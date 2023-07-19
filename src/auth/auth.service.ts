@@ -15,8 +15,8 @@ export class AuthService {
   ) {}
 
   async signInByTelegram(
-    telegram: TelegramUserDto,
     initClient: ClientDto,
+    telegram: TelegramUserDto,
   ): Promise<{ auth_token: string }> | never {
     const client = await this.clientService.findOne(initClient.name);
 

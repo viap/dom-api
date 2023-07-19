@@ -1,8 +1,18 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ClientDto } from 'src/clients/dto/client.dto';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UsePipes,
+} from '@nestjs/common';
+import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
-import { TelegramUserDto } from './dto/telegram.dto';
+import {
+  AuthByTelegramDto,
+  authByTelegramSchema,
+} from './dto/auth-by-telegram.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -11,9 +21,8 @@ export class AuthController {
   @Public()
   @Post('login/telegram')
   @HttpCode(HttpStatus.OK)
-  getAuthTokenForTelegram(
-    @Body() data: { client: ClientDto; telegram: TelegramUserDto },
-  ) {
-    return this.authService.signInByTelegram(data.telegram, data.client);
+  @UsePipes(new JoiValidationPipe(authByTelegramSchema))
+  getAuthTokenForTelegram(@Body() data: AuthByTelegramDto) {
+    return this.authService.signInByTelegram(data.client, data.telegram);
   }
 }

@@ -1,7 +1,17 @@
+import * as Joi from 'joi';
+
 export class CreateUserDto {
-  readonly telegramId: string;
   readonly name: string;
-  readonly descr: string;
   readonly roles: Array<string>;
+  readonly telegramId?: string;
+  readonly descr?: string;
   readonly img?: string;
 }
+
+export const createUserSchema = Joi.object<CreateUserDto>().keys({
+  name: Joi.string().required(),
+  roles: Joi.array<string>().required(),
+  telegramId: Joi.string(),
+  descr: Joi.string(),
+  img: Joi.string(),
+});

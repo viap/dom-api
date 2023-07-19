@@ -5,22 +5,20 @@ export type UserDocument = User & Document;
 
 @Schema()
 export class User {
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ required: true })
+  roles: Array<string>;
+
   @Prop()
   telegramId: string;
 
   @Prop()
-  name: string;
-
-  @Prop()
   descr: string;
 
-  @Prop({
-    required: false,
-  })
-  img: string;
-
   @Prop()
-  roles: Array<string>;
+  img: string;
 }
 
 export const userSchema = SchemaFactory.createForClass(User);

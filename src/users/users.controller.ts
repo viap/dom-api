@@ -8,11 +8,13 @@ import {
   Param,
   Post,
   Put,
+  UsePipes,
 } from '@nestjs/common';
+import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateUserDto, createUserSchema } from './dto/create-user.dto';
+import { UpdateUserDto, updateUserSchema } from './dto/update-user.dto';
 import { User } from './schemas/user.schema';
 import { UsersService } from './users.service';
 
@@ -20,34 +22,36 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Roles(Role.Admin, Role.Editor)
   @Get()
+  @Roles(Role.Admin, Role.Editor)
   getAll(): Promise<Array<User>> {
     return this.usersService.getAll();
   }
 
-  @Roles(Role.Admin, Role.Editor)
   @Get(':id')
+  @Roles(Role.Admin, Role.Editor)
   getOne(@Param('id') id: string): Promise<User> {
     return this.usersService.getById(id);
   }
 
-  @Roles(Role.Admin, Role.Editor)
   @Post()
+  @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.CREATED)
+  @UsePipes(new JoiValidationPipe(createUserSchema))
   create(@Body() user: CreateUserDto): Promise<User> {
     return this.usersService.create(user);
   }
 
-  @Roles(Role.Admin, Role.Editor)
   @Put(':id')
+  @Roles(Role.Admin, Role.Editor)
+  @UsePipes(new JoiValidationPipe(updateUserSchema))
   update(@Param('id') id: string, @Body() user: UpdateUserDto): Promise<User> {
     return this.usersService.update(id, user);
   }
 
   @Roles(Role.Admin)
   @Delete(':id')
-  remove(@Param('id') id): Promise<User> {
+  remove(@Param('id') id: string): Promise<User> {
     return this.usersService.remove(id);
   }
 }
