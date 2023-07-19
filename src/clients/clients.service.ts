@@ -1,22 +1,11 @@
 import { Injectable } from '@nestjs/common';
-
-export type Client = {
-  id: number;
-  name: string;
-  password: string;
-};
+import { clientConstants } from './consts';
+import { ClientDto } from './dto/client.dto';
 
 @Injectable()
 export class ClientsService {
-  private readonly clients: Array<Client> = [
-    {
-      id: 1,
-      name: 'domBot',
-      password: 'Knock-Knock-Bot',
-    },
-  ];
-
-  async findOne(name: string): Promise<Client | undefined> {
+  private readonly clients: Array<ClientDto> = clientConstants.clients;
+  async findOne(name: string): Promise<ClientDto | undefined> {
     return this.clients.find((client) => client.name === name);
   }
 }
