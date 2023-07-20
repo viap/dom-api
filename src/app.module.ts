@@ -5,7 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
-import { ClientsModule } from './clients/clients.module';
+import { ApiClientsModule } from './apiClients/api-clients.module';
 import { PsychologistModule } from './psychologists/psychologists.module';
 import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
@@ -20,7 +20,7 @@ import { UsersModule } from './users/users.module';
     }),
     UsersModule,
     AuthModule,
-    ClientsModule,
+    ApiClientsModule,
     RolesModule,
     PsychologistModule,
   ],

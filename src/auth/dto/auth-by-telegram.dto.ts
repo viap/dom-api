@@ -1,13 +1,16 @@
 import * as Joi from 'joi';
-import { ClientDto, ClientSchema } from 'src/clients/dto/client.dto';
+import {
+  ApiClientDto,
+  ApiClientSchema,
+} from 'src/apiClients/dto/api-client.dto';
 import { TelegramUserDto, TelegramUserSchema } from './telegram.dto';
 
 export const authByTelegramSchema = Joi.object<AuthByTelegramDto>({
-  client: ClientSchema.required(),
+  apiClient: ApiClientSchema.required(),
   telegram: TelegramUserSchema.required(),
 });
 
 export class AuthByTelegramDto {
-  client: ClientDto;
+  apiClient: ApiClientDto;
   telegram: TelegramUserDto;
 }

@@ -1,5 +1,5 @@
 export const clientConstants = {
-  clients: [
+  apiClients: [
     {
       name: 'domBot',
       // TODO: make it safe

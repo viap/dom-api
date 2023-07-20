@@ -1,26 +1,26 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Document } from 'mongoose';
-import { ClientsService } from 'src/clients/clients.service';
-import { ClientDto } from 'src/clients/dto/client.dto';
+import { ApiClientsService } from 'src/apiClients/api-clients.service';
+import { ApiClientDto } from 'src/apiClients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
 import { TelegramUserDto } from './dto/telegram.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private clientService: ClientsService,
+    private clientService: ApiClientsService,
     private jwtService: JwtService,
     private userService: UsersService,
   ) {}
 
   async signInByTelegram(
-    initClient: ClientDto,
+    initClient: ApiClientDto,
     telegram: TelegramUserDto,
   ): Promise<{ auth_token: string }> | never {
-    const client = await this.clientService.findOne(initClient.name);
+    const apiClient = await this.clientService.findOne(initClient.name);
 
-    if (client?.password !== initClient.password) {
+    if (apiClient?.password !== initClient.password) {
       throw new UnauthorizedException();
     }
 
@@ -29,7 +29,7 @@ export class AuthService {
         telegram,
       ))) as unknown as Document;
 
-    const payload = { userId: user._id, clientName: client.name };
+    const payload = { userId: user._id, clientName: apiClient.name };
 
     return { auth_token: await this.jwtService.signAsync(payload) };
   }

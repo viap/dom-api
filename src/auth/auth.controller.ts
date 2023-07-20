@@ -23,6 +23,6 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new JoiValidationPipe(authByTelegramSchema))
   getAuthTokenForTelegram(@Body() data: AuthByTelegramDto) {
-    return this.authService.signInByTelegram(data.client, data.telegram);
+    return this.authService.signInByTelegram(data.apiClient, data.telegram);
   }
 }
