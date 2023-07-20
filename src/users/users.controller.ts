@@ -44,8 +44,10 @@ export class UsersController {
 
   @Put(':id')
   @Roles(Role.Admin, Role.Editor)
-  @UsePipes(new JoiValidationPipe(updateUserSchema))
-  update(@Param('id') id: string, @Body() user: UpdateUserDto): Promise<User> {
+  update(
+    @Param('id') id: string,
+    @Body(new JoiValidationPipe(updateUserSchema)) user: UpdateUserDto,
+  ): Promise<User> {
     return this.usersService.update(id, user);
   }
 

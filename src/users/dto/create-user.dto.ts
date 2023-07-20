@@ -8,7 +8,7 @@ export class CreateUserDto {
   readonly img?: string;
 }
 
-export const createUserSchema = Joi.object<CreateUserDto>().keys({
+export const createUserSchema = Joi.object<CreateUserDto>({
   name: Joi.string().required(),
   roles: Joi.array<string>().required(),
   telegramId: Joi.string(),
