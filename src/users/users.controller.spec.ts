@@ -9,13 +9,11 @@ describe('Users Controller', () => {
   const CreateUserDto: CreateUserDto = {
     name: 'User #1',
     descr: 'Bread #1',
-    img: '',
   };
 
   const mockUser = {
     name: 'User #1',
     descr: 'Bread #1',
-    img: '',
     _id: 'a id',
   };
 
@@ -30,17 +28,14 @@ describe('Users Controller', () => {
               {
                 name: 'User #1',
                 descr: 'Bread #1',
-                img: '',
               },
               {
                 name: 'User #2',
                 descr: 'Breed #2',
-                img: '',
               },
               {
                 name: 'User #3',
                 descr: 'Breed #3',
-                img: '',
               },
             ]),
             create: jest.fn().mockResolvedValue(CreateUserDto),
@@ -70,17 +65,14 @@ describe('Users Controller', () => {
         {
           name: 'User #1',
           descr: 'Bread #1',
-          img: '',
         },
         {
           name: 'User #2',
           descr: 'Breed #2',
-          img: '',
         },
         {
           name: 'User #3',
           descr: 'Breed #3',
-          img: '',
         },
       ]);
       expect(service.getAll).toHaveBeenCalled();

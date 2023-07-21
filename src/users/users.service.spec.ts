@@ -8,7 +8,6 @@ import { User } from './schemas/user.schema';
 const mockUser = {
   name: 'User #1',
   descr: 'Breed #1',
-  img: '',
 };
 
 describe('UsersService', () => {
@@ -19,12 +18,10 @@ describe('UsersService', () => {
     {
       name: 'User #1',
       descr: 'Breed #1',
-      img: '',
     },
     {
       name: 'User #2',
       descr: 'Breed #2',
-      img: '',
     },
   ];
 
@@ -66,13 +63,11 @@ describe('UsersService', () => {
       Promise.resolve({
         name: 'User #1',
         descr: 'Breed #1',
-        img: '',
       } as any),
     );
     const newUser = await service.create({
       name: 'User #1',
       descr: 'Breed #1',
-      img: '',
     });
     expect(newUser).toEqual(mockUser);
   });

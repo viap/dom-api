@@ -5,7 +5,6 @@ export class UpdateUserDto {
   readonly roles: Array<string>;
   readonly telegramId?: string;
   readonly descr?: string;
-  readonly img?: string;
 }
 
 export const updateUserSchema = Joi.object({
@@ -13,5 +12,4 @@ export const updateUserSchema = Joi.object({
   roles: Joi.array<string>().required(),
   telegramId: Joi.string(),
   descr: Joi.string(),
-  img: Joi.string(),
 });

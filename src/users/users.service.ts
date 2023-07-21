@@ -32,7 +32,6 @@ export class UsersService {
       telegramId: telegram.id,
       name: telegram.name,
       descr: telegram.descr,
-      img: telegram.img,
       roles: [Role.User],
     });
   }

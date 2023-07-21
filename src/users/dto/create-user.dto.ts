@@ -5,7 +5,6 @@ export class CreateUserDto {
   readonly roles: Array<string>;
   readonly telegramId?: string;
   readonly descr?: string;
-  readonly img?: string;
 }
 
 export const createUserSchema = Joi.object<CreateUserDto>({
@@ -13,5 +12,4 @@ export const createUserSchema = Joi.object<CreateUserDto>({
   roles: Joi.array<string>().required(),
   telegramId: Joi.string(),
   descr: Joi.string(),
-  img: Joi.string(),
 });
