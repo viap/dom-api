@@ -35,13 +35,7 @@ export class PsychologistsService {
         return psychologist;
       }
 
-      // find user by id and add new role of psychologist
-      const user = await this.userService.getById(createData.user);
-      if (!user.roles.includes(Role.Psychologist)) {
-        user.roles.push(Role.Psychologist);
-      }
-      await this.userService.update(createData.user, user);
-
+      await this.userService.addRoles(createData.user, [Role.Psychologist]);
       return this.psychologistModel.create({ user: createData.user });
     } catch {
       throw new Error('User is not found');
@@ -52,20 +46,16 @@ export class PsychologistsService {
     id: string,
     updateData: UpdatePsychologistDto,
   ): Promise<Psychologist> {
-    return this.psychologistModel.findByIdAndUpdate(id, updateData);
+    await this.psychologistModel.findByIdAndUpdate(id, updateData);
+    return this.psychologistModel.findById(id);
   }
 
   async remove(id: string): Promise<Psychologist> {
     const psychologist = await this.psychologistModel.findByIdAndRemove(id);
 
-    const userId = psychologist.user.toString();
-    const user = await this.userService.getById(userId);
-    const ind = user.roles.findIndex(
-      (role: string) => role === Role.Psychologist,
-    );
-    user.roles.splice(ind, 1);
-    await this.userService.update(userId, user);
-
+    await this.userService.removeRoles(psychologist.user.toString(), [
+      Role.Psychologist,
+    ]);
     return psychologist;
   }
 }

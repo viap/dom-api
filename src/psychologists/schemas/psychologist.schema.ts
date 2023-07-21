@@ -30,6 +30,14 @@ export class Psychologist {
 
   @Prop({ required: true, default: false })
   isInTheClub: boolean;
+
+  @Prop({
+    required: true,
+    type: mongoose.Schema.Types.Map,
+    of: String,
+    default: {},
+  })
+  contacts: mongoose.Schema.Types.Map;
 }
 
 export const psychologistSchema = SchemaFactory.createForClass(Psychologist);

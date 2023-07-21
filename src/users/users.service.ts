@@ -36,11 +36,37 @@ export class UsersService {
     });
   }
 
-  async remove(id: string): Promise<User> {
-    return this.userModel.findByIdAndRemove(id);
+  async update(id: string, user: UpdateUserDto): Promise<User> {
+    await this.userModel.findByIdAndUpdate(id, user, { new: true });
+    return this.userModel.findById(id);
   }
 
-  async update(id: string, user: UpdateUserDto): Promise<User> {
-    return this.userModel.findByIdAndUpdate(id, user, { new: true });
+  async addRoles(id: string, roles: Array<Role>) {
+    const user = await this.getById(id);
+
+    roles.forEach((role) => {
+      if (!user.roles.includes(role)) {
+        user.roles.push(role);
+      }
+    });
+
+    return this.update(id, user);
+  }
+
+  async removeRoles(id: string, roles: Array<Role>) {
+    const user = await this.getById(id);
+
+    roles.forEach((role) => {
+      const index = user.roles.findIndex((curRole: string) => curRole === role);
+      if (index >= 0) {
+        user.roles.splice(index, 1);
+      }
+    });
+
+    return this.update(id, user);
+  }
+
+  async remove(id: string): Promise<User> {
+    return this.userModel.findByIdAndRemove(id);
   }
 }

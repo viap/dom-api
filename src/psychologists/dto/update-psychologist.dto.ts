@@ -11,6 +11,7 @@ export class UpdatePsychologistDto {
   sessionDurations: Array<SessionDuration>;
   education: Array<Education>;
   isInTheClub: boolean;
+  contacts: object;
 }
 
 export const updatePsychologistSchema = Joi.object<UpdatePsychologistDto>({
@@ -20,4 +21,5 @@ export const updatePsychologistSchema = Joi.object<UpdatePsychologistDto>({
   ),
   education: Joi.array<Education>().items(Joi.object().schema(educationSchema)),
   isInTheClub: Joi.boolean(),
+  contacts: Joi.object().pattern(Joi.string(), Joi.string()),
 });
