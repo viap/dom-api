@@ -7,11 +7,10 @@ import {
 } from '../schemas/session-duration.schema';
 
 export class UpdatePsychologistDto {
-  currency: Currency;
-  sessionDurations: Array<SessionDuration>;
-  education: Array<Education>;
-  isInTheClub: boolean;
-  contacts: object;
+  readonly currency: Currency;
+  readonly sessionDurations: Array<SessionDuration>;
+  readonly education: Array<Education>;
+  readonly isInTheClub: boolean;
 }
 
 export const updatePsychologistSchema = Joi.object<UpdatePsychologistDto>({
@@ -21,5 +20,4 @@ export const updatePsychologistSchema = Joi.object<UpdatePsychologistDto>({
   ),
   education: Joi.array<Education>().items(Joi.object().schema(educationSchema)),
   isInTheClub: Joi.boolean(),
-  contacts: Joi.object().pattern(Joi.string(), Joi.string()),
 });

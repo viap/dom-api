@@ -15,7 +15,7 @@ import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
 import { CreateUserDto, createUserSchema } from './dto/create-user.dto';
 import { UpdateUserDto, updateUserSchema } from './dto/update-user.dto';
-import { User } from './schemas/user.schema';
+import { UserDocument } from './schemas/user.schema';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -24,13 +24,13 @@ export class UsersController {
 
   @Get()
   @Roles(Role.Admin, Role.Editor)
-  getAll(): Promise<Array<User>> {
+  getAll(): Promise<Array<UserDocument>> {
     return this.usersService.getAll();
   }
 
   @Get(':id')
   @Roles(Role.Admin, Role.Editor)
-  getOne(@Param('id') id: string): Promise<User> {
+  getOne(@Param('id') id: string): Promise<UserDocument> {
     return this.usersService.getById(id);
   }
 
@@ -38,7 +38,7 @@ export class UsersController {
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(new JoiValidationPipe(createUserSchema))
-  create(@Body() user: CreateUserDto): Promise<User> {
+  create(@Body() user: CreateUserDto): Promise<UserDocument> {
     return this.usersService.create(user);
   }
 
@@ -47,13 +47,13 @@ export class UsersController {
   update(
     @Param('id') id: string,
     @Body(new JoiValidationPipe(updateUserSchema)) user: UpdateUserDto,
-  ): Promise<User> {
+  ): Promise<UserDocument> {
     return this.usersService.update(id, user);
   }
 
   @Roles(Role.Admin)
   @Delete(':id')
-  remove(@Param('id') id: string): Promise<User> {
+  remove(@Param('id') id: string): Promise<UserDocument> {
     return this.usersService.remove(id);
   }
 }

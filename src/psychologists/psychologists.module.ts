@@ -22,4 +22,4 @@ import {
   controllers: [PsychologistsController],
   exports: [PsychologistsService],
 })
-export class PsychologistModule {}
+export class PsychologistsModule {}

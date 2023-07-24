@@ -1,5 +1,4 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { User } from 'src/users/schemas/user.schema';
 
 @Schema()
 export class Education {
@@ -19,4 +18,4 @@ export class Education {
   endDate: Date;
 }
 
-export const educationSchema = SchemaFactory.createForClass(User);
+export const educationSchema = SchemaFactory.createForClass(Education);

@@ -13,6 +13,7 @@ import {
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
+import { UserDocument } from 'src/users/schemas/user.schema';
 import {
   CreatePsychologistDto,
   createPsychologistSchema,
@@ -22,7 +23,7 @@ import {
   updatePsychologistSchema,
 } from './dto/update-psychologist.dto';
 import { PsychologistsService } from './psychologists.service';
-import { Psychologist } from './schemas/psychologist.schema';
+import { PsychologistDocument } from './schemas/psychologist.schema';
 
 @Controller('psychologists')
 @Roles(Role.Admin, Role.Editor)
@@ -30,34 +31,36 @@ export class PsychologistsController {
   constructor(private readonly psychologistService: PsychologistsService) {}
 
   @Get()
-  getAll(): Promise<Array<Psychologist>> {
+  async getAll(): Promise<Array<UserDocument>> {
     return this.psychologistService.getAll();
   }
 
   @Get(':id')
-  async getOne(@Param('id') id: string) {
+  async getOne(@Param('id') id: string): Promise<UserDocument> {
     return this.psychologistService.getById(id);
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(new JoiValidationPipe(createPsychologistSchema))
-  create(@Body() createData: CreatePsychologistDto): Promise<Psychologist> {
+  async create(
+    @Body() createData: CreatePsychologistDto,
+  ): Promise<UserDocument> {
     return this.psychologistService.create(createData);
   }
 
   @Put(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body(new JoiValidationPipe(updatePsychologistSchema))
     updateData: UpdatePsychologistDto,
-  ): Promise<Psychologist> {
+  ): Promise<PsychologistDocument> {
     return this.psychologistService.update(id, updateData);
   }
 
   @Delete(':id')
   @Roles(Role.Admin)
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<PsychologistDocument> {
     return this.psychologistService.remove(id);
   }
 }
