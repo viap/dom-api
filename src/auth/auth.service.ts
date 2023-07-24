@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Document } from 'mongoose';
-import { ApiClientsService } from 'src/apiClients/api-clients.service';
-import { ApiClientDto } from 'src/apiClients/dto/api-client.dto';
+import { ApiClientsService } from 'src/api-clients/api-clients.service';
+import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
 import { TelegramUserDto } from './dto/telegram.dto';
 
