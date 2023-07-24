@@ -5,12 +5,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
-import { ApiClientsModule } from './apiClients/api-clients.module';
+import { ApiClientsModule } from './api-clients/api-clients.module';
 import { PsychologistModule } from './psychologists/psychologists.module';
 import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { ParticipantsModule } from './participants/participants.module';
+import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ParticipantsModule } from './participants/participants.module';
     RolesModule,
     PsychologistModule,
     ParticipantsModule,
+    TherapySessionsModule,
   ],
   controllers: [AppController],
   providers: [
