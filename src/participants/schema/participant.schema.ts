@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
+import { User } from 'src/users/schemas/user.schema';
 
 export type ParticipantDocument = Participant & Document;
 
@@ -9,7 +10,7 @@ export class Participant {
   name: string;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'User' })
-  user: mongoose.Schema.Types.ObjectId;
+  user: User;
 
   @Prop({ default: '' })
   descr: string;
