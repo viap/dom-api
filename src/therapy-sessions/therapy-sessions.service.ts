@@ -10,6 +10,8 @@ import {
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
 
+const submodels = ['psychologist', 'client'];
+
 @Injectable()
 export class TherapySessionsService {
   constructor(
@@ -20,7 +22,11 @@ export class TherapySessionsService {
   ) {}
 
   async getAll(): Promise<Array<TherapySessionDocument>> {
-    return this.therapySessionModel.find().exec();
+    return this.therapySessionModel.find().populate(submodels).exec();
+  }
+
+  async getById(id: string): Promise<TherapySessionDocument> {
+    return this.therapySessionModel.findById(id).populate(submodels).exec();
   }
 
   async getAllForPsychologist(
@@ -29,6 +35,7 @@ export class TherapySessionsService {
     try {
       return await this.therapySessionModel
         .find({ psychologist: psychologistId })
+        .populate(submodels)
         .exec();
     } catch {
       return [];
@@ -42,6 +49,7 @@ export class TherapySessionsService {
     try {
       return await this.therapySessionModel
         .find({ psychologist: psychologistId, client: clientId })
+        .populate(submodels)
         .exec();
     } catch {
       return [];
@@ -51,7 +59,6 @@ export class TherapySessionsService {
   async create(
     createData: CreateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
-    // return this.therapySessionModel.create(createData);
     const psychologist = await this.psychologistsService.getById(
       createData.psychologist,
     );
@@ -59,8 +66,8 @@ export class TherapySessionsService {
 
     return this.therapySessionModel.create({
       ...createData,
-      client: psychologist._id,
-      psychologist: client._id,
+      psychologist: psychologist._id,
+      client: client._id,
     });
   }
 
@@ -69,14 +76,10 @@ export class TherapySessionsService {
     updateData: UpdateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
     await this.therapySessionModel.findByIdAndUpdate(id, updateData);
-    return this.therapySessionModel.findById(id);
+    return this.getById(id);
   }
 
   async remove(id: string): Promise<TherapySessionDocument | null> {
-    try {
-      return await this.therapySessionModel.findByIdAndRemove(id);
-    } catch {
-      return null;
-    }
+    return await this.therapySessionModel.findByIdAndRemove(id);
   }
 }

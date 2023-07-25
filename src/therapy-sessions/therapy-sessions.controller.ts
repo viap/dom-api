@@ -29,6 +29,12 @@ export class TherapySessionsController {
     return this.therapySessionService.getAll();
   }
 
+  @Get(':id')
+  @Roles(Role.Admin)
+  getById(@Param('id') id: string): Promise<TherapySessionDocument> {
+    return this.therapySessionService.getById(id);
+  }
+
   @Get('/psychologist/:id')
   getAllForPsychologist(
     @Param('id') psychologistId: string,

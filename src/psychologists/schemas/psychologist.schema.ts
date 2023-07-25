@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
+import { UserDocument } from 'src/users/schemas/user.schema';
 import { Currency } from '../enums/currency.enum';
 import { Education, educationSchema } from './education.schema';
 import {
@@ -11,6 +12,9 @@ export type PsychologistDocument = Psychologist & Document;
 
 @Schema()
 export class Psychologist {
+  @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
+  user: UserDocument;
+
   @Prop({
     required: true,
     enum: Object.values(Currency),
@@ -26,6 +30,15 @@ export class Psychologist {
 
   @Prop({ required: true, default: false })
   isInTheClub: boolean;
+
+  @Prop({
+    required: true,
+    type: mongoose.Schema.Types.Array,
+    of: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: [],
+  })
+  clients: Array<UserDocument>;
 }
 
 export const psychologistSchema = SchemaFactory.createForClass(Psychologist);

@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import mongoose, { Document } from 'mongoose';
-import { Psychologist } from 'src/psychologists/schemas/psychologist.schema';
+import { Document } from 'mongoose';
 import { Role } from 'src/roles/roles.enum';
 import { Contact, contactSchema } from './contact.schema';
 
@@ -26,9 +25,6 @@ export class User {
     default: [],
   })
   contacts: Array<Contact>;
-
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Psychologist' })
-  psychologist: Psychologist;
 }
 
 export const userSchema = SchemaFactory.createForClass(User);

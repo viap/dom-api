@@ -7,38 +7,24 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserDocument } from './schemas/user.schema';
 
-const defaultPopulate = ['psychologist'];
-
 @Injectable()
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
   async getAll(): Promise<Array<UserDocument>> {
-    return this.userModel.find().populate(defaultPopulate).exec();
+    return this.userModel.find().exec();
   }
 
   async getAllByRole(role: Role): Promise<Array<UserDocument>> {
-    return this.userModel
-      .find({ roles: { $in: [role] } }, {}, { populate: defaultPopulate })
-      .exec();
+    return this.userModel.find({ roles: { $in: [role] } }).exec();
   }
 
   async getById(id: string): Promise<UserDocument> {
-    return this.userModel.findById(id);
+    return this.userModel.findById(id).exec();
   }
 
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
     return this.userModel.findOne({ telegramId }).exec();
-  }
-
-  async getByPsychologistId(psychologistId: string): Promise<UserDocument> {
-    return this.userModel
-      .findOne(
-        { psychologist: psychologistId },
-        {},
-        { populate: defaultPopulate },
-      )
-      .exec();
   }
 
   async create(createData: CreateUserDto): Promise<UserDocument> {
@@ -56,17 +42,10 @@ export class UsersService {
 
   async update(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
     await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
-    return this.userModel.findById(id);
+    return this.getById(id);
   }
 
-  async bindWithPsychologist(
-    id: string,
-    psychologist: string,
-  ): Promise<UserDocument> {
-    return this.userModel.findByIdAndUpdate(id, { psychologist });
-  }
-
-  async remove(id: string): Promise<UserDocument> {
+  async remove(id: string): Promise<UserDocument | null> {
     return this.userModel.findByIdAndRemove(id);
   }
 }
