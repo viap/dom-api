@@ -1,10 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Currency } from '../enums/currency.enum';
-
-type Price = {
-  currency: Currency;
-  value: number;
-};
+import { Price, priceSchema } from '../../common/schemas/price.schema';
 
 @Schema()
 export class SessionDuration {
@@ -14,7 +9,7 @@ export class SessionDuration {
   @Prop({ require: true })
   minutes: number;
 
-  @Prop({ required: true })
+  @Prop({ required: true, schema: priceSchema })
   prices: Array<Price>;
 
   @Prop()

@@ -10,6 +10,7 @@ import { PsychologistsModule } from './psychologists/psychologists.module';
 import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module';
     ApiClientsModule,
     RolesModule,
     PsychologistsModule,
+    TherapySessionsModule,
   ],
   controllers: [AppController],
   providers: [

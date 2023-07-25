@@ -4,8 +4,8 @@ import { Model } from 'mongoose';
 import { Role } from 'src/roles/roles.enum';
 import { UserDocument } from 'src/users/schemas/user.schema';
 import { UsersService } from 'src/users/users.service';
-import { addItems } from 'src/utils/add-items.util';
-import { removeItems } from 'src/utils/remove-item.util';
+import { addItems } from 'src/common/utils/add-items.util';
+import { removeItems } from 'src/common/utils/remove-item.util';
 import { CreatePsychologistDto } from './dto/create-psychologist.dto';
 import { UpdatePsychologistDto } from './dto/update-psychologist.dto';
 import {

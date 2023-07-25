@@ -1,5 +1,5 @@
 import * as Joi from 'joi';
-import { joiPriceSchema } from './joi.price.schema';
+import { joiPriceSchema } from '../../common/schemas/joi.price.schema';
 
 export const joiSessionDurationSchema = Joi.object({
   alias: Joi.string().required(),
