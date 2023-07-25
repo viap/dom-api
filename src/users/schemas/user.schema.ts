@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { Psychologist } from 'src/psychologists/schemas/psychologist.schema';
 import { Role } from 'src/roles/roles.enum';
+import { Contact, contactSchema } from './contact.schema';
 
 export type UserDocument = User & Document;
 
@@ -21,11 +22,10 @@ export class User {
 
   @Prop({
     required: true,
-    type: mongoose.Schema.Types.Map,
-    of: String,
-    default: {},
+    schema: contactSchema,
+    default: [],
   })
-  contacts: mongoose.Schema.Types.Map;
+  contacts: Array<Contact>;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Psychologist' })
   psychologist: Psychologist;

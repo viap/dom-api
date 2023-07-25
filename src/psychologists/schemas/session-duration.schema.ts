@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Currency } from '../enums/currency.enum';
 
 type Price = {
-  name: Currency;
+  currency: Currency;
   value: number;
 };
 

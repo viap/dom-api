@@ -14,16 +14,12 @@ import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
 import { UserDocument } from 'src/users/schemas/user.schema';
-import {
-  CreatePsychologistDto,
-  createPsychologistSchema,
-} from './dto/create-psychologist.dto';
-import {
-  UpdatePsychologistDto,
-  updatePsychologistSchema,
-} from './dto/update-psychologist.dto';
+import { CreatePsychologistDto } from './dto/create-psychologist.dto';
+import { UpdatePsychologistDto } from './dto/update-psychologist.dto';
 import { PsychologistsService } from './psychologists.service';
 import { PsychologistDocument } from './schemas/psychologist.schema';
+import { joiCreatePsychologistSchema } from './schemas/joi.create-psychologist.schema';
+import { joiUpdatePsychologistSchema } from './schemas/joi.update-psychologist.schema';
 
 @Controller('psychologists')
 @Roles(Role.Admin, Role.Editor)
@@ -42,7 +38,7 @@ export class PsychologistsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new JoiValidationPipe(createPsychologistSchema))
+  @UsePipes(new JoiValidationPipe(joiCreatePsychologistSchema))
   async create(
     @Body() createData: CreatePsychologistDto,
   ): Promise<UserDocument> {
@@ -52,7 +48,7 @@ export class PsychologistsController {
   @Put(':id')
   async update(
     @Param('id') id: string,
-    @Body(new JoiValidationPipe(updatePsychologistSchema))
+    @Body(new JoiValidationPipe(joiUpdatePsychologistSchema))
     updateData: UpdatePsychologistDto,
   ): Promise<PsychologistDocument> {
     return this.psychologistService.update(id, updateData);

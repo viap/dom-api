@@ -1,17 +1,9 @@
-import * as Joi from 'joi';
+import { Contact } from '../schemas/contact.schema';
 
 export class UpdateUserDto {
   readonly name?: string;
   readonly roles?: Array<string>;
   readonly telegramId?: string;
   readonly descr?: string;
-  readonly contacts?: object;
+  readonly contacts?: Array<Contact>;
 }
-
-export const updateUserSchema = Joi.object({
-  name: Joi.string(),
-  roles: Joi.array<string>(),
-  telegramId: Joi.string(),
-  descr: Joi.string(),
-  contacts: Joi.object().pattern(Joi.string(), Joi.string()),
-});

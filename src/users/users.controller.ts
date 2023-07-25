@@ -13,10 +13,12 @@ import {
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
-import { CreateUserDto, createUserSchema } from './dto/create-user.dto';
-import { UpdateUserDto, updateUserSchema } from './dto/update-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UserDocument } from './schemas/user.schema';
 import { UsersService } from './users.service';
+import { joiUpdateUserSchema } from './schemas/joi.update-user.schema';
+import { joiCreateUserSchema } from './schemas/joi.create-user.schema';
 
 @Controller('users')
 export class UsersController {
@@ -37,18 +39,18 @@ export class UsersController {
   @Post()
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new JoiValidationPipe(createUserSchema))
-  create(@Body() user: CreateUserDto): Promise<UserDocument> {
-    return this.usersService.create(user);
+  @UsePipes(new JoiValidationPipe(joiCreateUserSchema))
+  create(@Body() createData: CreateUserDto): Promise<UserDocument> {
+    return this.usersService.create(createData);
   }
 
   @Put(':id')
   @Roles(Role.Admin, Role.Editor)
   update(
     @Param('id') id: string,
-    @Body(new JoiValidationPipe(updateUserSchema)) user: UpdateUserDto,
+    @Body(new JoiValidationPipe(joiUpdateUserSchema)) updateData: UpdateUserDto,
   ): Promise<UserDocument> {
-    return this.usersService.update(id, user);
+    return this.usersService.update(id, updateData);
   }
 
   @Roles(Role.Admin)

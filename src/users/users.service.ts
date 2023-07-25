@@ -41,8 +41,8 @@ export class UsersService {
       .exec();
   }
 
-  async create(user: CreateUserDto): Promise<UserDocument> {
-    return this.userModel.create(user);
+  async create(createData: CreateUserDto): Promise<UserDocument> {
+    return this.userModel.create(createData);
   }
 
   async createFromTelegram(telegram: TelegramUserDto): Promise<UserDocument> {
@@ -54,8 +54,8 @@ export class UsersService {
     });
   }
 
-  async update(id: string, user: UpdateUserDto): Promise<UserDocument> {
-    await this.userModel.findByIdAndUpdate(id, user, { new: true });
+  async update(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
+    await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
     return this.userModel.findById(id);
   }
 

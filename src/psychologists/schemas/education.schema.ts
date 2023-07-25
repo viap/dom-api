@@ -12,10 +12,10 @@ export class Education {
   hours: number;
 
   @Prop()
-  startDate: Date;
+  startDate: string;
 
   @Prop()
-  endDate: Date;
+  endDate: string;
 }
 
 export const educationSchema = SchemaFactory.createForClass(Education);
