@@ -30,6 +30,13 @@ export class PsychologistsService {
     return this.psychologistModel.findById(id).populate(submodels).exec();
   }
 
+  async getByUserId(userId: string): Promise<PsychologistDocument | null> {
+    return this.psychologistModel
+      .findOne({ user: userId })
+      .populate(submodels)
+      .exec();
+  }
+
   async create(
     createData: CreatePsychologistDto,
   ): Promise<PsychologistDocument> {
