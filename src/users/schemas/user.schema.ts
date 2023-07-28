@@ -14,9 +14,6 @@ export class User {
   roles: Array<Role>;
 
   @Prop()
-  telegramId: string;
-
-  @Prop()
   descr: string;
 
   @Prop({

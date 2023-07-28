@@ -6,7 +6,7 @@ export class Contact {
   network: string;
 
   @Prop({ required: true })
-  login: string;
+  username: string;
 
   @Prop({ required: true, default: true })
   hidden: boolean;

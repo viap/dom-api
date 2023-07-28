@@ -5,6 +5,7 @@ import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
 import { Role } from 'src/roles/roles.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SocialNetworks } from './enums/social-networks.enum';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
@@ -24,7 +25,12 @@ export class UsersService {
   }
 
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
-    return this.userModel.findOne({ telegramId }).exec();
+    return await this.userModel
+      .findOne({
+        'contacts.id': telegramId,
+        'contacts.network': SocialNetworks.Telegram,
+      })
+      .exec();
   }
 
   async create(createData: CreateUserDto): Promise<UserDocument> {
@@ -32,11 +38,20 @@ export class UsersService {
   }
 
   async createFromTelegram(telegram: TelegramUserDto): Promise<UserDocument> {
+    const name = [telegram.last_name, telegram.first_name]
+      .filter((value) => !!value)
+      .join(' ');
+
     return this.userModel.create({
-      telegramId: telegram.id,
-      name: telegram.name,
-      descr: telegram.descr,
+      name: name || telegram.username,
       roles: [Role.User],
+      contacts: [
+        {
+          network: SocialNetworks.Telegram,
+          id: telegram.id,
+          username: telegram.username,
+        },
+      ],
     });
   }
 

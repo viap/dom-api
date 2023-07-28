@@ -3,7 +3,7 @@ import { TelegramUserDto } from '../dto/telegram.dto';
 
 export const joiTelegramUserSchema = Joi.object<TelegramUserDto>({
   id: Joi.string().required(),
-  name: Joi.string(),
-  descr: Joi.string(),
-  img: Joi.string(),
+  username: Joi.string(),
+  first_name: Joi.string(),
+  last_name: Joi.string(),
 });

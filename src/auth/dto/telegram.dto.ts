@@ -1,6 +1,6 @@
 export class TelegramUserDto {
   readonly id: string;
-  readonly name?: string;
-  readonly descr?: string;
-  readonly img?: string;
+  readonly first_name?: string;
+  readonly last_name?: string;
+  readonly username?: string;
 }

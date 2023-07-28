@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ApiClientsService } from './api-clients.service';
 
-describe('ClientsService', () => {
+describe('ApiClientsService', () => {
   let service: ApiClientsService;
 
   beforeEach(async () => {
