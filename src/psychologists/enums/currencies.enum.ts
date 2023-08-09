@@ -1,4 +1,4 @@
-export enum Currency {
+export enum Currencies {
   Gel = 'gel',
   Rub = 'rub',
   Usd = 'usd',

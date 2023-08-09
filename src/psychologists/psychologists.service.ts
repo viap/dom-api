@@ -5,8 +5,10 @@ import { addItems } from 'src/common/utils/add-items.util';
 import { removeItems } from 'src/common/utils/remove-item.util';
 import { Role } from 'src/roles/roles.enum';
 import { UsersService } from 'src/users/users.service';
+import { CreateNewClientDto } from './dto/create-new-client.dto';
 import { CreatePsychologistDto } from './dto/create-psychologist.dto';
 import { UpdatePsychologistDto } from './dto/update-psychologist.dto';
+import { Client } from './schemas/clients.schema';
 import {
   Psychologist,
   PsychologistDocument,
@@ -35,6 +37,18 @@ export class PsychologistsService {
       .findOne({ user: userId })
       .populate(submodels)
       .exec();
+  }
+
+  async getClients(psychologistId: string): Promise<Array<Client>> {
+    return (
+      await this.psychologistModel.findById(psychologistId).populate({
+        path: 'clients',
+        populate: {
+          path: 'user',
+          model: 'User',
+        },
+      })
+    ).clients;
   }
 
   async create(
@@ -73,18 +87,40 @@ export class PsychologistsService {
     return this.getById(id);
   }
 
-  async addClient(psychologistId: string, clientId: string): Promise<boolean> {
+  async addClient(psychologistId: string, userId: string): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
-    const client = await this.userService.getById(clientId);
+    const user = await this.userService.getById(userId);
 
-    if (psychologist) {
-      const clients = psychologist.clients || [];
-      if (!clients.includes(client._id.toString())) {
-        clients.push(client._id);
-        psychologist.clients = clients;
+    if (psychologist && user) {
+      if (
+        !psychologist.clients.find((client) => {
+          return client.user === user._id.toString();
+        })
+      ) {
+        psychologist.clients.push({
+          user: user._id,
+          descr: '',
+        });
         psychologist.save();
       }
+      return true;
+    } else {
+      return false;
+    }
+  }
 
+  async addNewClient(
+    psychologistId: string,
+    newClient: CreateNewClientDto,
+  ): Promise<boolean> {
+    const psychologist = await this.getById(psychologistId);
+    if (psychologist) {
+      const user = await this.userService.create({ name: newClient.name });
+      psychologist.clients.push({
+        user: user._id,
+        descr: newClient.descr,
+      });
+      psychologist.save();
       return true;
     } else {
       return false;

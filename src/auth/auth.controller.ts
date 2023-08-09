@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -22,5 +23,18 @@ export class AuthController {
   @UsePipes(new JoiValidationPipe(joiAuthByTelegramSchema))
   getAuthTokenForTelegram(@Body() data: AuthByTelegramDto) {
     return this.authService.signInByTelegram(data.apiClient, data.telegram);
+  }
+
+  @Get('check-token')
+  @HttpCode(HttpStatus.OK)
+  checkToken(): boolean {
+    return true;
+  }
+
+  @Public()
+  @Get('ping')
+  @HttpCode(HttpStatus.OK)
+  ping(): string {
+    return 'pong';
   }
 }

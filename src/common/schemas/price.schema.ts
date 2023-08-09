@@ -1,14 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Currency } from '../../psychologists/enums/currency.enum';
+import { Currencies } from '../../psychologists/enums/currencies.enum';
 
 @Schema()
 export class Price {
   @Prop({
     required: true,
-    enum: Object.values(Currency),
-    default: Currency.Gel,
+    enum: Object.values(Currencies),
+    default: Currencies.Gel,
   })
-  currency: Currency;
+  currency: Currencies;
 
   @Prop({ required: true })
   value: number;

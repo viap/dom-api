@@ -1,7 +1,7 @@
 import * as Joi from 'joi';
-import { Currency } from '../../psychologists/enums/currency.enum';
+import { Currencies } from '../../psychologists/enums/currencies.enum';
 
 export const joiPriceSchema = Joi.object({
-  currency: Joi.string().valid(...Object.values(Currency)),
+  currency: Joi.string().valid(...Object.values(Currencies)),
   value: Joi.number().required(),
 });

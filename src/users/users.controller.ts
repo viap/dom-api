@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Request,
   UsePipes,
 } from '@nestjs/common';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
@@ -28,6 +29,12 @@ export class UsersController {
   @Roles(Role.Admin, Role.Editor)
   getAll(): Promise<Array<UserDocument>> {
     return this.usersService.getAll();
+  }
+
+  @Get('me')
+  getMe(@Request() req): UserDocument {
+    const user = req.user as UserDocument;
+    return user;
   }
 
   @Get(':id')
