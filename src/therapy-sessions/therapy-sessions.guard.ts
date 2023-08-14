@@ -33,14 +33,6 @@ export class TherapySessionsGuard implements CanActivate {
     if (ShouldBeMyTherapySessions) {
       try {
         const user = request.user as UserDocument;
-
-        // NOTICE: check if user have any required role except psychologist
-        if (
-          includesOther<Role>(requiredRoles, user.roles, [Role.Psychologist])
-        ) {
-          return true;
-        }
-
         const psychologist = await this.psychologistsService.getByUserId(
           user._id.toString(),
         );
@@ -48,8 +40,16 @@ export class TherapySessionsGuard implements CanActivate {
         if (!psychologist) {
           return false;
         }
+
         const params = request.params || {};
         request['psychologist'] = psychologist;
+
+        // NOTICE: check if user have any required role except psychologist
+        if (
+          includesOther<Role>(requiredRoles, user.roles, [Role.Psychologist])
+        ) {
+          return true;
+        }
 
         if (params.psychologistId) {
           return (
