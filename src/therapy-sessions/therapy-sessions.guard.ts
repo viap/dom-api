@@ -8,6 +8,7 @@ import { Role } from 'src/roles/roles.enum';
 import { UserDocument } from 'src/users/schemas/user.schema';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
 
 @Injectable()
 export class TherapySessionsGuard implements CanActivate {
@@ -47,11 +48,14 @@ export class TherapySessionsGuard implements CanActivate {
         if (!psychologist) {
           return false;
         }
-
         const params = request.params || {};
+        request['psychologist'] = psychologist;
 
         if (params.psychologistId) {
-          return psychologist._id.toString() === params.psychologistId;
+          return (
+            psychologist._id.toString() === params.psychologistId ||
+            params.psychologistId === currentUserAlias
+          );
         }
 
         if (params.sessionId) {

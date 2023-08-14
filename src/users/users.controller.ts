@@ -20,6 +20,7 @@ import { UserDocument } from './schemas/user.schema';
 import { UsersService } from './users.service';
 import { joiUpdateUserSchema } from './schemas/joi.update-user.schema';
 import { joiCreateUserSchema } from './schemas/joi.create-user.schema';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
 
 @Controller('users')
 export class UsersController {
@@ -31,7 +32,7 @@ export class UsersController {
     return this.usersService.getAll();
   }
 
-  @Get('me')
+  @Get(currentUserAlias)
   getMe(@Request() req): UserDocument {
     const user = req.user as UserDocument;
     return user;

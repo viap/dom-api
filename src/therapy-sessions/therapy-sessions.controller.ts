@@ -6,10 +6,12 @@ import {
   Param,
   Post,
   Put,
+  Request,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
+import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/roles.enum';
 import { IsMyTherapySessions } from './decorators/is-my-therapy-session.decorator';
@@ -41,24 +43,35 @@ export class TherapySessionsController {
     return this.therapySessionService.getById(sessionId);
   }
 
+  // NOTICE: '.../psychologist/me' is using for data access for current user therapy sessions
   @Get('/psychologist/:psychologistId')
   @IsMyTherapySessions()
   getAllForPsychologist(
-    @Param('psychologistId') psychologistId: string,
+    @Request() req,
   ): Promise<Array<TherapySessionDocument>> {
-    return this.therapySessionService.getAllForPsychologist(psychologistId);
+    if (req.psychologist) {
+      const psychologistId = (
+        req.psychologist as PsychologistDocument
+      )._id.toString();
+      return this.therapySessionService.getAllForPsychologist(psychologistId);
+    }
   }
 
   @Get('/psychologist/:psychologistId/client/:clientId')
   @IsMyTherapySessions()
   getAllForPsychologistAndClient(
-    @Param('psychologistId') psychologistId: string,
+    @Request() req,
     @Param('clientId') clientId: string,
   ): Promise<Array<TherapySessionDocument>> {
-    return this.therapySessionService.getAllForPsychologistAndClient(
-      psychologistId,
-      clientId,
-    );
+    if (req.psychologist) {
+      const psychologistId = (
+        req.psychologist as PsychologistDocument
+      )._id.toString();
+      return this.therapySessionService.getAllForPsychologistAndClient(
+        psychologistId,
+        clientId,
+      );
+    }
   }
 
   @Post()

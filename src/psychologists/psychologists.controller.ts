@@ -24,6 +24,9 @@ import { joiCreateNewClientSchema } from './schemas/joi.create-new-client.schema
 import { joiCreatePsychologistSchema } from './schemas/joi.create-psychologist.schema';
 import { joiUpdatePsychologistSchema } from './schemas/joi.update-psychologist.schema';
 import { PsychologistDocument } from './schemas/psychologist.schema';
+import { joiEditMyClientSchema } from './schemas/joi.edit-my-client.schema';
+import { EditMyClientDto } from './dto/edit-my-client.dto';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
 
 @Controller('psychologists')
 export class PsychologistsController {
@@ -35,7 +38,7 @@ export class PsychologistsController {
     return this.psychologistService.getAll();
   }
 
-  @Get('me')
+  @Get(currentUserAlias)
   @Roles(Role.Psychologist)
   getMe(@Request() req): Promise<PsychologistDocument> {
     const user = req.user as UserDocument;
@@ -44,7 +47,7 @@ export class PsychologistsController {
     }
   }
 
-  @Get('me/clients')
+  @Get(currentUserAlias + '/clients')
   @Roles(Role.Psychologist)
   async getClients(@Request() req): Promise<Array<Client>> {
     const psychologist = await this.getMe(req);
@@ -69,7 +72,7 @@ export class PsychologistsController {
     return this.psychologistService.create(createData);
   }
 
-  @Post('me/add-new-client')
+  @Post(currentUserAlias + '/add-new-client')
   @Roles(Role.Psychologist)
   async addMyNewClient(
     @Request() req,
@@ -81,6 +84,24 @@ export class PsychologistsController {
       return this.psychologistService.addNewClient(
         psychologist._id.toString(),
         client,
+      );
+    }
+  }
+
+  @Put(currentUserAlias + '/edit-client/:userId')
+  @Roles(Role.Admin, Role.Editor)
+  async editMyClient(
+    @Request() req,
+    @Param('userId') userId: string,
+    @Body(new JoiValidationPipe(joiEditMyClientSchema))
+    clientData: EditMyClientDto,
+  ): Promise<boolean> {
+    const psychologist = await this.getMe(req);
+    if (psychologist) {
+      return this.psychologistService.editPsychologistClient(
+        psychologist._id.toString(),
+        userId,
+        clientData,
       );
     }
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { addItems } from 'src/common/utils/add-items.util';
 import { removeItems } from 'src/common/utils/remove-item.util';
 import { Role } from 'src/roles/roles.enum';
@@ -13,8 +13,17 @@ import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
+import { EditMyClientDto } from './dto/edit-my-client.dto';
 
-const submodels = ['user'];
+const submodels = [
+  {
+    path: 'clients',
+    populate: {
+      path: 'user',
+      model: 'User',
+    },
+  },
+];
 
 @Injectable()
 export class PsychologistsService {
@@ -28,8 +37,14 @@ export class PsychologistsService {
     return this.psychologistModel.find().populate(submodels).exec();
   }
 
-  async getById(id: string): Promise<PsychologistDocument | null> {
-    return this.psychologistModel.findById(id).populate(submodels).exec();
+  async getById(
+    id: string,
+    populated = true,
+  ): Promise<PsychologistDocument | null> {
+    return this.psychologistModel
+      .findById(id)
+      .populate(populated ? submodels : undefined)
+      .exec();
   }
 
   async getByUserId(userId: string): Promise<PsychologistDocument | null> {
@@ -101,7 +116,7 @@ export class PsychologistsService {
           user: user._id,
           descr: '',
         });
-        psychologist.save();
+        await psychologist.save();
       }
       return true;
     } else {
@@ -120,11 +135,31 @@ export class PsychologistsService {
         user: user._id,
         descr: newClient.descr,
       });
-      psychologist.save();
+      await psychologist.save();
       return true;
     } else {
       return false;
     }
+  }
+
+  async editPsychologistClient(
+    psychologistId: string,
+    userId: string,
+    client: EditMyClientDto,
+  ): Promise<boolean> {
+    await this.psychologistModel.findByIdAndUpdate(
+      psychologistId,
+      {
+        $set: {
+          'clients.$[outer].descr': client.descr,
+        },
+      },
+      {
+        arrayFilters: [{ 'outer.user': new mongoose.Types.ObjectId(userId) }],
+      },
+    );
+
+    return true;
   }
 
   async remove(id: string): Promise<PsychologistDocument | null> {
