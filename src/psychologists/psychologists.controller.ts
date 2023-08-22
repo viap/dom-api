@@ -112,7 +112,7 @@ export class PsychologistsController {
     @Param('id') id: string,
     @Param('clientId') clientId: string,
   ): Promise<boolean> {
-    return this.psychologistService.addClient(id, clientId);
+    return this.psychologistService.addClientFromUser(id, clientId);
   }
 
   @Put(':id')
@@ -125,9 +125,22 @@ export class PsychologistsController {
     return this.psychologistService.update(id, updateData);
   }
 
-  @Delete(':id')
+  @Delete(currentUserAlias + '/delete-client/:userId')
+  @Roles(Role.Psychologist)
+  async deleteClient(
+    @Request() req,
+    @Param('userId') userId: string,
+  ): Promise<boolean> {
+    const psychologist = await this.getMe(req);
+    if (psychologist) {
+      return this.psychologistService.deleteClient(psychologist._id, userId);
+    }
+    return false;
+  }
+
+  @Delete(':userId')
   @Roles(Role.Admin)
-  async remove(@Param('id') id: string): Promise<PsychologistDocument> {
-    return this.psychologistService.remove(id);
+  async delete(@Param('userId') userId: string): Promise<boolean> {
+    return this.psychologistService.delete(userId);
   }
 }

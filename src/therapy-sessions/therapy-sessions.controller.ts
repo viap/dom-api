@@ -22,6 +22,7 @@ import { joiUpdateTherapySessionSchema } from './schemas/joi.update-therapy-sess
 import { TherapySessionDocument } from './schemas/therapy-session.schema';
 import { TherapySessionsGuard } from './therapy-sessions.guard';
 import { TherapySessionsService } from './therapy-sessions.service';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
 
 @Controller('therapy-sessions')
 @Roles(Role.Admin, Role.Editor, Role.Psychologist)
@@ -82,6 +83,18 @@ export class TherapySessionsController {
     return this.therapySessionService.create(createData);
   }
 
+  @Post(currentUserAlias)
+  @IsMyTherapySessions()
+  @UsePipes(new JoiValidationPipe(joiCreateTherapySessionSchema))
+  createForMe(
+    @Request() req,
+    @Body() createData: CreateTherapySessionDto,
+  ): Promise<TherapySessionDocument> {
+    if (req.psychologist) {
+      return this.therapySessionService.createFor(req.psychologist, createData);
+    }
+  }
+
   @Put(':sessionId')
   @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   @IsMyTherapySessions()
@@ -95,9 +108,7 @@ export class TherapySessionsController {
 
   @Delete(':sessionId')
   @IsMyTherapySessions()
-  remove(
-    @Param('sessionId') sessionId: string,
-  ): Promise<TherapySessionDocument | null> {
+  remove(@Param('sessionId') sessionId: string): Promise<boolean> {
     return this.therapySessionService.remove(sessionId);
   }
 }

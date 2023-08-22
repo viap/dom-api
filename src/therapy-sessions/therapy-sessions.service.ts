@@ -9,6 +9,7 @@ import {
   TherapySession,
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
+import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 
 const submodels = ['psychologist', 'client'];
 
@@ -62,8 +63,15 @@ export class TherapySessionsService {
     const psychologist = await this.psychologistsService.getById(
       createData.psychologist,
     );
-    const client = await this.usersService.getById(createData.client);
 
+    return this.createFor(psychologist, createData);
+  }
+
+  async createFor(
+    psychologist: PsychologistDocument,
+    createData: CreateTherapySessionDto,
+  ): Promise<TherapySessionDocument> {
+    const client = await this.usersService.getById(createData.client);
     return this.therapySessionModel.create({
       ...createData,
       psychologist: psychologist._id,
@@ -79,7 +87,7 @@ export class TherapySessionsService {
     return this.getById(id);
   }
 
-  async remove(id: string): Promise<TherapySessionDocument | null> {
-    return await this.therapySessionModel.findByIdAndRemove(id);
+  async remove(id: string): Promise<boolean> {
+    return !!(await this.therapySessionModel.findByIdAndRemove(id));
   }
 }

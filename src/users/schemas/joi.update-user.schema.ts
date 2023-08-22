@@ -1,6 +1,7 @@
 import * as Joi from 'joi';
-import { Contact } from './contact.schema';
-import { joiContactSchema } from './joi.contacts.schema';
+
+import { joiContactSchema } from '../../common/schemas/joi.contacts.schema';
+import { Contact } from 'src/common/schemas/contact.schema';
 
 export const joiUpdateUserSchema = Joi.object({
   name: Joi.string(),

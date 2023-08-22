@@ -5,7 +5,7 @@ import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
 import { Role } from 'src/roles/roles.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SocialNetworks } from './enums/social-networks.enum';
+import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()

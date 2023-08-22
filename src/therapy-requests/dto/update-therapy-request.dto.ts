@@ -1,8 +1,9 @@
 import { Contact } from 'src/common/schemas/contact.schema';
 
-export class UpdateUserDto {
+export class UpdateTherapyRequestDto {
   readonly name?: string;
-  readonly roles?: Array<string>;
-  readonly descr?: string;
   readonly contacts?: Array<Contact>;
+  readonly descr?: string;
+  readonly psychologist?: string;
+  readonly user?: string;
 }

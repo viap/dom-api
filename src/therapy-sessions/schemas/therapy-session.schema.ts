@@ -10,7 +10,7 @@ export class TherapySession {
   date: string;
 
   @Prop({ required: true, default: Date.now() })
-  timestamp: string;
+  timestamp: number;
 
   @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
   client: UserDocument;
@@ -31,7 +31,7 @@ export class TherapySession {
   @Prop({ schema: priceSchema })
   comission: Price;
 
-  @Prop()
+  @Prop({ default: '' })
   descr: string;
 }
 

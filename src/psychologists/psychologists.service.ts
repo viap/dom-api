@@ -16,6 +16,7 @@ import {
 import { EditMyClientDto } from './dto/edit-my-client.dto';
 
 const submodels = [
+  'user',
   {
     path: 'clients',
     populate: {
@@ -102,7 +103,10 @@ export class PsychologistsService {
     return this.getById(id);
   }
 
-  async addClient(psychologistId: string, userId: string): Promise<boolean> {
+  async addClientFromUser(
+    psychologistId: string,
+    userId: string,
+  ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     const user = await this.userService.getById(userId);
 
@@ -142,6 +146,28 @@ export class PsychologistsService {
     }
   }
 
+  async deleteClient(psychologistId: string, userId: string): Promise<boolean> {
+    const psychologist = await this.getById(psychologistId);
+    if (psychologist) {
+      const result = await this.psychologistModel.updateMany(
+        {},
+        {
+          $pull: {
+            clients: {
+              user: {
+                $eq: new mongoose.Types.ObjectId(userId),
+              },
+            },
+          },
+        },
+      );
+
+      return result.modifiedCount > 0;
+    } else {
+      return false;
+    }
+  }
+
   async editPsychologistClient(
     psychologistId: string,
     userId: string,
@@ -162,7 +188,7 @@ export class PsychologistsService {
     return true;
   }
 
-  async remove(id: string): Promise<PsychologistDocument | null> {
+  async delete(id: string): Promise<boolean> {
     const psychologist = await this.getById(id);
 
     if (psychologist) {
@@ -174,9 +200,9 @@ export class PsychologistsService {
       ]);
       await user.save();
 
-      await this.psychologistModel.findByIdAndRemove(id);
+      return !!(await this.psychologistModel.findByIdAndRemove(id));
     }
 
-    return psychologist;
+    return false;
   }
 }

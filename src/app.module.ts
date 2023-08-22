@@ -11,6 +11,7 @@ import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
+import { TherapyRequestsModule } from './therapy-requests/therapy-requests.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.modul
     RolesModule,
     PsychologistsModule,
     TherapySessionsModule,
+    TherapyRequestsModule,
   ],
   controllers: [AppController],
   providers: [
