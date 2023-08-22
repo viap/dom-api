@@ -6,8 +6,8 @@ import { UpdateTherapyRequestDto } from '../dto/update-therapy-request.dto';
 export const joiUpdateTherapyRequestSchema =
   Joi.object<UpdateTherapyRequestDto>({
     name: Joi.string(),
-    psychologist: Joi.string(),
-    user: Joi.string(),
     descr: Joi.string(),
+    user: Joi.string(),
+    psychologist: Joi.string(),
     contacts: Joi.array<Contact>().items(joiContactSchema),
   });

@@ -75,14 +75,18 @@ export class PsychologistsService {
       .populate(submodels)
       .exec();
 
-    if (psychologist) {
-      return psychologist;
-    }
-
     const user = await this.userService.getById(createData.userId);
 
     if (!user) {
       throw new Error('User is not found');
+    }
+
+    if (psychologist) {
+      if (!user.roles.includes(Role.Psychologist)) {
+        user.roles = addItems<Role>(user.roles, [Role.Psychologist]);
+        await user.save();
+      }
+      return psychologist;
     }
 
     const newPsychologist = await this.psychologistModel.create({

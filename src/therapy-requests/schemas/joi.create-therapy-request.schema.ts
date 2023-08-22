@@ -6,8 +6,8 @@ import { Contact } from 'src/common/schemas/contact.schema';
 export const joiCreateTherapyRequestSchema =
   Joi.object<CreateTherapyRequestDto>({
     name: Joi.string().required(),
-    psychologist: Joi.string(),
+    descr: Joi.string().required(),
     user: Joi.string(),
-    descr: Joi.string(),
+    psychologist: Joi.string(),
     contacts: Joi.array<Contact>().items(joiContactSchema).required(),
   });
