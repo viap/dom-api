@@ -29,6 +29,12 @@ export class TherapyRequest {
     default: [],
   })
   contacts: Array<Contact>;
+
+  @Prop({
+    required: true,
+    default: false,
+  })
+  accepted: boolean;
 }
 
 export const schemaTherapyRequest =

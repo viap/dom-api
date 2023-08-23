@@ -37,6 +37,19 @@ export class TherapyRequestsService {
     return this.therapyRequestModel.find().populate(submodels).exec();
   }
 
+  async getAllForPsychologist(
+    psychologistId: string,
+  ): Promise<Array<TherapyRequestDocument>> {
+    try {
+      return await this.therapyRequestModel
+        .find({ psychologist: psychologistId })
+        .populate(submodels)
+        .exec();
+    } catch {
+      return [];
+    }
+  }
+
   async getById(id: string): Promise<TherapyRequestDocument> {
     return this.therapyRequestModel.findById(id).populate(submodels).exec();
   }
@@ -70,6 +83,51 @@ export class TherapyRequestsService {
         ? new mongoose.Types.ObjectId(createData.user)
         : undefined,
     });
+  }
+
+  async acceptRequest(therapyRequestId: string): Promise<boolean> {
+    const therapyRequest = await this.getById(therapyRequestId);
+    let result: boolean | undefined = false;
+
+    if (
+      therapyRequest &&
+      therapyRequest.psychologist &&
+      !therapyRequest.accepted
+    ) {
+      if (therapyRequest.user) {
+        result = await this.psychologistService.addClientFromUser(
+          therapyRequest.psychologist._id.toString(),
+          therapyRequest.user._id.toString(),
+        );
+      } else {
+        result = await this.psychologistService.addNewClient(
+          therapyRequest.psychologist._id.toString(),
+          {
+            name: therapyRequest.name,
+          },
+        );
+      }
+
+      if (result) {
+        therapyRequest.accepted = true;
+        await therapyRequest.save();
+      }
+    }
+
+    return result;
+  }
+
+  async rejectRequest(therapyRequestId: string): Promise<boolean> {
+    const therapyRequest = await this.getById(therapyRequestId);
+
+    if (therapyRequest && !therapyRequest.accepted) {
+      therapyRequest.psychologist = undefined;
+      await therapyRequest.save();
+
+      return !therapyRequest.psychologist;
+    }
+
+    return false;
   }
 
   async update(

@@ -6,6 +6,8 @@ import {
   Param,
   Post,
   Put,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
 import { TherapyRequestsService } from './therapy-requests.service';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
@@ -13,8 +15,15 @@ import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-requ
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { joiUpdateTherapyRequestSchema } from './schemas/joi.update-therapy-request.schema';
 import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
+import { TherapyRequestsGuard } from './therapy-requests.guard';
+import { IsMyData } from './decorators/is-my-data.decorator';
+import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
+import { Roles } from 'src/roles/decorators/role.docorator';
+import { Role } from 'src/roles/roles.enum';
 
 @Controller('therapy-requests')
+@Roles(Role.Admin, Role.Editor, Role.Psychologist)
+@UseGuards(TherapyRequestsGuard)
 export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
 
@@ -28,12 +37,38 @@ export class TherapyRequestsController {
     return this.therapyRequestService.getById(therapyRequestId);
   }
 
+  @Get('/psychologist/:psychologistId')
+  @IsMyData()
+  getAllForPsychologist(
+    @Request() req,
+    @Param('psychologistId') psychologistId: string,
+  ) {
+    if (req.psychologist) {
+      const psychologistId = (
+        req.psychologist as PsychologistDocument
+      )._id.toString();
+      return this.therapyRequestService.getAllForPsychologist(psychologistId);
+    } else if (psychologistId) {
+      return this.therapyRequestService.getAllForPsychologist(psychologistId);
+    }
+  }
+
   @Post()
   create(
     @Body(new JoiValidationPipe(joiCreateTherapyRequestSchema))
     createData: CreateTherapyRequestDto,
   ) {
     return this.therapyRequestService.create(createData);
+  }
+
+  @Post(':therapyRequestId/accept')
+  acceptRequest(@Param('therapyRequestId') therapyRequestId: string) {
+    return this.therapyRequestService.acceptRequest(therapyRequestId);
+  }
+
+  @Post(':therapyRequestId/reject')
+  rejectRequest(@Param('therapyRequestId') therapyRequestId: string) {
+    return this.therapyRequestService.rejectRequest(therapyRequestId);
   }
 
   @Put(':therapyRequestId')

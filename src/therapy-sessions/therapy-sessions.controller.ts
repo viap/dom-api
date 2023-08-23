@@ -84,6 +84,7 @@ export class TherapySessionsController {
   }
 
   @Post(currentUserAlias)
+  @Roles(Role.Psychologist)
   @IsMyTherapySessions()
   @UsePipes(new JoiValidationPipe(joiCreateTherapySessionSchema))
   createForMe(
