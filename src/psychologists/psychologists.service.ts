@@ -4,25 +4,32 @@ import mongoose, { Model } from 'mongoose';
 import { addItems } from 'src/common/utils/add-items.util';
 import { removeItems } from 'src/common/utils/remove-item.util';
 import { Role } from 'src/roles/roles.enum';
+import { TherapyRequestDocument } from 'src/therapy-requests/schemas/therapy-request.schema';
 import { UsersService } from 'src/users/users.service';
 import { CreateNewClientDto } from './dto/create-new-client.dto';
 import { CreatePsychologistDto } from './dto/create-psychologist.dto';
+import { EditMyClientDto } from './dto/edit-my-client.dto';
 import { UpdatePsychologistDto } from './dto/update-psychologist.dto';
 import { Client } from './schemas/clients.schema';
 import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
-import { EditMyClientDto } from './dto/edit-my-client.dto';
 
 const submodels = [
   'user',
   {
     path: 'clients',
-    populate: {
-      path: 'user',
-      model: 'User',
-    },
+    populate: [
+      {
+        path: 'user',
+        model: 'User',
+      },
+      {
+        path: 'therapyRequest',
+        model: 'TherapyRequest',
+      },
+    ],
   },
 ];
 
@@ -57,13 +64,7 @@ export class PsychologistsService {
 
   async getClients(psychologistId: string): Promise<Array<Client>> {
     return (
-      await this.psychologistModel.findById(psychologistId).populate({
-        path: 'clients',
-        populate: {
-          path: 'user',
-          model: 'User',
-        },
-      })
+      await this.psychologistModel.findById(psychologistId).populate(submodels)
     ).clients;
   }
 
@@ -110,6 +111,7 @@ export class PsychologistsService {
   async addClientFromUser(
     psychologistId: string,
     userId: string,
+    therapyRequest?: TherapyRequestDocument,
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     const user = await this.userService.getById(userId);
@@ -123,6 +125,7 @@ export class PsychologistsService {
         psychologist.clients.push({
           user: user._id,
           descr: '',
+          therapyRequest: therapyRequest?._id,
         });
         await psychologist.save();
       }
@@ -135,13 +138,18 @@ export class PsychologistsService {
   async addNewClient(
     psychologistId: string,
     newClient: CreateNewClientDto,
+    therapyRequest?: TherapyRequestDocument,
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const user = await this.userService.create({ name: newClient.name });
+      const user = await this.userService.create({
+        name: newClient.name,
+        contacts: newClient.contacts,
+      });
       psychologist.clients.push({
         user: user._id,
-        descr: newClient.descr,
+        descr: newClient.descr || '',
+        therapyRequest: therapyRequest?._id,
       });
       await psychologist.save();
       return true;

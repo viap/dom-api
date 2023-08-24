@@ -77,13 +77,13 @@ export class PsychologistsController {
   async addMyNewClient(
     @Request() req,
     @Body(new JoiValidationPipe(joiCreateNewClientSchema))
-    client: CreateNewClientDto,
+    clientData: CreateNewClientDto,
   ): Promise<boolean> {
     const psychologist = await this.getMe(req);
     if (psychologist) {
       return this.psychologistService.addNewClient(
         psychologist._id.toString(),
-        client,
+        clientData,
       );
     }
   }

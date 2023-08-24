@@ -1,16 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import mongoose, { Model } from 'mongoose';
+import { SocialNetworks } from 'src/common/enums/social-networks.enum';
+import { Contact } from 'src/common/schemas/contact.schema';
+import { PsychologistsService } from 'src/psychologists/psychologists.service';
+import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
+import { UserDocument } from 'src/users/schemas/user.schema';
+import { UsersService } from 'src/users/users.service';
+import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
+import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
 import {
   TherapyRequest,
   TherapyRequestDocument,
 } from './schemas/therapy-request.schema';
-import mongoose, { Model } from 'mongoose';
-import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
-import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
-import { PsychologistsService } from 'src/psychologists/psychologists.service';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
-import { UsersService } from 'src/users/users.service';
-import { UserDocument } from 'src/users/schemas/user.schema';
 
 const submodels = [
   'user',
@@ -94,17 +96,34 @@ export class TherapyRequestsService {
       therapyRequest.psychologist &&
       !therapyRequest.accepted
     ) {
-      if (therapyRequest.user) {
+      const telegramUserFromRequest: Contact | undefined =
+        therapyRequest.contacts.find(
+          (contact) => contact.network === SocialNetworks.Telegram,
+        );
+
+      const telegramUserFromUser: Contact | undefined =
+        therapyRequest.user?.contacts.find(
+          (contact) => contact.network === SocialNetworks.Telegram,
+        );
+
+      if (
+        therapyRequest.user &&
+        telegramUserFromUser?.username === telegramUserFromRequest?.username
+      ) {
         result = await this.psychologistService.addClientFromUser(
           therapyRequest.psychologist._id.toString(),
           therapyRequest.user._id.toString(),
+          therapyRequest,
         );
       } else {
         result = await this.psychologistService.addNewClient(
           therapyRequest.psychologist._id.toString(),
           {
             name: therapyRequest.name,
+            descr: therapyRequest.descr,
+            contacts: therapyRequest.contacts,
           },
+          therapyRequest,
         );
       }
 
