@@ -8,7 +8,7 @@ export type TherapyRequestDocument = TherapyRequest & Document;
 
 @Schema()
 export class TherapyRequest {
-  @Prop({ required: true, default: Date.now() })
+  @Prop({ required: true, default: () => Date.now() })
   timestamp: number;
 
   @Prop({ required: true })

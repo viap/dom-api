@@ -9,7 +9,7 @@ export class TherapySession {
   @Prop({ required: true })
   date: string;
 
-  @Prop({ required: true, default: Date.now() })
+  @Prop({ required: true, default: () => Date.now() })
   timestamp: number;
 
   @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
