@@ -35,16 +35,22 @@ export class TherapyRequestsService {
     private userService: UsersService,
   ) {}
 
-  async getAll(): Promise<Array<TherapyRequestDocument>> {
-    return this.therapyRequestModel.find().populate(submodels).exec();
+  async getAll(params?: {
+    [key: string]: any;
+  }): Promise<Array<TherapyRequestDocument>> {
+    console.log('params', params);
+    return this.therapyRequestModel.find(params).populate(submodels).exec();
   }
 
   async getAllForPsychologist(
     psychologistId: string,
+    params?: {
+      [key: string]: any;
+    },
   ): Promise<Array<TherapyRequestDocument>> {
     try {
       return await this.therapyRequestModel
-        .find({ psychologist: psychologistId })
+        .find({ psychologist: psychologistId, ...params })
         .populate(submodels)
         .exec();
     } catch {

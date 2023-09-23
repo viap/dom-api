@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -28,8 +29,14 @@ export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
 
   @Get()
-  getAll() {
-    return this.therapyRequestService.getAll();
+  getAll(@Query() params?: { [key: string]: any }) {
+    let accepted: boolean | undefined;
+    try {
+      accepted = !!JSON.parse(params.accepted);
+    } catch {
+      accepted = undefined;
+    }
+    return this.therapyRequestService.getAll({ accepted });
   }
 
   @Get(':therapyRequestId')
@@ -42,14 +49,26 @@ export class TherapyRequestsController {
   getAllForPsychologist(
     @Request() req,
     @Param('psychologistId') psychologistId: string,
+    @Query() params?: { [key: string]: any },
   ) {
+    let accepted: boolean | undefined;
+    try {
+      accepted = !!JSON.parse(params.accepted);
+    } catch {
+      accepted = undefined;
+    }
+
     if (req.psychologist) {
       const psychologistId = (
         req.psychologist as PsychologistDocument
       )._id.toString();
-      return this.therapyRequestService.getAllForPsychologist(psychologistId);
+      return this.therapyRequestService.getAllForPsychologist(psychologistId, {
+        accepted,
+      });
     } else if (psychologistId) {
-      return this.therapyRequestService.getAllForPsychologist(psychologistId);
+      return this.therapyRequestService.getAllForPsychologist(psychologistId, {
+        accepted,
+      });
     }
   }
 
