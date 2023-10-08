@@ -7,19 +7,37 @@ jobs:
     steps:
       - name: Get the project code
         uses: actions/checkout@v3
+      - name: Make env file with secrets
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+          directory: 'config/'
+          fail_on_empty: true
+          envkey_NODE_ENV: prod
+          envkey_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          envkey_MONGO_URL: ${{ secrets.MONGO_URL }}
+          envkey_MONGO_DBNAME: ${{ secrets.MONGO_DBNAME }}
+          envkey_MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          envkey_MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
       - name: Init the project
         run: npm install
       - name: Build the project
         run: yarn build
-      - name: Show build's files
-        run: ls -ls ./dist
+      - name: Run tests
+        run: echo 'There will be tests'
       - name: Deploy to server
         uses: easingthemes/ssh-deploy@main
         with:
-          SOURCE: 'dist/'
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           ARGS: '-avzr -i'
           REMOTE_HOST: ${{secrets.REMOTE_HOST}}
           REMOTE_USER: ${{secrets.REMOTE_USER}}
           TARGET: ${{secrets.REMOTE_TARGET}}
           EXCLUDE: '/.github/, /.git/, /.gitignore, /dist/, /node_modules/'
+      - name: Remote | Init and start the project
+        uses: fifsky/ssh-action@master
+        with:
+          command: |
+            cd ${{secrets.REMOTE_TARGET}} && npm install && yarn build && yarn start
+          host: ${{ secrets.REMOTE_HOST }}
+          user: ${{secrets.REMOTE_USER}}
+          key: ${{ secrets.SSH_PRIVATE_KEY}}
