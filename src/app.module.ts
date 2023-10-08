@@ -12,6 +12,8 @@ import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
 import { TherapyRequestsModule } from './therapy-requests/therapy-requests.module';
+import { EventsModule } from './events/events.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { TherapyRequestsModule } from './therapy-requests/therapy-requests.modul
     PsychologistsModule,
     TherapySessionsModule,
     TherapyRequestsModule,
+    EventsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

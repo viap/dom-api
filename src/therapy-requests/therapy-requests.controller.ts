@@ -20,7 +20,7 @@ import { TherapyRequestsGuard } from './therapy-requests.guard';
 import { IsMyData } from './decorators/is-my-data.decorator';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/roles.enum';
+import { Role } from 'src/roles/enums/roles.enum';
 
 @Controller('therapy-requests')
 @Roles(Role.Admin, Role.Editor, Role.Psychologist)

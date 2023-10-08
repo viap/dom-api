@@ -1,10 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { includesOther } from 'src/common/utils/includes-other.util';
+import { includesOther } from 'src/common/utils/includes-other';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { ROLES_KEY } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/roles.enum';
+import { Role } from 'src/roles/enums/roles.enum';
 import { UserDocument } from 'src/users/schemas/user.schema';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';

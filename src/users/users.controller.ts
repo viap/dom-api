@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/roles.enum';
+import { Role } from 'src/roles/enums/roles.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserDocument } from './schemas/user.schema';

@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import { Model } from 'mongoose';
 import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 import { Contact } from 'src/common/schemas/contact.schema';
+import { valueToObjectId } from 'src/common/utils/value-to-object-id';
+import { NotificationTypes } from 'src/notifications/enums/notification-types.enum';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
+import { Role } from 'src/roles/enums/roles.enum';
 import { UserDocument } from 'src/users/schemas/user.schema';
 import { UsersService } from 'src/users/users.service';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
@@ -33,12 +37,12 @@ export class TherapyRequestsService {
     private therapyRequestModel: Model<TherapyRequest>,
     private psychologistService: PsychologistsService,
     private userService: UsersService,
+    private notificationService: NotificationsService,
   ) {}
 
   async getAll(params?: {
     [key: string]: any;
   }): Promise<Array<TherapyRequestDocument>> {
-    console.log('params', params);
     return this.therapyRequestModel.find(params).populate(submodels).exec();
   }
 
@@ -78,19 +82,32 @@ export class TherapyRequestsService {
       user = await this.userService.getById(createData.psychologist);
     }
 
-    return this.therapyRequestModel.create({
-      ...createData,
-      psychologist: psychologist
-        ? psychologist._id
-        : createData.psychologist
-        ? new mongoose.Types.ObjectId(createData.psychologist)
-        : undefined,
-      user: user
-        ? user._id
-        : createData.user
-        ? new mongoose.Types.ObjectId(createData.user)
-        : undefined,
+    const therapyRequest = await (
+      await this.therapyRequestModel.create({
+        ...createData,
+        psychologist: psychologist
+          ? psychologist._id
+          : createData.psychologist
+          ? valueToObjectId(createData.psychologist)
+          : undefined,
+        user: user
+          ? user._id
+          : createData.user
+          ? valueToObjectId(createData.user)
+          : undefined,
+      })
+    ).populate(submodels);
+
+    this.notificationService.create({
+      type: NotificationTypes.NEW_THERAPY_REQUEST,
+      roles: [Role.Psychologist],
+      recipients:
+        therapyRequest.psychologist && therapyRequest.psychologist.user
+          ? [therapyRequest.psychologist.user._id.toString()]
+          : undefined,
     });
+
+    return therapyRequest;
   }
 
   async acceptRequest(therapyRequestId: string): Promise<boolean> {

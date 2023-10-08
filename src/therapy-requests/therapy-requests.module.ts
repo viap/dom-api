@@ -8,11 +8,13 @@ import {
 } from './schemas/therapy-request.schema';
 import { PsychologistsModule } from 'src/psychologists/psychologists.module';
 import { UsersModule } from 'src/users/users.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     UsersModule,
     PsychologistsModule,
+    NotificationsModule,
     MongooseModule.forFeature([
       {
         name: TherapyRequest.name,

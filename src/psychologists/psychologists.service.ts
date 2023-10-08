@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import { addItems } from 'src/common/utils/add-items.util';
-import { removeItems } from 'src/common/utils/remove-item.util';
-import { Role } from 'src/roles/roles.enum';
+import { addItems } from 'src/common/utils/add-items';
+import { removeItems } from 'src/common/utils/remove-item';
+import { Role } from 'src/roles/enums/roles.enum';
 import { TherapyRequestDocument } from 'src/therapy-requests/schemas/therapy-request.schema';
 import { UsersService } from 'src/users/users.service';
 import { CreateNewClientDto } from './dto/create-new-client.dto';
