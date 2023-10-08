@@ -8,7 +8,7 @@ jobs:
       - name: Get the project code
         uses: actions/checkout@v3
       - name: Init the project
-        run: npm ci
+        run: npm install
       - name: Build the project
         run: yarn build
       - name: Show build's files
