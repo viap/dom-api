@@ -1,0 +1,15 @@
+name: Deployment
+on: workflow_dispatch
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Get the project code
+        uses: actions/checkout@v3
+      - name: Init the project
+        run: npm ci
+      - name: Build the project
+        run: yarn build
+      - name: Show build's files
+        run: ls -ls ./dist
