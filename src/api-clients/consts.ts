@@ -1,9 +1,8 @@
 export const clientConstants = {
   apiClients: [
     {
-      name: 'domBot',
-      // TODO: make it safe
-      password: 'Knock-Knock-Bot',
+      name: process.env.BOT_CLIENT_NAME,
+      password: process.env.BOT_CLIENT_PASSWORD,
     },
   ],
 };
