@@ -13,11 +13,12 @@ jobs:
           directory: 'config/'
           fail_on_empty: true
           envkey_NODE_ENV: prod
-          envkey_JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          envkey_MONGO_URL: ${{ secrets.MONGO_URL }}
-          envkey_MONGO_DBNAME: ${{ secrets.MONGO_DBNAME }}
-          envkey_MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
-          envkey_MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          envkey_PORT: ${{secrets.PORT}}
+          envkey_JWT_SECRET: ${{secrets.JWT_SECRET}}
+          envkey_MONGO_URL: ${{secrets.MONGO_URL}}
+          envkey_MONGO_DBNAME: ${{secrets.MONGO_DBNAME}}
+          envkey_MONGO_INITDB_ROOT_USERNAME: ${{secrets.MONGO_INITDB_ROOT_USERNAME}}
+          envkey_MONGO_INITDB_ROOT_PASSWORD: ${{secrets.MONGO_INITDB_ROOT_PASSWORD}}
       - name: Init the project
         run: npm install
       - name: Build the project
@@ -27,7 +28,7 @@ jobs:
       - name: Deploy to server
         uses: easingthemes/ssh-deploy@main
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
           ARGS: '-avzr -i'
           REMOTE_HOST: ${{secrets.REMOTE_HOST}}
           REMOTE_USER: ${{secrets.REMOTE_USER}}
@@ -37,7 +38,11 @@ jobs:
         uses: fifsky/ssh-action@master
         with:
           command: |
-            cd ${{secrets.REMOTE_TARGET}} && npm install && yarn build && yarn start
-          host: ${{ secrets.REMOTE_HOST }}
+            cd ${{secrets.REMOTE_TARGET}} && 
+            npm install && 
+            pm2 delete domApi 2 > /dev/null
+            npm run build &&
+            pm2 start npm --name domApi -- start
+          host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
-          key: ${{ secrets.SSH_PRIVATE_KEY}}
+          key: ${{secrets.SSH_PRIVATE_KEY}}
