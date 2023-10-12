@@ -16,7 +16,10 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDocument } from 'src/notifications/schemas/notification.schema';
 
 const socketToUser: { [key: string]: string } = {};
-@WebSocketGateway(3004, {
+const webSocketPort = process.env.WEBSOCKET_PORT
+  ? parseInt(process.env.WEBSOCKET_PORT)
+  : 3004;
+@WebSocketGateway(webSocketPort, {
   transports: ['websocket'],
   cors: {
     origin: '*',
