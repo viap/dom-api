@@ -91,6 +91,12 @@ export class NotificationsService {
   ): Promise<NotificationDocument | false> {
     const validationResult = joiCreateNotificationSchema.validate(createData);
     if (!validationResult.error) {
+      createData.startsAt = createData.startsAt || Date.now();
+      // NOTICE: finishAt = startAt + one day, if not set another
+      createData.finishAt =
+        createData.finishAt ||
+        new Date().setDate(new Date(createData.startsAt).getDate() + 1);
+
       const recipients: Array<mongoose.Types.ObjectId> | undefined =
         createData.recipients
           ? createData.recipients.map(valueToObjectId)
@@ -129,14 +135,65 @@ export class NotificationsService {
 
   async addReceived(notificationId: string, userId: string): Promise<boolean> {
     const user = await this.userService.getById(userId);
-
     if (!user) return false;
 
-    return !!(await this.notificationModel
-      .findByIdAndUpdate(notificationId, {
-        $addToSet: { received: user._id },
-      })
-      .exec());
+    // NOTICE: add user to received list in notification
+    await this.notificationModel
+      .findOneAndUpdate(
+        {
+          _id: notificationId,
+          received: {
+            $not: { $elemMatch: { $eq: user._id } },
+          },
+        },
+        {
+          $addToSet: { received: user._id },
+        },
+      )
+      .exec();
+
+    await this.updateNotificationStatus(notificationId);
+
+    // NOTICE: check if user was added to received list in notification
+    return (
+      (await this.notificationModel
+        .findOne({
+          _id: notificationId,
+          received: {
+            $elemMatch: { $eq: user._id },
+          },
+        })
+        .count()) === 1
+    );
+  }
+
+  async updateNotificationStatus(notificationId: string) {
+    const notification = await this.notificationModel.findById(notificationId);
+
+    let isEveryoneWasNotified = false;
+    const isTimeOver = notification.finishAt < Date.now();
+
+    if (!isTimeOver) {
+      if (
+        notification.recipients.length > 0 &&
+        notification.recipients.length === notification.received.length
+      ) {
+        isEveryoneWasNotified =
+          notification.recipients
+            .sort()
+            .map((item) => item.toString())
+            .join() ===
+          notification.received
+            .sort()
+            .map((item) => item.toString())
+            .join();
+      }
+    }
+
+    if (isEveryoneWasNotified || isTimeOver) {
+      notification.status = NotificationStatuses.INACTIVE;
+      notification.save();
+    }
   }
 
   async remove(id: string): Promise<boolean> {

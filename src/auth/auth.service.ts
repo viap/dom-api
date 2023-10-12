@@ -4,7 +4,9 @@ import { Document } from 'mongoose';
 import { ApiClientsService } from 'src/api-clients/api-clients.service';
 import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
+import { jwtConstants } from './constants';
 import { TelegramUserDto } from './dto/telegram.dto';
+import { TokenPayloadDto } from './dto/token-payload.dto';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +15,12 @@ export class AuthService {
     private jwtService: JwtService,
     private userService: UsersService,
   ) {}
+
+  async verifyToken(token: string): Promise<TokenPayloadDto | undefined> {
+    return await this.jwtService.verifyAsync(token, {
+      secret: jwtConstants.secret,
+    });
+  }
 
   async signInByTelegram(
     initClient: ApiClientDto,
@@ -29,7 +37,10 @@ export class AuthService {
         telegram,
       ))) as unknown as Document;
 
-    const payload = { userId: user._id, clientName: apiClient.name };
+    const payload: TokenPayloadDto = {
+      userId: user._id,
+      clientName: apiClient.name,
+    };
 
     return { auth_token: await this.jwtService.signAsync(payload) };
   }

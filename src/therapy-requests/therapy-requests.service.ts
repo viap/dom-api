@@ -110,6 +110,31 @@ export class TherapyRequestsService {
     return therapyRequest;
   }
 
+  async update(
+    id: string,
+    updateData: UpdateTherapyRequestDto,
+  ): Promise<TherapyRequestDocument> {
+    await this.therapyRequestModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+
+    if (updateData.psychologist) {
+      const psychologist = await this.psychologistService.getById(
+        updateData.psychologist,
+      );
+
+      if (psychologist) {
+        await this.notificationService.create({
+          type: NotificationTypes.TRANSFER_THERAPY_REQUEST,
+          roles: [Role.Psychologist],
+          recipients: [psychologist.user._id.toString()],
+        });
+      }
+    }
+
+    return this.getById(id);
+  }
+
   async acceptRequest(therapyRequestId: string): Promise<boolean> {
     const therapyRequest = await this.getById(therapyRequestId);
     let result: boolean | undefined = false;
@@ -170,16 +195,6 @@ export class TherapyRequestsService {
     }
 
     return false;
-  }
-
-  async update(
-    id: string,
-    updateData: UpdateTherapyRequestDto,
-  ): Promise<TherapyRequestDocument> {
-    await this.therapyRequestModel.findByIdAndUpdate(id, updateData, {
-      new: true,
-    });
-    return this.getById(id);
   }
 
   async remove(id: string): Promise<boolean> {

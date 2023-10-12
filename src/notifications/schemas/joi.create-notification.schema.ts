@@ -8,9 +8,7 @@ export const joiCreateNotificationSchema = Joi.object<CreateNotificationDto>({
   type: Joi.string()
     .valid(...Object.values(NotificationTypes))
     .required(),
-  status: Joi.array<NotificationStatuses>().items(
-    ...Object.values(NotificationStatuses),
-  ),
+  status: Joi.string().valid(...Object.values(NotificationStatuses)),
   roles: Joi.array<Role>().items(...Object.values(Role)),
   recipients: Joi.array<string>(),
   startsAt: Joi.number(),

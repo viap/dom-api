@@ -10,7 +10,12 @@ import {
 import { Observable, from } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Server, Socket } from 'socket.io';
+import { AuthService } from 'src/auth/auth.service';
+import extractTokenFromHeaders from 'src/common/utils/extract-token-from-headers';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationDocument } from 'src/notifications/schemas/notification.schema';
 
+const socketToUser: { [key: string]: string } = {};
 @WebSocketGateway(3004, {
   transports: ['websocket'],
   cors: {
@@ -21,27 +26,61 @@ export class EventsGateway implements OnModuleInit {
   @WebSocketServer()
   server: Server;
 
+  constructor(
+    private authService: AuthService,
+    private notificationsService: NotificationsService,
+  ) {}
+
   onModuleInit() {
-    this.server.on('connection', (socket: Socket) => {
-      socket.emit('inited', { id: socket.id });
+    this.server.on('connection', async (socket: Socket) => {
+      // NOTICE: authorisation by token
+      const token = extractTokenFromHeaders(socket.handshake.headers);
+      if (token) {
+        const payload = await this.authService.verifyToken(token);
+        if (payload?.userId) {
+          socketToUser[socket.id] = payload.userId;
+          socket.emit('inited', { id: socket.id });
+        }
+      }
     });
   }
 
-  @SubscribeMessage('events')
-  findAll(
-    @MessageBody() data: any,
+  @SubscribeMessage('auth-by-token')
+  async authUser(
+    @MessageBody('token') token: string,
     @ConnectedSocket() client: Socket,
-  ): Observable<WsResponse<number>> {
-    return from([1, 2, 3]).pipe(
-      map((item) => ({ event: 'events', data: item })),
-    );
+  ) {
+    const payload = await this.authService.verifyToken(token);
+    if (payload?.userId) {
+      socketToUser[client.id] = payload.userId;
+    }
   }
 
-  @SubscribeMessage('identity')
-  async identity(
-    @MessageBody() data: number,
+  @SubscribeMessage('notifications')
+  async getEvents(
     @ConnectedSocket() client: Socket,
-  ): Promise<number> {
-    return data;
+  ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
+    const userId = socketToUser[client.id];
+    if (userId) {
+      const notifications = await this.notificationsService.getAllByUserId(
+        userId,
+      );
+      return from(notifications).pipe(
+        map((event) => ({ event: 'notification', data: event })),
+      );
+    }
+  }
+
+  @SubscribeMessage('notifications/add-received')
+  async addReceived(
+    @MessageBody() data: { notificationId: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<boolean> {
+    const { notificationId } = data;
+    const userId = socketToUser[client.id];
+    if (notificationId && userId) {
+      return this.notificationsService.addReceived(notificationId, userId);
+    }
+    return false;
   }
 }

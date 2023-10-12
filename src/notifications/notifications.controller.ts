@@ -13,12 +13,12 @@ export class NotificationsController {
     return this.notificationService.getAll();
   }
 
-  @Get('user/:userId')
+  @Get('users/:userId')
   getAllForUser(@Param('userId') userId: string) {
     return this.notificationService.getAllByUserId(userId);
   }
 
-  @Post(':notificationId/user/:userId')
+  @Post(':notificationId/add-received/:userId')
   addReceived(
     @Param('notificationId') notificationId: string,
     @Param('userId') userId: string,
