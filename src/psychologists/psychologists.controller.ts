@@ -33,7 +33,7 @@ export class PsychologistsController {
   constructor(private readonly psychologistService: PsychologistsService) {}
 
   @Get()
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.User)
   async getAll(): Promise<Array<PsychologistDocument>> {
     return this.psychologistService.getAll();
   }
@@ -57,7 +57,7 @@ export class PsychologistsController {
   }
 
   @Get(':id')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.User)
   async getOne(@Param('id') id: string): Promise<PsychologistDocument> {
     return this.psychologistService.getById(id);
   }

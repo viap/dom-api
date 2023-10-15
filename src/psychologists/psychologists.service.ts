@@ -65,7 +65,7 @@ export class PsychologistsService {
   async getClients(psychologistId: string): Promise<Array<Client>> {
     return (
       await this.psychologistModel.findById(psychologistId).populate(submodels)
-    ).clients;
+    ).clients.filter((client) => client.user);
   }
 
   async create(

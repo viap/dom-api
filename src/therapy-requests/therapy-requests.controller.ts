@@ -73,6 +73,7 @@ export class TherapyRequestsController {
   }
 
   @Post()
+  @Roles(Role.User)
   create(
     @Body(new JoiValidationPipe(joiCreateTherapyRequestSchema))
     createData: CreateTherapyRequestDto,
