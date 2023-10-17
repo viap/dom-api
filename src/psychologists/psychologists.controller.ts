@@ -89,7 +89,7 @@ export class PsychologistsController {
   }
 
   @Put(currentUserAlias + '/edit-client/:userId')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   async editMyClient(
     @Request() req,
     @Param('userId') userId: string,
@@ -107,7 +107,7 @@ export class PsychologistsController {
   }
 
   @Post(':id/add-client/:clientId')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   async addClient(
     @Param('id') id: string,
     @Param('clientId') clientId: string,
@@ -126,7 +126,7 @@ export class PsychologistsController {
   }
 
   @Delete(currentUserAlias + '/delete-client/:userId')
-  @Roles(Role.Psychologist)
+  @Roles(Role.Admin, Role.Psychologist)
   async deleteClient(
     @Request() req,
     @Param('userId') userId: string,
