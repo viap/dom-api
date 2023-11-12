@@ -47,9 +47,9 @@ jobs:
         with:
           command: |
             cd ${{secrets.REMOTE_TARGET}} && 
+            pm2 delete domApi > /dev/null
             npm install && 
             npm run build &&
-            pm2 delete domApi > /dev/null
             pm2 start npm --name domApi -- start
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
