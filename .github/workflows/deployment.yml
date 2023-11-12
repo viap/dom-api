@@ -37,7 +37,7 @@ jobs:
         uses: easingthemes/ssh-deploy@main
         with:
           SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
-          ARGS: '-avzr -i'
+          ARGS: '-avzr --delete'
           REMOTE_HOST: ${{secrets.REMOTE_HOST}}
           REMOTE_USER: ${{secrets.REMOTE_USER}}
           TARGET: ${{secrets.REMOTE_TARGET}}
@@ -48,8 +48,8 @@ jobs:
           command: |
             cd ${{secrets.REMOTE_TARGET}} && 
             npm install && 
-            pm2 delete domApi 2 > /dev/null
             npm run build &&
+            pm2 delete domApi > /dev/null
             pm2 start npm --name domApi -- start
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
