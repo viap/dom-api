@@ -62,7 +62,7 @@ export class NotificationsService {
             ],
           },
           {
-            // NOTICE: user is not is received list
+            // NOTICE: user is not in received list
             received: { $not: { $elemMatch: { $eq: user._id } } },
           },
           {

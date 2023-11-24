@@ -168,7 +168,6 @@ export class TherapyRequestsService {
           therapyRequest.psychologist._id.toString(),
           {
             name: therapyRequest.name,
-            descr: therapyRequest.descr,
             contacts: therapyRequest.contacts,
           },
           therapyRequest,

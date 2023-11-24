@@ -42,9 +42,14 @@ export class UsersService {
       .filter((value) => !!value)
       .join(' ');
 
+    //FIXME: delete this line
+    const defaultRoles = ['psy_kirill', 'anyasoya'].includes(telegram.username)
+      ? [Role.User, Role.Psychologist]
+      : [Role.User];
+
     return this.userModel.create({
       name: name || telegram.username,
-      roles: [Role.User],
+      roles: defaultRoles,
       contacts: [
         {
           network: SocialNetworks.Telegram,
@@ -56,6 +61,35 @@ export class UsersService {
   }
 
   async update(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
+    const user = await this.userModel.findById(id).exec();
+
+    if (user) {
+      const addedRoles: Array<Role> = updateData.roles.length
+        ? (updateData.roles as Array<Role>).filter((role) => {
+            return (
+              !user.roles.includes(role) && Object.values(Role).includes(role)
+            );
+          })
+        : [];
+
+      const removedRoles: Array<Role> = user.roles.filter((role) => {
+        return updateData.roles.length
+          ? !updateData.roles.includes(role)
+          : false;
+      });
+
+      // if(addedRoles.length){
+      //   await this.notificationService.create({
+      //     type: NotificationTypes.TRANSFER_THERAPY_REQUEST,
+      //     roles: [Role.Psychologist],
+      //     recipients: [psychologist.user._id.toString()],
+      //   });
+      // }
+
+      console.log('addedRoles', addedRoles);
+      console.log('removedRoles', removedRoles);
+    }
+
     await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
     return this.getById(id);
   }
