@@ -43,7 +43,9 @@ export class UsersService {
       .join(' ');
 
     //FIXME: delete this line
-    const defaultRoles = ['psy_kirill', 'anyasoya'].includes(telegram.username)
+    const defaultRoles = ['psy_kirill', 'anyaradapsy'].includes(
+      telegram.username,
+    )
       ? [Role.User, Role.Psychologist]
       : [Role.User];
 
