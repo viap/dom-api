@@ -32,10 +32,9 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    const user = ((await this.userService.getByTelegramId(telegram.id)) ||
-      (await this.userService.createFromTelegram(
-        telegram,
-      ))) as unknown as Document;
+    const user =
+      (await this.userService.getByTelegramId(telegram.id)) ||
+      (await this.userService.createFromTelegram(telegram));
 
     const payload: TokenPayloadDto = {
       userId: user._id,
