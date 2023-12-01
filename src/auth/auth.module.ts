@@ -11,7 +11,7 @@ import { jwtConstants } from './constants';
     UsersModule,
     ApiClientsModule,
     JwtModule.register({
-      global: true,
+      global: false,
       secret: jwtConstants.secret,
       // signOptions: { expiresIn: '1d' },
     }),
