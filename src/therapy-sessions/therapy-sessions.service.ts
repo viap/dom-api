@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
+import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { UsersService } from 'src/users/users.service';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
 import { UpdateTherapySessionDto } from './dto/update-therapy-session.dto';
@@ -9,7 +10,6 @@ import {
   TherapySession,
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 
 const submodels = ['psychologist', 'client'];
 
@@ -32,12 +32,27 @@ export class TherapySessionsService {
 
   async getAllForPsychologist(
     psychologistId: string,
+    from?: number,
+    to?: number,
   ): Promise<Array<TherapySessionDocument>> {
     try {
-      return await this.therapySessionModel
-        .find({ psychologist: psychologistId })
-        .populate(submodels)
-        .exec();
+      if (from && to) {
+        return await this.therapySessionModel
+          .find({
+            $and: [
+              { psychologist: psychologistId },
+              { timestamp: { $gte: from } },
+              { timestamp: { $lte: to } },
+            ],
+          })
+          .populate(submodels)
+          .exec();
+      } else {
+        return await this.therapySessionModel
+          .find({ psychologist: psychologistId })
+          .populate(submodels)
+          .exec();
+      }
     } catch {
       return [];
     }
