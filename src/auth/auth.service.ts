@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Document } from 'mongoose';
 import { ApiClientsService } from 'src/api-clients/api-clients.service';
 import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
@@ -22,13 +21,21 @@ export class AuthService {
     });
   }
 
+  async isAvailableClient(initClient: ApiClientDto) {
+    const apiClient = await this.clientService.findOne(initClient.name);
+
+    if (apiClient?.password !== initClient.password) {
+      return false;
+    }
+
+    return true;
+  }
+
   async signInByTelegram(
     initClient: ApiClientDto,
     telegram: TelegramUserDto,
   ): Promise<{ auth_token: string }> | never {
-    const apiClient = await this.clientService.findOne(initClient.name);
-
-    if (apiClient?.password !== initClient.password) {
+    if (!this.isAvailableClient(initClient)) {
       throw new UnauthorizedException();
     }
 
@@ -38,7 +45,8 @@ export class AuthService {
 
     const payload: TokenPayloadDto = {
       userId: user._id,
-      clientName: apiClient.name,
+      roles: user.roles,
+      clientName: initClient.name,
     };
 
     return { auth_token: await this.jwtService.signAsync(payload) };

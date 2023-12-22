@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { FilterQuery, Model } from 'mongoose';
 import { valueToObjectId } from 'src/common/utils/value-to-object-id';
 import { UsersService } from 'src/users/users.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
@@ -40,31 +40,14 @@ export class NotificationsService {
     return this.notificationModel.findById(id).populate(submodels).exec();
   }
 
-  async getAllByUserId(userId: string): Promise<Array<NotificationDocument>> {
-    const user = await this.userService.getById(userId);
-    if (!user) return [];
-
+  async getAllActive(
+    extraFilters: Array<FilterQuery<any>> = [],
+    needPopulate = false,
+  ): Promise<Array<NotificationDocument>> {
     return await this.notificationModel
       .find({
         $and: [
-          {
-            // NOTICE: roles empty or user have any required role
-            $or: [
-              { roles: { $size: 0 } },
-              { roles: { $elemMatch: { $in: user.roles } } },
-            ],
-          },
-          {
-            // NOTICE: recipients empty or user is in recipients list
-            $or: [
-              { recipients: { $size: 0 } },
-              { recipients: { $elemMatch: { $eq: user._id } } },
-            ],
-          },
-          {
-            // NOTICE: user is not in received list
-            received: { $not: { $elemMatch: { $eq: user._id } } },
-          },
+          ...extraFilters,
           {
             // NOTICE: only active notifications
             status: { $eq: NotificationStatuses.ACTIVE },
@@ -82,8 +65,36 @@ export class NotificationsService {
           },
         ],
       })
-      .populate(submodels)
+      .populate(needPopulate ? submodels : undefined)
       .exec();
+  }
+
+  async getAllByUserId(userId: string): Promise<Array<NotificationDocument>> {
+    const user = await this.userService.getById(userId);
+    if (!user) return [];
+
+    const filters: Array<FilterQuery<any>> = [
+      {
+        // NOTICE: roles empty or user have any required role
+        $or: [
+          { roles: { $size: 0 } },
+          { roles: { $elemMatch: { $in: user.roles } } },
+        ],
+      },
+      {
+        // NOTICE: recipients empty or user is in recipients list
+        $or: [
+          { recipients: { $size: 0 } },
+          { recipients: { $elemMatch: { $eq: user._id } } },
+        ],
+      },
+      {
+        // NOTICE: user is not in received list
+        received: { $not: { $elemMatch: { $eq: user._id } } },
+      },
+    ];
+
+    return await this.getAllActive(filters);
   }
 
   async create(
