@@ -24,6 +24,7 @@ import { joiUpdateTherapySessionSchema } from './schemas/joi.update-therapy-sess
 import { TherapySessionDocument } from './schemas/therapy-session.schema';
 import { TherapySessionsGuard } from './therapy-sessions.guard';
 import { TherapySessionsService } from './therapy-sessions.service';
+import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
 
 @Controller('therapy-sessions')
 @Roles(Role.Admin, Role.Editor, Role.Psychologist)
@@ -35,6 +36,38 @@ export class TherapySessionsController {
   @Roles(Role.Admin)
   getAll(): Promise<Array<TherapySessionDocument>> {
     return this.therapySessionService.getAll();
+  }
+
+  @Get('/from/:from/to/:to')
+  @IsMyTherapySessions()
+  getAllForPeriod(
+    @Param('from', new ParseIntPipe()) from: number,
+    @Param('to', new ParseIntPipe()) to: number,
+  ): Promise<Array<TherapySessionDocument>> {
+    return this.therapySessionService.getAll(from, to);
+  }
+
+  @Get('/statistic/from/:from/to/:to')
+  @IsMyTherapySessions()
+  getStatisticForPeriod(
+    @Param('from', new ParseIntPipe()) from: number,
+    @Param('to', new ParseIntPipe()) to: number,
+  ): Promise<Array<TherapySessionsControllerStatistic>> {
+    return this.therapySessionService.getStatisticForPeriod(from, to);
+  }
+
+  @Get('/statistic/psychologist/:psychologistId/from/:from/to/:to')
+  @IsMyTherapySessions()
+  getStatisticForPsychologistForPeriod(
+    @Param('psychologistId') psychologistId: string,
+    @Param('from', new ParseIntPipe()) from: number,
+    @Param('to', new ParseIntPipe()) to: number,
+  ): Promise<Array<TherapySessionsControllerStatistic>> {
+    return this.therapySessionService.getStatisticForPeriod(
+      from,
+      to,
+      psychologistId,
+    );
   }
 
   @Get(':sessionId')

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Price } from 'src/common/schemas/price.schema';
+import { getSumsForPrices } from 'src/common/utils/get-sums-for-prices';
+import groupBy from 'src/common/utils/group-by';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { UsersService } from 'src/users/users.service';
@@ -10,8 +13,23 @@ import {
   TherapySession,
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
+import { Currencies } from 'src/psychologists/enums/currencies.enum';
+import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
+// import { from as fromArr, groupBy, mergeMap, toArray } from 'rxjs';
 
-const submodels = ['psychologist', 'client'];
+const submodels = [
+  'psychologist',
+  'client',
+  {
+    path: 'psychologist',
+    populate: {
+      path: 'user',
+      model: 'User',
+    },
+  },
+];
+
+const oneDay = 1000 * 60 * 60 * 24;
 
 @Injectable()
 export class TherapySessionsService {
@@ -22,12 +40,88 @@ export class TherapySessionsService {
     private usersService: UsersService,
   ) {}
 
-  async getAll(): Promise<Array<TherapySessionDocument>> {
-    return this.therapySessionModel.find().populate(submodels).exec();
+  async getAll(
+    from?: number,
+    to?: number,
+  ): Promise<Array<TherapySessionDocument>> {
+    if (from && to) {
+      return this.therapySessionModel
+        .find({
+          $and: [{ timestamp: { $gte: from } }, { timestamp: { $lte: to } }],
+        })
+        .populate(submodels)
+        .exec();
+    } else {
+      return this.therapySessionModel.find().populate(submodels).exec();
+    }
   }
 
   async getById(id: string): Promise<TherapySessionDocument> {
     return this.therapySessionModel.findById(id).populate(submodels).exec();
+  }
+
+  async getStatisticForPeriod(
+    from: number,
+    to: number,
+    psychologistId?: string,
+  ): Promise<Array<TherapySessionsControllerStatistic>> {
+    const sessionIndex = (session: TherapySession) =>
+      `${session.psychologist._id}-${session.client._id}`;
+
+    const calcPrices = (prices: Array<Price>) => {
+      const aggregatedPrices = prices.reduce((acc, cur) => {
+        if (acc[cur.currency]) {
+          acc[cur.currency] = acc[cur.currency] + cur.value;
+        } else {
+          acc[cur.currency] = cur.value;
+        }
+        return acc;
+      }, {});
+
+      return Object.entries(aggregatedPrices).map(
+        ([currency, price]: [Currencies, number]) => {
+          return {
+            currency,
+            value: price,
+          } as Price;
+        },
+      );
+    };
+
+    const sessions = psychologistId
+      ? await this.getAllForPsychologist(psychologistId, from, to)
+      : await this.getAll(from, to);
+
+    const sessionNumbers: { [key: string]: number } = {};
+
+    const groupedSessions = Object.values(
+      groupBy(sessions, (session) => sessionIndex(session)),
+    );
+
+    for (let i = 0; i < sessions.length; i++) {
+      const session = sessions[i];
+      sessionNumbers[sessionIndex(session)] =
+        await this.therapySessionModel.count({
+          $and: [
+            { psychologist: session.psychologist._id },
+            { client: session.client._id },
+          ],
+        });
+    }
+
+    return groupedSessions.map((sessionGroup) => {
+      const session = sessionGroup[sessionGroup.length - 1];
+      return {
+        psychologist: session.psychologist,
+        client: session.client,
+        from: new Date(from).toLocaleDateString('ru'),
+        to: new Date(to).toLocaleDateString('ru'),
+        price: calcPrices(sessionGroup.map((s) => s.price)),
+        comission: calcPrices(sessionGroup.map((s) => s.comission)),
+        countForPeriod: sessionGroup.length,
+        countAll: sessionNumbers[sessionIndex(session)] || 0,
+      } as TherapySessionsControllerStatistic;
+    });
   }
 
   async getAllForPsychologist(
@@ -103,6 +197,11 @@ export class TherapySessionsService {
   }
 
   async remove(id: string): Promise<boolean> {
-    return !!(await this.therapySessionModel.findByIdAndRemove(id));
+    const therapySession = await this.getById(id);
+    if (therapySession && Date.now() - therapySession.timestamp < oneDay) {
+      return !!(await therapySession.deleteOne());
+    }
+
+    return false;
   }
 }

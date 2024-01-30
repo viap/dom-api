@@ -6,7 +6,12 @@ import { UserDocument } from 'src/users/schemas/user.schema';
 
 @Schema()
 export class TherapySession {
-  @Prop({ required: true })
+  @Prop({
+    required: true,
+    default: () => {
+      return new Date().toLocaleDateString('ru');
+    },
+  })
   date: string;
 
   @Prop({ required: true, default: () => Date.now() })
