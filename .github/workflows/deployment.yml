@@ -33,6 +33,15 @@ jobs:
         run: yarn build
       - name: Run tests
         run: echo 'There will be tests'
+      - name: Remote | Stop project
+        uses: fifsky/ssh-action@master
+        with:
+          command: |
+            cd ${{secrets.REMOTE_TARGET}} && 
+            pm2 stop domApi
+          host: ${{secrets.REMOTE_HOST}}
+          user: ${{secrets.REMOTE_USER}}
+          key: ${{secrets.SSH_PRIVATE_KEY}}
       - name: Deploy to server
         uses: easingthemes/ssh-deploy@main
         with:
