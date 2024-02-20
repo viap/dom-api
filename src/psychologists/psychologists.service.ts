@@ -15,6 +15,8 @@ import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
+import { awaitedPsychologists } from 'src/common/const/awaited-psychologists';
+import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 
 const submodels = [
   'user',
@@ -56,10 +58,29 @@ export class PsychologistsService {
   }
 
   async getByUserId(userId: string): Promise<PsychologistDocument | null> {
-    return this.psychologistModel
+    const psychologist = await this.psychologistModel
       .findOne({ user: userId })
       .populate(submodels)
       .exec();
+
+    // FIXME: delete hardcode depends on awaitedPsychologists
+    if (awaitedPsychologists.length > 0 && !psychologist) {
+      const user = await this.userService.getById(userId);
+
+      const telegramUser = user.contacts.find((contact) => {
+        return contact.network === SocialNetworks.Telegram;
+      });
+
+      const isPsychologist = awaitedPsychologists.includes(
+        telegramUser?.username.toLowerCase(),
+      );
+
+      if (isPsychologist) {
+        return this.create({ userId });
+      }
+    }
+
+    return psychologist;
   }
 
   async getClients(psychologistId: string): Promise<Array<Client>> {
