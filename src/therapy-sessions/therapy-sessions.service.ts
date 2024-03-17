@@ -14,6 +14,7 @@ import {
   TherapySession,
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
+import { parseRuDate } from 'src/common/utils/parse-ru-date';
 // import { from as fromArr, groupBy, mergeMap, toArray } from 'rxjs';
 
 const submodels = [
@@ -180,8 +181,10 @@ export class TherapySessionsService {
     createData: CreateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
     const client = await this.usersService.getById(createData.client);
+    const timestamp = parseRuDate(createData.date) || Date.now();
     return this.therapySessionModel.create({
       ...createData,
+      timestamp,
       psychologist: psychologist._id,
       client: client._id,
     });
@@ -202,5 +205,17 @@ export class TherapySessionsService {
     }
 
     return false;
+  }
+
+  // NOTICE: start onece to set dateTime values for all sessions
+  async migration_addDateTime() {
+    const allSessions = await this.therapySessionModel.find({}).exec();
+
+    allSessions.map((session) => {
+      session.dateTime = parseRuDate(session.date) || session.timestamp;
+      session.save();
+    });
+
+    return true;
   }
 }

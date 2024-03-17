@@ -38,6 +38,12 @@ export class TherapySessionsController {
     return this.therapySessionService.getAll();
   }
 
+  @Post('/update/date-time')
+  @Roles(Role.Admin)
+  updateDateTime(): Promise<boolean> {
+    return this.therapySessionService.migration_addDateTime();
+  }
+
   @Get('/from/:from/to/:to')
   @IsMyTherapySessions()
   getAllForPeriod(

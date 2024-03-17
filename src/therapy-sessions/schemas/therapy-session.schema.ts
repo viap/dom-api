@@ -15,6 +15,9 @@ export class TherapySession {
   date: string;
 
   @Prop({ required: true, default: () => Date.now() })
+  dateTime: number;
+
+  @Prop({ required: true, default: () => Date.now() })
   timestamp: number;
 
   @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
