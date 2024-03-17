@@ -47,7 +47,7 @@ export class TherapySessionsService {
     if (from && to) {
       return this.therapySessionModel
         .find({
-          $and: [{ timestamp: { $gte: from } }, { timestamp: { $lte: to } }],
+          $and: [{ dateTime: { $gte: from } }, { dateTime: { $lte: to } }],
         })
         .populate(submodels)
         .exec();
@@ -135,8 +135,8 @@ export class TherapySessionsService {
           .find({
             $and: [
               { psychologist: psychologistId },
-              { timestamp: { $gte: from } },
-              { timestamp: { $lte: to } },
+              { dateTime: { $gte: from } },
+              { dateTime: { $lte: to } },
             ],
           })
           .populate(submodels)
@@ -181,10 +181,12 @@ export class TherapySessionsService {
     createData: CreateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
     const client = await this.usersService.getById(createData.client);
-    const timestamp = parseRuDate(createData.date) || Date.now();
+    const dateTime = createData.dateTime
+      ? new Date(createData.dateTime).getTime()
+      : Date.now();
     return this.therapySessionModel.create({
       ...createData,
-      timestamp,
+      dateTime,
       psychologist: psychologist._id,
       client: client._id,
     });
@@ -194,7 +196,13 @@ export class TherapySessionsService {
     id: string,
     updateData: UpdateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
-    await this.therapySessionModel.findByIdAndUpdate(id, updateData);
+    const dateTime = updateData.dateTime
+      ? new Date(updateData.dateTime).getTime()
+      : Date.now();
+    await this.therapySessionModel.findByIdAndUpdate(id, {
+      ...updateData,
+      dateTime,
+    });
     return this.getById(id);
   }
 

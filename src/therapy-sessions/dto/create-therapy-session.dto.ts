@@ -1,7 +1,7 @@
 import { Price } from 'src/common/schemas/price.schema';
 
 export class CreateTherapySessionDto {
-  date: string;
+  dateTime?: number;
   client: string;
   psychologist: string;
   duration: number;
