@@ -217,12 +217,9 @@ export class TherapySessionsService {
 
   // NOTICE: start onece to set dateTime values for all sessions
   async migration_addDateTime() {
-    const allSessions = await this.therapySessionModel.find({}).exec();
-
-    allSessions.map((session) => {
-      session.dateTime = parseRuDate(session.date) || session.timestamp;
-      session.save();
-    });
+    await this.therapySessionModel
+      .updateMany({}, { $unset: { date: 1 } })
+      .exec();
 
     return true;
   }
