@@ -30,7 +30,7 @@ jobs:
       - name: Init the project
         run: npm install
       - name: Build the project
-        run: yarn build
+        run: npm run build
       - name: Run tests
         run: echo 'There will be tests'
       - name: Remote | Stop project
