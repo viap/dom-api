@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
+import { awaitedPsychologists } from 'src/common/const/awaited-psychologists';
+import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 import { addItems } from 'src/common/utils/add-items';
 import { removeItems } from 'src/common/utils/remove-item';
 import { Role } from 'src/roles/enums/roles.enum';
@@ -15,8 +17,6 @@ import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
-import { awaitedPsychologists } from 'src/common/const/awaited-psychologists';
-import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 
 const submodels = [
   'user',
@@ -44,7 +44,11 @@ export class PsychologistsService {
   ) {}
 
   async getAll(): Promise<Array<PsychologistDocument>> {
-    return this.psychologistModel.find().populate(submodels).exec();
+    return (await this.psychologistModel.find().populate(submodels)).filter(
+      (psychologist) => {
+        return psychologist.user.roles.includes(Role.Psychologist);
+      },
+    );
   }
 
   async getById(
