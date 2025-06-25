@@ -37,8 +37,8 @@ jobs:
         uses: fifsky/ssh-action@master
         with:
           command: |
-            pm2 stop domBot &> /dev/null || true && 
-            pm2 delete domApi &> /dev/null || true
+            pm2 stop domBot &> /dev/null && 
+            pm2 delete domApi &> /dev/null
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
@@ -60,6 +60,7 @@ jobs:
             cd ${{secrets.REMOTE_TARGET}} && 
             npm install && 
             pm2 start npm --name domApi -- start
+            pm2 start domBot &> /dev/null
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
