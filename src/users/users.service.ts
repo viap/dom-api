@@ -34,6 +34,15 @@ export class UsersService {
       .exec();
   }
 
+  async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {
+    return await this.userModel
+      .findOne({
+        'contacts.username': telegramUserName,
+        'contacts.network': SocialNetworks.Telegram,
+      })
+      .exec();
+  }
+
   async create(createData: CreateUserDto): Promise<UserDocument> {
     return this.userModel.create(createData);
   }

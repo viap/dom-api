@@ -167,15 +167,34 @@ export class PsychologistsService {
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const user = await this.userService.create({
-        name: newClient.name,
-        contacts: newClient.contacts,
-      });
-      psychologist.clients.push({
-        user: user._id,
-        descr: newClient.descr || '',
-        therapyRequest: therapyRequest?._id,
-      });
+      const telegramUserName = newClient.contacts.find(
+        (contact) => contact.network === SocialNetworks.Telegram,
+      )?.username;
+
+      // NOTE: if telegram contact is provided try to find in existed users
+      const existedUser = telegramUserName
+        ? await this.userService.getByTelegramUserName(telegramUserName)
+        : undefined;
+
+      if (existedUser) {
+        psychologist.clients.push({
+          user: existedUser._id,
+          descr: newClient.descr || existedUser.descr || '',
+          therapyRequest: therapyRequest?._id,
+        });
+      } else {
+        const user = await this.userService.create({
+          name: newClient.name,
+          contacts: newClient.contacts,
+        });
+
+        psychologist.clients.push({
+          user: user._id,
+          descr: newClient.descr || '',
+          therapyRequest: therapyRequest?._id,
+        });
+      }
+
       await psychologist.save();
       return true;
     } else {
