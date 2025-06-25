@@ -37,8 +37,8 @@ jobs:
         uses: fifsky/ssh-action@master
         with:
           command: |
-            pm2 stop domBot > /dev/null && 
-            pm2 stop domApi > /dev/null
+            pm2 stop domBot &> /dev/null || true && 
+            pm2 delete domApi &> /dev/null || true
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
@@ -51,12 +51,13 @@ jobs:
           REMOTE_USER: ${{secrets.REMOTE_USER}}
           TARGET: ${{secrets.REMOTE_TARGET}}
           EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/'
+          SCRIPT_BEFORE: |
+            mkdir -p ${{secrets.REMOTE_TARGET}}
       - name: Remote | Init and start the project
         uses: fifsky/ssh-action@master
         with:
           command: |
             cd ${{secrets.REMOTE_TARGET}} && 
-            pm2 delete domApi 2> /dev/null
             npm install && 
             pm2 start npm --name domApi -- start
           host: ${{secrets.REMOTE_HOST}}
