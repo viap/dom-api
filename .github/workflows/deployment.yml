@@ -37,7 +37,8 @@ jobs:
         uses: fifsky/ssh-action@master
         with:
           command: |
-            pm2 delete domApi 2> /dev/null || true
+            pm2 stop domBot &> /dev/null || true && 
+            pm2 delete domApi &> /dev/null || true
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
