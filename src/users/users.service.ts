@@ -3,11 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
 import { Role } from 'src/roles/enums/roles.enum';
+import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { User, UserDocument } from './schemas/user.schema';
-import { awaitedPsychologists } from 'src/common/const/awaited-psychologists';
 
 @Injectable()
 export class UsersService {
@@ -52,18 +51,9 @@ export class UsersService {
       .filter((value) => !!value)
       .join(' ');
 
-    //FIXME: delete this hardcode
-    const isPsychologist = awaitedPsychologists.includes(
-      telegram.username.toLowerCase(),
-    );
-    const defaultRoles = isPsychologist
-      ? [Role.User, Role.Psychologist]
-      : [Role.User];
-    // --------------------------
-
     return this.userModel.create({
       name: name || telegram.username,
-      roles: defaultRoles,
+      roles: [Role.User],
       contacts: [
         {
           network: SocialNetworks.Telegram,
