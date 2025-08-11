@@ -15,7 +15,13 @@ export class AuthService {
   ) {}
 
   async verifyToken(token: string): Promise<TokenPayloadDto | undefined> {
-    return await this.jwtService.verifyAsync(token);
+    return await this.jwtService.verifyAsync(token).catch(() => undefined);
+  }
+
+  async decode(
+    token: string,
+  ): Promise<Record<string, unknown> | string | null> {
+    return this.jwtService.decode(token);
   }
 
   async isAvailableClient(initClient: ApiClientDto) {

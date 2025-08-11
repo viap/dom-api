@@ -46,6 +46,7 @@ export class EventsGateway implements OnModuleInit {
 
       if (token) {
         const payload = await this.authService.verifyToken(token);
+
         if (payload?.userId) {
           socketToUser[client.id] = payload.userId;
           client.emit('inited', {
@@ -117,13 +118,17 @@ export class EventsGateway implements OnModuleInit {
 
     let userId: string | undefined = socketToUser[client.id];
     if (!userId && token) {
-      const payload = await this.authService.verifyToken(token);
-      userId = payload?.userId;
+      // NOTICE: don't check the token validity, only look for the userId
+      const payload = await this.authService.decode(token);
+      if (payload !== null && typeof payload === 'object' && payload.userId) {
+        userId = String(payload.userId);
+      }
     }
 
     if (userId) {
       return this.notificationsService.addReceived(notificationId, userId);
     }
+
     return false;
   }
 }
