@@ -3,6 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Price } from 'src/common/schemas/price.schema';
 import groupBy from 'src/common/utils/group-by';
+import {
+  sanitizeDateRange,
+  validateObjectId,
+} from 'src/common/utils/mongo-sanitizer';
 import { Currencies } from 'src/psychologists/enums/currencies.enum';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
@@ -14,8 +18,6 @@ import {
   TherapySession,
   TherapySessionDocument,
 } from './schemas/therapy-session.schema';
-import { parseRuDate } from 'src/common/utils/parse-ru-date';
-// import { from as fromArr, groupBy, mergeMap, toArray } from 'rxjs';
 
 const submodels = [
   'psychologist',
@@ -44,10 +46,14 @@ export class TherapySessionsService {
     from?: number,
     to?: number,
   ): Promise<Array<TherapySessionDocument>> {
-    if (from && to) {
+    const sanitizedDates = sanitizeDateRange(from, to);
+    if (sanitizedDates.from && sanitizedDates.to) {
       return this.therapySessionModel
         .find({
-          $and: [{ dateTime: { $gte: from } }, { dateTime: { $lte: to } }],
+          $and: [
+            { dateTime: { $gte: sanitizedDates.from } },
+            { dateTime: { $lte: sanitizedDates.to } },
+          ],
         })
         .populate(submodels)
         .exec();
@@ -57,7 +63,14 @@ export class TherapySessionsService {
   }
 
   async getById(id: string): Promise<TherapySessionDocument> {
-    return this.therapySessionModel.findById(id).populate(submodels).exec();
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    return this.therapySessionModel
+      .findById(validId)
+      .populate(submodels)
+      .exec();
   }
 
   async getStatisticForPeriod(
@@ -130,20 +143,26 @@ export class TherapySessionsService {
     to?: number,
   ): Promise<Array<TherapySessionDocument>> {
     try {
-      if (from && to) {
+      const validId = validateObjectId(psychologistId);
+      if (!validId) {
+        return [];
+      }
+
+      const sanitizedDates = sanitizeDateRange(from, to);
+      if (sanitizedDates.from && sanitizedDates.to) {
         return await this.therapySessionModel
           .find({
             $and: [
-              { psychologist: psychologistId },
-              { dateTime: { $gte: from } },
-              { dateTime: { $lte: to } },
+              { psychologist: validId },
+              { dateTime: { $gte: sanitizedDates.from } },
+              { dateTime: { $lte: sanitizedDates.to } },
             ],
           })
           .populate(submodels)
           .exec();
       } else {
         return await this.therapySessionModel
-          .find({ psychologist: psychologistId })
+          .find({ psychologist: validId })
           .populate(submodels)
           .exec();
       }
@@ -157,8 +176,15 @@ export class TherapySessionsService {
     clientId: string,
   ): Promise<Array<TherapySessionDocument>> {
     try {
+      const validPsychologistId = validateObjectId(psychologistId);
+      const validClientId = validateObjectId(clientId);
+
+      if (!validPsychologistId || !validClientId) {
+        return [];
+      }
+
       return await this.therapySessionModel
-        .find({ psychologist: psychologistId, client: clientId })
+        .find({ psychologist: validPsychologistId, client: validClientId })
         .populate(submodels)
         .exec();
     } catch {

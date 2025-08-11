@@ -5,14 +5,26 @@ import {
   PipeTransform,
 } from '@nestjs/common';
 import { ObjectSchema } from 'joi';
+import {
+  SanitizableValue,
+  sanitizeObject,
+} from '../common/utils/mongo-sanitizer';
 
 @Injectable()
 export class JoiValidationPipe implements PipeTransform {
   constructor(private schema: ObjectSchema) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  transform(value: any, metadata: ArgumentMetadata) {
-    const { error } = this.schema.validate(value);
+  transform<T extends SanitizableValue>(
+    value: T,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _metadata?: ArgumentMetadata,
+  ): T {
+    // First sanitize the input to prevent NoSQL injection
+    const sanitizedValue = sanitizeObject(value) as T;
+
+    // Then validate with Joi schema
+    const { error } = this.schema.validate(sanitizedValue);
     if (error) {
       const messageDetails = Array.isArray(error.details)
         ? error.details.map((detail) => {
@@ -23,6 +35,7 @@ export class JoiValidationPipe implements PipeTransform {
         `Validation failed: ${messageDetails.join(' | ')}`,
       );
     }
-    return value;
+
+    return sanitizedValue;
   }
 }
