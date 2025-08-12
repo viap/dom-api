@@ -26,6 +26,8 @@ const webSocketPort = process.env.WEBSOCKET_PORT
   transports: ['websocket'],
   cors: {
     origin: '*',
+    credentials: true,
+    methods: ['GET', 'POST'],
   },
 })
 export class EventsGateway implements OnModuleInit {
