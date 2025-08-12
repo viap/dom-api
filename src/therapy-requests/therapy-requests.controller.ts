@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { TherapyRequestsService } from './therapy-requests.service';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
+import { TherapyRequestQueryParams } from 'src/common/types/therapy-request-params.types';
 import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-request.schema';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { joiUpdateTherapyRequestSchema } from './schemas/joi.update-therapy-request.schema';
@@ -29,10 +30,12 @@ export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
 
   @Get()
-  getAll(@Query() params?: { [key: string]: any }) {
+  getAll(@Query() params?: TherapyRequestQueryParams) {
     let accepted: boolean | undefined;
     try {
-      accepted = !!JSON.parse(params.accepted);
+      accepted = params?.accepted
+        ? !!JSON.parse(params.accepted.toString())
+        : undefined;
     } catch {
       accepted = undefined;
     }
@@ -49,11 +52,13 @@ export class TherapyRequestsController {
   getAllForPsychologist(
     @Request() req,
     @Param('psychologistId') psychologistId: string,
-    @Query() params?: { [key: string]: any },
+    @Query() params?: TherapyRequestQueryParams,
   ) {
     let accepted: boolean | undefined;
     try {
-      accepted = !!JSON.parse(params.accepted);
+      accepted = params?.accepted
+        ? !!JSON.parse(params.accepted.toString())
+        : undefined;
     } catch {
       accepted = undefined;
     }

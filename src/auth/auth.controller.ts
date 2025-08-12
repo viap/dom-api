@@ -28,6 +28,7 @@ export class AuthController {
   @Get('check-token')
   @HttpCode(HttpStatus.OK)
   checkToken(): boolean {
+    // NOTICE: the token itself checks in the auth guard
     return true;
   }
 

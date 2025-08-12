@@ -3,6 +3,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 import { Contact } from 'src/common/schemas/contact.schema';
+import {
+  safeFindParams,
+  validateObjectId,
+} from 'src/common/utils/mongo-sanitizer';
+import { TherapyRequestFilters } from 'src/common/types/therapy-request-params.types';
 import { valueToObjectId } from 'src/common/utils/value-to-object-id';
 import { NotificationTypes } from 'src/notifications/enums/notification-types.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -40,21 +45,25 @@ export class TherapyRequestsService {
     private notificationService: NotificationsService,
   ) {}
 
-  async getAll(params?: {
-    [key: string]: any;
-  }): Promise<Array<TherapyRequestDocument>> {
-    return this.therapyRequestModel.find(params).populate(submodels).exec();
+  async getAll(
+    params?: TherapyRequestFilters,
+  ): Promise<Array<TherapyRequestDocument>> {
+    const safeParams = safeFindParams(params);
+    return this.therapyRequestModel.find(safeParams).populate(submodels).exec();
   }
 
   async getAllForPsychologist(
     psychologistId: string,
-    params?: {
-      [key: string]: any;
-    },
+    params?: TherapyRequestFilters,
   ): Promise<Array<TherapyRequestDocument>> {
     try {
+      const validId = validateObjectId(psychologistId);
+      if (!validId) {
+        return [];
+      }
+      const safeParams = safeFindParams(params);
       return await this.therapyRequestModel
-        .find({ psychologist: psychologistId, ...params })
+        .find({ psychologist: validId, ...safeParams })
         .populate(submodels)
         .exec();
     } catch {
@@ -63,7 +72,14 @@ export class TherapyRequestsService {
   }
 
   async getById(id: string): Promise<TherapyRequestDocument> {
-    return this.therapyRequestModel.findById(id).populate(submodels).exec();
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    return this.therapyRequestModel
+      .findById(validId)
+      .populate(submodels)
+      .exec();
   }
 
   async create(

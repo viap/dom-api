@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
+import {
+  validateObjectId,
+  validateRoles,
+} from 'src/common/utils/mongo-sanitizer';
 import { Role } from 'src/roles/enums/roles.enum';
+import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { User, UserDocument } from './schemas/user.schema';
-import { awaitedPsychologists } from 'src/common/const/awaited-psychologists';
 
 @Injectable()
 export class UsersService {
@@ -18,14 +21,31 @@ export class UsersService {
   }
 
   async getAllByRole(role: Role): Promise<Array<UserDocument>> {
-    return this.userModel.find({ roles: { $in: [role] } }).exec();
+    // Validate role enum to prevent injection
+    const validRoles = validateRoles([role]);
+    if (validRoles.length === 0) {
+      return [];
+    }
+    return this.userModel.find({ roles: { $in: validRoles } }).exec();
   }
 
   async getById(id: string): Promise<UserDocument> {
-    return this.userModel.findById(id).exec();
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    return this.userModel.findById(validId).exec();
   }
 
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
+    // Sanitize telegramId - ensure it's a string and reasonable length
+    if (
+      !telegramId ||
+      typeof telegramId !== 'string' ||
+      telegramId.length > 50
+    ) {
+      return null;
+    }
     return await this.userModel
       .findOne({
         'contacts.id': telegramId,
@@ -35,6 +55,14 @@ export class UsersService {
   }
 
   async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {
+    // Sanitize username - ensure it's a string and reasonable length
+    if (
+      !telegramUserName ||
+      typeof telegramUserName !== 'string' ||
+      telegramUserName.length > 50
+    ) {
+      return null;
+    }
     return await this.userModel
       .findOne({
         'contacts.username': telegramUserName,
@@ -52,18 +80,9 @@ export class UsersService {
       .filter((value) => !!value)
       .join(' ');
 
-    //FIXME: delete this hardcode
-    const isPsychologist = awaitedPsychologists.includes(
-      telegram.username.toLowerCase(),
-    );
-    const defaultRoles = isPsychologist
-      ? [Role.User, Role.Psychologist]
-      : [Role.User];
-    // --------------------------
-
     return this.userModel.create({
       name: name || telegram.username,
-      roles: defaultRoles,
+      roles: [Role.User],
       contacts: [
         {
           network: SocialNetworks.Telegram,
@@ -75,6 +94,11 @@ export class UsersService {
   }
 
   async update(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
     // NOTICE: add notification about roles update - ?
     // const { roles = [] } = updateData;
     // const user = await this.userModel.findById(id).exec();
@@ -97,11 +121,15 @@ export class UsersService {
     //   // }
     // }
 
-    await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
-    return this.getById(id);
+    await this.userModel.findByIdAndUpdate(validId, updateData, { new: true });
+    return this.getById(validId);
   }
 
   async remove(id: string): Promise<UserDocument | null> {
-    return this.userModel.findByIdAndRemove(id);
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    return this.userModel.findByIdAndRemove(validId);
   }
 }

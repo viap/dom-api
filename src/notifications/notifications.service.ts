@@ -41,7 +41,7 @@ export class NotificationsService {
   }
 
   async getAllActive(
-    extraFilters: Array<FilterQuery<any>> = [],
+    extraFilters: Array<FilterQuery<Notification>> = [],
     needPopulate = false,
   ): Promise<Array<NotificationDocument>> {
     return await this.notificationModel
@@ -73,7 +73,7 @@ export class NotificationsService {
     const user = await this.userService.getById(userId);
     if (!user) return [];
 
-    const filters: Array<FilterQuery<any>> = [
+    const filters: Array<FilterQuery<Notification>> = [
       {
         // NOTICE: roles empty or user have any required role
         $or: [

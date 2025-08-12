@@ -7,11 +7,13 @@ export default function extractApiClientFromHeaders(
   const [type, token] = headers.authorization?.split(' ') ?? [];
 
   if (type === 'ApiClient') {
-    const data = JSON.parse(token);
+    try {
+      const data = JSON.parse(token);
 
-    if (data.name && data.password) {
-      return data as ApiClientDto;
-    }
+      if (data.name && data.password) {
+        return data as ApiClientDto;
+      }
+    } catch (e) {}
   }
 
   return undefined;
