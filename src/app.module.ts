@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
+import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
 import { EventsModule } from './events/events.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -38,6 +39,7 @@ import { cwd } from 'process';
     TherapyRequestsModule,
     EventsModule,
     NotificationsModule,
+    BookingSystemModule,
   ],
   controllers: [AppController],
   providers: [
