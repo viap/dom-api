@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UsersService } from './users.service';
+import { Role } from '../roles/enums/roles.enum';
 
 describe('Users Controller', () => {
   let controller: UsersController;
@@ -15,6 +16,8 @@ describe('Users Controller', () => {
     name: 'User #1',
     descr: 'Bread #1',
     _id: 'a id',
+    roles: [Role.User],
+    contacts: [],
   };
 
   beforeEach(async () => {
@@ -52,7 +55,7 @@ describe('Users Controller', () => {
     it('should create a new user', async () => {
       const createSpy = jest
         .spyOn(service, 'create')
-        .mockResolvedValueOnce(mockUser);
+        .mockResolvedValueOnce(mockUser as any);
 
       await controller.create(CreateUserDto);
       expect(createSpy).toHaveBeenCalledWith(CreateUserDto);

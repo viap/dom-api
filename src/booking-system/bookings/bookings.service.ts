@@ -1,31 +1,30 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model } from 'mongoose';
-import { Booking, BookingDocument } from './schemas/booking.schema';
+import {
+  safeFindParams,
+  sanitizeDateRange,
+  validateObjectId,
+} from '../../common/utils/mongo-sanitizer';
+import { UsersService } from '../../users/users.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { SchedulesService } from '../schedules/schedules.service';
-import { UsersService } from '../../users/users.service';
-import { BookingStatus } from './enums/booking-status.enum';
-import { RecurrenceType } from './enums/recurrence-type.enum';
+import { BookingQueryParams } from '../shared/types/query-params.interface';
 import {
   RecurrenceCalculator,
   RecurrenceOptions,
 } from '../shared/utils/recurrence-calculator';
-import {
-  validateObjectId,
-  safeFindParams,
-  sanitizeDateRange,
-} from '../../common/utils/mongo-sanitizer';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import { BookingQueryParams } from '../shared/types/query-params.interface';
-import { SafeQueryParams } from 'src/common/types/query-params.types';
+import { BookingStatus } from './enums/booking-status.enum';
+import { RecurrenceType } from './enums/recurrence-type.enum';
+import { Booking, BookingDocument } from './schemas/booking.schema';
 
 const SUBMODELS = [
   {

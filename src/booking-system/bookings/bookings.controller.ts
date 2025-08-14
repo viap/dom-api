@@ -1,29 +1,29 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  Query,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
   Request,
 } from '@nestjs/common';
-import { BookingsService } from './bookings.service';
 import { JoiValidationPipe } from '../../joi/joi.pipe';
-import { createBookingSchema } from './schemas/joi.create-booking.schema';
-import { updateBookingSchema } from './schemas/joi.update-booking.schema';
 import { Roles } from '../../roles/decorators/role.docorator';
 import { Role } from '../../roles/enums/roles.enum';
-import { IsMyBooking } from './decorators/is-my-booking.decorator';
 import { BookingQueryParams } from '../shared/types/query-params.interface';
+import { BookingsService } from './bookings.service';
+import { IsMyBooking } from './decorators/is-my-booking.decorator';
+import { createBookingSchema } from './schemas/joi.create-booking.schema';
+import { updateBookingSchema } from './schemas/joi.update-booking.schema';
 
-import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
 import { ApproveBookingDto } from './dto/approve-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { CreateBookingDto } from './dto/create-booking.dto';
+import { UpdateBookingDto } from './dto/update-booking.dto';
 
 @Controller('booking-system/bookings')
 export class BookingsController {
@@ -146,8 +146,10 @@ export class BookingsController {
    */
   @Get('upcoming')
   getUpcomingBookings(@Query() query: BookingQueryParams) {
-    const userId = query.userId;
-    const limit = query.limit ? parseInt(query.limit) : 10;
+    const userId = Array.isArray(query.userId) ? query.userId[0] : query.userId;
+    const limit = query.limit
+      ? parseInt(Array.isArray(query.limit) ? query.limit[0] : query.limit)
+      : 10;
     return this.bookingsService.getUpcomingBookings(userId, limit);
   }
 
@@ -165,9 +167,19 @@ export class BookingsController {
     @Param('roomId') roomId: string,
     @Query() query: BookingQueryParams,
   ) {
-    const startDateTime = new Date(query.startDateTime);
-    const endDateTime = new Date(query.endDateTime);
-    const excludeBookingId = query.excludeBookingId;
+    const startDateTime = new Date(
+      Array.isArray(query.startDateTime)
+        ? query.startDateTime[0]
+        : query.startDateTime,
+    );
+    const endDateTime = new Date(
+      Array.isArray(query.endDateTime)
+        ? query.endDateTime[0]
+        : query.endDateTime,
+    );
+    const excludeBookingId = Array.isArray(query.excludeBookingId)
+      ? query.excludeBookingId[0]
+      : query.excludeBookingId;
 
     return this.bookingsService.validateAvailability(
       roomId,
