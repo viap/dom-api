@@ -12,8 +12,9 @@ import {
   sanitizeDateRange,
   validateObjectId,
 } from '../../common/utils/mongo-sanitizer';
-import { UsersService } from '../../users/users.service';
+import { Role } from '../../roles/enums/roles.enum';
 import { UserDocument } from '../../users/schemas/user.schema';
+import { UsersService } from '../../users/users.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { BookingQueryParams } from '../shared/types/query-params.interface';
@@ -27,7 +28,7 @@ import { BookingStatus } from './enums/booking-status.enum';
 import { RecurrenceType } from './enums/recurrence-type.enum';
 import { Booking, BookingDocument } from './schemas/booking.schema';
 
-const SUBMODELS = [
+const submodels = [
   {
     path: 'room',
     select: 'name capacity location amenities',
@@ -251,7 +252,7 @@ export class BookingsService {
 
     return this.bookingModel
       .find(query)
-      .populate(SUBMODELS)
+      .populate(submodels)
       .sort(sort)
       .limit(safeParams.limit ? parseInt(safeParams.limit as string) : 100)
       .lean()
@@ -266,7 +267,7 @@ export class BookingsService {
 
     const booking = await this.bookingModel
       .findById(validId)
-      .populate(SUBMODELS)
+      .populate(submodels)
       .populate({
         path: 'childBookings',
         select: 'title startDateTime endDateTime status',
@@ -308,7 +309,7 @@ export class BookingsService {
 
     return this.bookingModel
       .find(query)
-      .populate(SUBMODELS)
+      .populate(submodels)
       .sort({ startDateTime: 1 })
       .lean()
       .exec();
@@ -390,7 +391,7 @@ export class BookingsService {
 
     return this.bookingModel
       .find(query)
-      .populate(SUBMODELS)
+      .populate(submodels)
       .sort({ createdAt: 1 })
       .lean()
       .exec();
@@ -664,6 +665,7 @@ export class BookingsService {
     // Check advance notice
     const hoursInAdvance =
       (startDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
     if (hoursInAdvance < MIN_ADVANCE_NOTICE_HOURS) {
       throw new BadRequestException(
         `Booking must be made at least ${MIN_ADVANCE_NOTICE_HOURS} hours in advance`,
@@ -700,6 +702,12 @@ export class BookingsService {
       const user = await this.usersService.getById(userId);
       if (!user) {
         throw new BadRequestException('User not found');
+      }
+
+      // Admin users can bypass role restrictions
+      if (user.roles.includes(Role.Admin)) {
+        // Allow admin to proceed regardless of room restrictions
+        return;
       }
 
       // Check if user has any of the required roles
@@ -809,7 +817,7 @@ export class BookingsService {
 
     return this.bookingModel
       .find(query)
-      .populate(SUBMODELS)
+      .populate(submodels)
       .sort({ startDateTime: 1 })
       .limit(limit)
       .lean()
@@ -894,7 +902,7 @@ export class BookingsService {
     // Return updated bookings
     const approvedBookings = await this.bookingModel
       .find({ _id: { $in: validBookingIds } })
-      .populate(SUBMODELS)
+      .populate(submodels)
       .lean()
       .exec();
 
@@ -919,7 +927,7 @@ export class BookingsService {
       .find({
         $or: [{ _id: validParentId }, { parentBooking: validParentId }],
       })
-      .populate(SUBMODELS)
+      .populate(submodels)
       .sort({ startDateTime: 1 })
       .lean()
       .exec();

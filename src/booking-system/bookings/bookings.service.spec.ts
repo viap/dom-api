@@ -1070,6 +1070,43 @@ describe('BookingsService', () => {
           service.create(createBookingDto, mockUser as any),
         ).rejects.toThrow(BadRequestException);
       });
+
+      it('should allow admin to bypass role restrictions for psychologist-only room', async () => {
+        const createBookingDto = {
+          title: 'Admin Bypass Test',
+          room: '507f1f77bcf86cd799439019', // mockPsychologistOnlyRoom (Role.Psychologist only)
+          bookedBy: '507f1f77bcf86cd799439016', // mockAdminUser
+          startDateTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+          endDateTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+          recurrenceType: RecurrenceType.NONE,
+        };
+
+        mockRoomsService.findOne.mockResolvedValue(mockPsychologistOnlyRoom);
+        mockUsersService.getById.mockResolvedValue(mockAdminUser);
+        mockSchedulesService.isTimeSlotAvailable.mockResolvedValue(true);
+
+        // Mock no conflicting bookings
+        mockBookingModel.find.mockReturnValue({
+          exec: jest.fn().mockResolvedValue([]),
+        });
+
+        // Mock findOne for the returned booking
+        const mockFindChain = {
+          populate: jest.fn().mockReturnThis(),
+          lean: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue(mockBooking),
+        };
+
+        mockBookingModel.findById.mockReturnValue(mockFindChain);
+
+        const result = await service.create(
+          createBookingDto,
+          mockAdminUser as any,
+        );
+
+        expect(result).toEqual(mockBooking);
+        expect(mockSave).toHaveBeenCalled();
+      });
     });
   });
 });
