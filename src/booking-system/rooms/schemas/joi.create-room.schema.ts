@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { Role } from '../../../roles/enums/roles.enum';
 
 export const createRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(100).required().messages({
@@ -41,6 +42,20 @@ export const createRoomSchema = Joi.object({
   }),
 
   isActive: Joi.boolean().default(true).optional(),
+
+  allowedRoles: Joi.array()
+    .items(Joi.string().valid(...Object.values(Role)))
+    .unique()
+    .max(10)
+    .optional()
+    .default([])
+    .messages({
+      'array.max': 'Cannot specify more than 10 allowed roles',
+      'array.unique': 'Duplicate roles are not allowed',
+      'any.only': `Allowed roles must be one of: ${Object.values(Role).join(
+        ', ',
+      )}`,
+    }),
 
   settings: Joi.object({
     allowMultipleBookings: Joi.boolean().optional(),

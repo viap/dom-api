@@ -84,6 +84,7 @@ export class BookingsService {
         new Date(createBookingDto.startDateTime),
         new Date(createBookingDto.endDateTime),
         createBookingDto.metadata?.estimatedAttendees || 1,
+        createBookingDto.bookedBy,
       );
 
       // Handle recurring bookings
@@ -650,6 +651,7 @@ export class BookingsService {
     startDateTime: Date,
     endDateTime: Date,
     estimatedAttendees: number,
+    userId?: string,
   ): Promise<void> {
     const now = new Date();
 
@@ -679,12 +681,33 @@ export class BookingsService {
       );
     }
 
-    // Check room capacity
+    // Check room capacity and role-based access control
     const room = await this.roomsService.findOne(roomId);
     if (room && estimatedAttendees > room.capacity) {
       throw new BadRequestException(
         `Estimated attendees (${estimatedAttendees}) exceeds room capacity (${room.capacity})`,
       );
+    }
+
+    // Role-based access control validation
+    if (room && room.allowedRoles && room.allowedRoles.length > 0 && userId) {
+      const user = await this.usersService.getById(userId);
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      // Check if user has any of the required roles
+      const hasRequiredRole = user.roles.some((userRole) =>
+        room.allowedRoles.includes(userRole),
+      );
+
+      if (!hasRequiredRole) {
+        throw new ForbiddenException(
+          `Access denied. This room requires one of the following roles: ${room.allowedRoles.join(
+            ', ',
+          )}`,
+        );
+      }
     }
 
     // Check if booking is in the past

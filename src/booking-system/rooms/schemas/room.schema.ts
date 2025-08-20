@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { CompanyDocument } from '../../companies/schemas/company.schema';
+import { Role } from '../../../roles/enums/roles.enum';
 
 export type RoomDocument = Room & Document;
 
@@ -30,6 +31,9 @@ export class Room {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ type: [String], enum: Role, default: [] })
+  allowedRoles: Role[];
 
   @Prop({ type: Object })
   settings: {
