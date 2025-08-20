@@ -6,6 +6,7 @@ import { Booking, bookingSchema } from './schemas/booking.schema';
 import { RoomsModule } from '../rooms/rooms.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 import { UsersModule } from '../../users/users.module';
+import { IsMyBookingGuard } from './guards/is-my-booking.guard';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { UsersModule } from '../../users/users.module';
     UsersModule,
   ],
   controllers: [BookingsController],
-  providers: [BookingsService],
+  providers: [BookingsService, IsMyBookingGuard],
   exports: [BookingsService],
 })
 export class BookingsModule {}

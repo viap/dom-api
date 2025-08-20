@@ -4,7 +4,7 @@ export interface CreateBookingDto {
   title: string;
   description?: string;
   room: string;
-  bookedBy: string;
+  bookedBy?: string;
   startDateTime: Date | string;
   endDateTime: Date | string;
   recurrenceType?: RecurrenceType;

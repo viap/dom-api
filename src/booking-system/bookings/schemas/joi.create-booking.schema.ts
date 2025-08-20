@@ -21,10 +21,9 @@ export const createBookingSchema = Joi.object({
 
   bookedBy: Joi.string()
     .pattern(/^[0-9a-fA-F]{24}$/)
-    .required()
+    .optional()
     .messages({
       'string.pattern.base': 'Invalid user ID format',
-      'any.required': 'User ID is required',
     }),
 
   startDateTime: Joi.date().iso().required().messages({

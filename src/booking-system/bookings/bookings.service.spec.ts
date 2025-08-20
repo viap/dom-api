@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import { SocialNetworks } from '../../common/enums/social-networks.enum';
 import { Role } from '../../roles/enums/roles.enum';
 import { UsersService } from '../../users/users.service';
 import { RoomsService } from '../rooms/rooms.service';
@@ -21,11 +22,14 @@ describe('BookingsService', () => {
   const mockUser = {
     _id: '507f1f77bcf86cd799439014',
     name: 'John Doe',
+    descr: 'Test user',
     roles: [Role.User],
     contacts: [
       {
-        type: 'email',
-        value: 'john@example.com',
+        id: '1',
+        network: SocialNetworks.Phone,
+        username: 'john@example.com',
+        hidden: false,
       },
     ],
     createdAt: new Date(),
@@ -35,11 +39,14 @@ describe('BookingsService', () => {
   const mockAdminUser = {
     _id: '507f1f77bcf86cd799439016',
     name: 'Admin User',
+    descr: 'Admin user',
     roles: [Role.Admin],
     contacts: [
       {
-        type: 'email',
-        value: 'admin@example.com',
+        id: '2',
+        network: SocialNetworks.Phone,
+        username: 'admin@example.com',
+        hidden: false,
       },
     ],
     createdAt: new Date(),
@@ -49,11 +56,14 @@ describe('BookingsService', () => {
   const mockPsychologistUser = {
     _id: '507f1f77bcf86cd799439017',
     name: 'Dr. Smith',
+    descr: 'Psychologist user',
     roles: [Role.Psychologist],
     contacts: [
       {
-        type: 'email',
-        value: 'dr.smith@example.com',
+        id: '3',
+        network: SocialNetworks.Phone,
+        username: 'dr.smith@example.com',
+        hidden: false,
       },
     ],
     createdAt: new Date(),
@@ -274,7 +284,7 @@ describe('BookingsService', () => {
 
       mockBookingModel.findById.mockReturnValue(mockFindChain);
 
-      const result = await service.create(createBookingDto);
+      const result = await service.create(createBookingDto, mockUser as any);
 
       expect(result).toEqual(mockBooking);
       expect(mockSave).toHaveBeenCalled();
@@ -299,9 +309,9 @@ describe('BookingsService', () => {
 
       mockRoomsService.findOne.mockResolvedValue(null);
 
-      await expect(service.create(createBookingDto)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.create(createBookingDto, mockUser as any),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if user not found', async () => {
@@ -317,9 +327,9 @@ describe('BookingsService', () => {
       mockRoomsService.findOne.mockResolvedValue(mockRoom);
       mockUsersService.getById.mockResolvedValue(null);
 
-      await expect(service.create(createBookingDto)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.create(createBookingDto, mockUser as any),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException if room is not available in schedule', async () => {
@@ -336,9 +346,9 @@ describe('BookingsService', () => {
       mockUsersService.getById.mockResolvedValue(mockUser);
       mockSchedulesService.isTimeSlotAvailable.mockResolvedValue(false);
 
-      await expect(service.create(createBookingDto)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.create(createBookingDto, mockUser as any),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should throw ConflictException if there are conflicting bookings', async () => {
@@ -360,9 +370,9 @@ describe('BookingsService', () => {
         exec: jest.fn().mockResolvedValue([mockBooking]),
       });
 
-      await expect(service.create(createBookingDto)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.create(createBookingDto, mockUser as any),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -923,7 +933,7 @@ describe('BookingsService', () => {
 
         mockBookingModel.findById.mockReturnValue(mockFindChain);
 
-        const result = await service.create(createBookingDto);
+        const result = await service.create(createBookingDto, mockUser as any);
 
         expect(result).toEqual(mockBooking);
         expect(mockSave).toHaveBeenCalled();
@@ -957,7 +967,7 @@ describe('BookingsService', () => {
 
         mockBookingModel.findById.mockReturnValue(mockFindChain);
 
-        const result = await service.create(createBookingDto);
+        const result = await service.create(createBookingDto, mockUser as any);
 
         expect(result).toEqual(mockBooking);
         expect(mockSave).toHaveBeenCalled();
@@ -991,7 +1001,7 @@ describe('BookingsService', () => {
 
         mockBookingModel.findById.mockReturnValue(mockFindChain);
 
-        const result = await service.create(createBookingDto);
+        const result = await service.create(createBookingDto, mockUser as any);
 
         expect(result).toEqual(mockBooking);
         expect(mockSave).toHaveBeenCalled();
@@ -1010,10 +1020,12 @@ describe('BookingsService', () => {
         mockRoomsService.findOne.mockResolvedValue(mockPsychologistOnlyRoom);
         mockUsersService.getById.mockResolvedValue(mockUser);
 
-        await expect(service.create(createBookingDto)).rejects.toThrow(
-          ForbiddenException,
-        );
-        await expect(service.create(createBookingDto)).rejects.toThrow(
+        await expect(
+          service.create(createBookingDto, mockUser as any),
+        ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.create(createBookingDto, mockUser as any),
+        ).rejects.toThrow(
           'Access denied. This room requires one of the following roles: psychologist',
         );
       });
@@ -1031,10 +1043,12 @@ describe('BookingsService', () => {
         mockRoomsService.findOne.mockResolvedValue(mockRestrictedRoom);
         mockUsersService.getById.mockResolvedValue(mockUser);
 
-        await expect(service.create(createBookingDto)).rejects.toThrow(
-          ForbiddenException,
-        );
-        await expect(service.create(createBookingDto)).rejects.toThrow(
+        await expect(
+          service.create(createBookingDto, mockUser as any),
+        ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.create(createBookingDto, mockUser as any),
+        ).rejects.toThrow(
           'Access denied. This room requires one of the following roles: admin, psychologist',
         );
       });
@@ -1052,9 +1066,9 @@ describe('BookingsService', () => {
         mockRoomsService.findOne.mockResolvedValue(mockPsychologistOnlyRoom);
         mockUsersService.getById.mockResolvedValue(null); // User not found
 
-        await expect(service.create(createBookingDto)).rejects.toThrow(
-          BadRequestException,
-        );
+        await expect(
+          service.create(createBookingDto, mockUser as any),
+        ).rejects.toThrow(BadRequestException);
       });
     });
   });

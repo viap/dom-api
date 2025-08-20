@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -10,6 +11,7 @@ import {
   Post,
   Query,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 import { JoiValidationPipe } from '../../joi/joi.pipe';
 import { Roles } from '../../roles/decorators/role.docorator';
@@ -20,12 +22,15 @@ import { IsMyBooking } from './decorators/is-my-booking.decorator';
 import { createBookingSchema } from './schemas/joi.create-booking.schema';
 import { updateBookingSchema } from './schemas/joi.update-booking.schema';
 
+import { UserDocument } from '../../users/schemas/user.schema';
 import { ApproveBookingDto } from './dto/approve-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { IsMyBookingGuard } from './guards/is-my-booking.guard';
 
 @Controller('booking-system/bookings')
+@UseGuards(IsMyBookingGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
@@ -72,10 +77,25 @@ export class BookingsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(
+    @Request() req,
     @Body(new JoiValidationPipe(createBookingSchema))
     createBookingDto: CreateBookingDto,
   ) {
-    return this.bookingsService.create(createBookingDto);
+    const user = req.user as UserDocument;
+
+    // If bookedBy is not provided, default to current user
+    if (!createBookingDto.bookedBy) {
+      createBookingDto.bookedBy = user._id.toString();
+    } else if (createBookingDto.bookedBy !== user._id.toString()) {
+      // Only admins can create bookings for other users
+      if (!user.roles.includes(Role.Admin)) {
+        throw new ForbiddenException(
+          'Only administrators can create bookings on behalf of other users',
+        );
+      }
+    }
+
+    return this.bookingsService.create(createBookingDto, user);
   }
 
   /**

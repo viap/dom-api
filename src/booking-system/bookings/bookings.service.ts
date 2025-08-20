@@ -13,6 +13,7 @@ import {
   validateObjectId,
 } from '../../common/utils/mongo-sanitizer';
 import { UsersService } from '../../users/users.service';
+import { UserDocument } from '../../users/schemas/user.schema';
 import { RoomsService } from '../rooms/rooms.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { BookingQueryParams } from '../shared/types/query-params.interface';
@@ -62,7 +63,10 @@ export class BookingsService {
     private usersService: UsersService,
   ) {}
 
-  async create(createBookingDto: CreateBookingDto): Promise<BookingDocument> {
+  async create(
+    createBookingDto: CreateBookingDto,
+    currentUser: UserDocument,
+  ): Promise<BookingDocument> {
     try {
       // Validate referenced entities
       const [room, bookedByUser] = await Promise.all([
@@ -92,7 +96,7 @@ export class BookingsService {
         createBookingDto.recurrenceType &&
         createBookingDto.recurrenceType !== RecurrenceType.NONE
       ) {
-        return await this.createRecurringSeries(createBookingDto);
+        return await this.createRecurringSeries(createBookingDto, currentUser);
       }
 
       // Create single booking
@@ -119,6 +123,8 @@ export class BookingsService {
 
   async createRecurringSeries(
     bookingData: CreateBookingDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _currentUser: UserDocument,
   ): Promise<BookingDocument> {
     const recurrenceOptions: RecurrenceOptions = {
       type: bookingData.recurrenceType,
