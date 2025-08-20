@@ -41,3 +41,6 @@ export class Psychologist {
 }
 
 export const psychologistSchema = SchemaFactory.createForClass(Psychologist);
+
+psychologistSchema.index({ user: 1 });
+psychologistSchema.index({ isInTheClub: 1 });

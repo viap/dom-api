@@ -43,3 +43,8 @@ export class Notification {
 }
 
 export const schemaNotification = SchemaFactory.createForClass(Notification);
+
+schemaNotification.index({ status: 1, startsAt: 1, finishAt: 1 });
+schemaNotification.index({ recipients: 1 });
+schemaNotification.index({ received: 1 });
+schemaNotification.index({ roles: 1 });
