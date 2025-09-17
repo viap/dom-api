@@ -1,3 +1,4 @@
+import { BookingStatus } from '../enums/booking-status.enum';
 import { RecurrenceType } from '../enums/recurrence-type.enum';
 
 export interface UpdateBookingDto {
@@ -6,7 +7,7 @@ export interface UpdateBookingDto {
   room?: string;
   startDateTime?: Date | string;
   endDateTime?: Date | string;
-  status?: string;
+  status?: BookingStatus;
   cancellationReason?: string;
   recurrenceType?: RecurrenceType;
   recurrenceInterval?: number;

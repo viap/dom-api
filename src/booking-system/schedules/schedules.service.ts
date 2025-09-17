@@ -1,26 +1,26 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model } from 'mongoose';
 import {
+  safeFindParams,
+  sanitizeDateRange,
+  validateObjectId,
+} from '../../common/utils/mongo-sanitizer';
+import { CompaniesService } from '../companies/companies.service';
+import { RoomsService } from '../rooms/rooms.service';
+import { ScheduleQueryParams } from '../shared/types/query-params.interface';
+import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import {
+  RecurrencePattern,
   Schedule,
   ScheduleDocument,
   ScheduleType,
-  RecurrencePattern,
 } from './schemas/schedule.schema';
-import { RoomsService } from '../rooms/rooms.service';
-import { CompaniesService } from '../companies/companies.service';
-import {
-  validateObjectId,
-  safeFindParams,
-  sanitizeDateRange,
-} from '../../common/utils/mongo-sanitizer';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { ScheduleQueryParams } from '../shared/types/query-params.interface';
 
 @Injectable()
 export class SchedulesService {

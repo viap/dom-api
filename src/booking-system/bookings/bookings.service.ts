@@ -209,6 +209,19 @@ export class BookingsService {
       }
     }
 
+    if (
+      !safeParams.room &&
+      safeParams.roomIds &&
+      Array.isArray(safeParams.roomIds)
+    ) {
+      const validRoomIds = safeParams.roomIds
+        .map((id) => validateObjectId(id as string))
+        .filter((id) => id !== null);
+      if (validRoomIds.length > 0) {
+        query.room = { $in: validRoomIds };
+      }
+    }
+
     if (safeParams.bookedBy && typeof safeParams.bookedBy === 'string') {
       const validUserId = validateObjectId(safeParams.bookedBy);
       if (validUserId) {
@@ -566,7 +579,7 @@ export class BookingsService {
   }
 
   async exportBookings(
-    filter: BookingQueryParams = {},
+    filter: BookingQueryParams,
   ): Promise<Record<string, unknown>[]> {
     const bookings = await this.findAll(filter);
 

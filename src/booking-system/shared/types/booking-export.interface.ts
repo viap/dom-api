@@ -1,3 +1,5 @@
+import { BookingQueryParams } from './query-params.interface';
+
 export interface BookingExportData {
   id: string;
   title: string;
@@ -41,15 +43,6 @@ export interface BookingExportData {
   recurrenceType?: string;
 }
 
-export interface BookingExportFilter {
-  roomIds?: string[];
-  startDate: string;
-  endDate: string;
-  status?: string[];
-  includePrivate?: boolean;
-  includeRecurring?: boolean;
-}
-
 export interface BookingExportResponse {
   data: BookingExportData[];
   summary: {
@@ -63,6 +56,6 @@ export interface BookingExportResponse {
       utilizationPercentage: number;
     }[];
   };
-  filter: BookingExportFilter;
+  filter: BookingQueryParams;
   exportedAt: string;
 }

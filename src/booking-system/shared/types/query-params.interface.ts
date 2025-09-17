@@ -1,7 +1,10 @@
+import { BookingStatus } from '../../bookings/enums/booking-status.enum';
+
 export interface BookingQueryParams {
   room?: string;
+  roomIds?: string[];
   bookedBy?: string;
-  status?: string;
+  status?: BookingStatus;
   startDate?: string;
   endDate?: string;
   includeChildBookings?: string;
@@ -36,13 +39,4 @@ export interface ScheduleQueryParams {
   startDate?: string;
   endDate?: string;
   [key: string]: string | string[] | undefined;
-}
-
-export interface ExportFilter {
-  startDate: string;
-  endDate: string;
-  roomIds?: string[];
-  status?: string[];
-  includePrivate?: boolean;
-  includeRecurring?: boolean;
 }
