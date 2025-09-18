@@ -58,7 +58,9 @@ export class Room {
 
 export const roomSchema = SchemaFactory.createForClass(Room);
 
+// Enhanced indexes for performance optimization
 roomSchema.index({ company: 1, name: 1 }, { unique: true });
-roomSchema.index({ company: 1 });
-roomSchema.index({ isActive: 1 });
+roomSchema.index({ company: 1, isActive: 1 });
+roomSchema.index({ isActive: 1, capacity: 1 });
 roomSchema.index({ capacity: 1 });
+roomSchema.index({ company: 1, isActive: 1, capacity: 1 });

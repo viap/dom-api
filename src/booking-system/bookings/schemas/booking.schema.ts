@@ -100,9 +100,17 @@ export class Booking {
 
 export const bookingSchema = SchemaFactory.createForClass(Booking);
 
-bookingSchema.index({ room: 1, startDateTime: 1, endDateTime: 1 });
-bookingSchema.index({ bookedBy: 1, startDateTime: 1 });
+// Enhanced compound indexes for performance optimization
+bookingSchema.index({ room: 1, startDateTime: 1, endDateTime: 1, status: 1 });
+bookingSchema.index({ bookedBy: 1, startDateTime: 1, status: 1 });
 bookingSchema.index({ status: 1, startDateTime: 1 });
 bookingSchema.index({ startDateTime: 1, endDateTime: 1 });
-bookingSchema.index({ parentBooking: 1 });
+bookingSchema.index({ parentBooking: 1 }, { sparse: true });
 bookingSchema.index({ recurrenceType: 1 });
+
+// Additional performance indexes
+bookingSchema.index({ status: 1, createdAt: 1 });
+bookingSchema.index({ room: 1, status: 1, startDateTime: 1 });
+bookingSchema.index({ bookedBy: 1, status: 1, startDateTime: -1 });
+bookingSchema.index({ startDateTime: 1, status: 1 });
+bookingSchema.index({ endDateTime: 1, status: 1 });

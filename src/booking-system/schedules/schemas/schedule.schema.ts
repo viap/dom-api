@@ -76,8 +76,11 @@ export class Schedule {
 
 export const scheduleSchema = SchemaFactory.createForClass(Schedule);
 
-scheduleSchema.index({ room: 1, startDate: 1, endDate: 1 });
-scheduleSchema.index({ company: 1, startDate: 1, endDate: 1 });
-scheduleSchema.index({ type: 1, isActive: 1 });
-scheduleSchema.index({ startDate: 1, endDate: 1 });
-scheduleSchema.index({ recurrencePattern: 1 });
+// Enhanced indexes for performance optimization
+scheduleSchema.index({ room: 1, startDate: 1, endDate: 1, isActive: 1 });
+scheduleSchema.index({ company: 1, startDate: 1, endDate: 1, isActive: 1 });
+scheduleSchema.index({ type: 1, isActive: 1, startDate: 1 });
+scheduleSchema.index({ startDate: 1, endDate: 1, isActive: 1 });
+scheduleSchema.index({ recurrencePattern: 1, isActive: 1 });
+scheduleSchema.index({ room: 1, type: 1, isActive: 1 });
+scheduleSchema.index({ isActive: 1, startDate: 1, endDate: 1 });
