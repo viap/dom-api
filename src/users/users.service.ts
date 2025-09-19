@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
@@ -70,6 +70,14 @@ export class UsersService {
       .exec();
   }
 
+  async getByLogin(login: string): Promise<UserDocument> {
+    const sanitizedLogin = sanitizeObject(login);
+    if (!sanitizedLogin || typeof sanitizedLogin !== 'string') {
+      return null;
+    }
+    return this.userModel.findOne({ login: sanitizedLogin }).exec();
+  }
+
   async getByAuthUser(authUser: AuthUserDto): Promise<UserDocument> {
     const sanitizedAuthUser = sanitizeObject(authUser) as AuthUserDto;
 
@@ -108,14 +116,36 @@ export class UsersService {
       .exec();
   }
 
+  private async validateUniqueLogin(login: string, excludeUserId?: string): Promise<void> {
+    if (!login) {
+      return;
+    }
+
+    const existingUser = await this.getByLogin(login);
+    if (existingUser && (!excludeUserId || existingUser._id.toString() !== excludeUserId)) {
+      throw new ConflictException('User with this login already exists');
+    }
+  }
+
   async create(createData: CreateUserDto): Promise<UserDocument> {
     const userData = { ...createData };
+
+    // Validate unique login before creation
+    await this.validateUniqueLogin(userData.login);
 
     if (userData.password) {
       userData.password = await this.hashPassword(userData.password);
     }
 
-    return this.userModel.create(userData);
+    try {
+      return await this.userModel.create(userData);
+    } catch (error) {
+      // Handle MongoDB duplicate key error
+      if (error.code === 11000 && error.keyPattern?.login) {
+        throw new ConflictException('User with this login already exists');
+      }
+      throw error;
+    }
   }
 
   async createFromTelegram(telegram: TelegramUserDto): Promise<UserDocument> {
@@ -144,6 +174,11 @@ export class UsersService {
 
     const userData = { ...updateData };
 
+    // Validate unique login before update (excluding current user)
+    if (userData.login) {
+      await this.validateUniqueLogin(userData.login, validId);
+    }
+
     if (userData.password) {
       userData.password = await this.hashPassword(userData.password);
     }
@@ -170,8 +205,16 @@ export class UsersService {
     //   // }
     // }
 
-    await this.userModel.findByIdAndUpdate(validId, userData, { new: true });
-    return this.getById(validId);
+    try {
+      await this.userModel.findByIdAndUpdate(validId, userData, { new: true });
+      return this.getById(validId);
+    } catch (error) {
+      // Handle MongoDB duplicate key error
+      if (error.code === 11000 && error.keyPattern?.login) {
+        throw new ConflictException('User with this login already exists');
+      }
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<UserDocument | null> {
