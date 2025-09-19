@@ -1,21 +1,21 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  Query,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
-import { SchedulesService } from './schedules.service';
 import { JoiValidationPipe } from '../../joi/joi.pipe';
-import { createScheduleSchema } from './schemas/joi.create-schedule.schema';
-import { updateScheduleSchema } from './schemas/joi.update-schedule.schema';
 import { Roles } from '../../roles/decorators/role.docorator';
 import { Role } from '../../roles/enums/roles.enum';
+import { SchedulesService } from './schedules.service';
+import { createScheduleSchema } from './schemas/joi.create-schedule.schema';
+import { updateScheduleSchema } from './schemas/joi.update-schedule.schema';
 
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';

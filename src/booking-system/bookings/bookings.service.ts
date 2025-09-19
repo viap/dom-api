@@ -349,10 +349,7 @@ export class BookingsService {
     };
 
     if (startDate || endDate) {
-      const { from, to } = sanitizeDateRange(
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-      );
+      const { from, to } = sanitizeDateRange(startDate, endDate);
 
       query.$or = [
         // Bookings that start within the date range

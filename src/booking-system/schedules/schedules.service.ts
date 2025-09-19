@@ -148,10 +148,8 @@ export class SchedulesService {
     };
 
     if (startDate || endDate) {
-      const { from, to } = sanitizeDateRange(
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-      );
+      const { from, to } = sanitizeDateRange(startDate, endDate);
+
       query.$or = [
         // Schedules that start within the date range
         {
@@ -203,10 +201,7 @@ export class SchedulesService {
     };
 
     if (startDate || endDate) {
-      const { from, to } = sanitizeDateRange(
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-      );
+      const { from, to } = sanitizeDateRange(startDate, endDate);
       query.startDate = {};
       if (from) query.startDate.$gte = from;
       if (to) query.startDate.$lte = to;
