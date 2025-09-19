@@ -8,6 +8,10 @@ export class ApiClientsService {
       name: process.env.BOT_CLIENT_NAME,
       password: process.env.BOT_CLIENT_PASSWORD,
     },
+    {
+      name: process.env.WEB_CLIENT_NAME,
+      password: process.env.WEB_CLIENT_PASSWORD,
+    },
   ];
   async findOne(name: string): Promise<ApiClientDto | undefined> {
     return this.clients.find((client) => client.name === name);

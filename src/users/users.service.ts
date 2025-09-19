@@ -3,10 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
 import {
+  sanitizeObject,
   validateObjectId,
   validateRoles,
 } from 'src/common/utils/mongo-sanitizer';
 import { Role } from 'src/roles/enums/roles.enum';
+import { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -38,34 +40,48 @@ export class UsersService {
   }
 
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
-    // Sanitize telegramId - ensure it's a string and reasonable length
+    const sanitizedTelegramId = sanitizeObject(telegramId);
     if (
-      !telegramId ||
-      typeof telegramId !== 'string' ||
-      telegramId.length > 50
+      !sanitizedTelegramId ||
+      typeof sanitizedTelegramId !== 'string' ||
+      sanitizedTelegramId.length > 50
     ) {
       return null;
     }
     return await this.userModel
       .findOne({
-        'contacts.id': telegramId,
+        'contacts.id': sanitizedTelegramId,
         'contacts.network': SocialNetworks.Telegram,
       })
       .exec();
   }
 
+  async getByAuthUser(authUser: AuthUserDto): Promise<UserDocument> {
+    const sanitizedAuthUser = sanitizeObject(authUser) as AuthUserDto;
+
+    console.log('@@@ Sanitized Auth User:', sanitizedAuthUser);
+
+    // TODO: add password hashing
+    return await this.userModel
+      .findOne({
+        login: sanitizedAuthUser.login,
+        password: sanitizedAuthUser.password,
+      })
+      .exec();
+  }
+
   async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {
-    // Sanitize username - ensure it's a string and reasonable length
+    const sanitizedTelegramUserName = sanitizeObject(telegramUserName);
     if (
-      !telegramUserName ||
-      typeof telegramUserName !== 'string' ||
-      telegramUserName.length > 50
+      !sanitizedTelegramUserName ||
+      typeof sanitizedTelegramUserName !== 'string' ||
+      sanitizedTelegramUserName.length > 50
     ) {
       return null;
     }
     return await this.userModel
       .findOne({
-        'contacts.username': telegramUserName,
+        'contacts.username': sanitizedTelegramUserName,
         'contacts.network': SocialNetworks.Telegram,
       })
       .exec();
