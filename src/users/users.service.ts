@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
@@ -85,6 +85,7 @@ export class UsersService {
       .findOne({
         login: sanitizedAuthUser.login,
       })
+      .select('+password')
       .exec();
 
     if (!user || !user.password) {
@@ -116,13 +117,19 @@ export class UsersService {
       .exec();
   }
 
-  private async validateUniqueLogin(login: string, excludeUserId?: string): Promise<void> {
+  private async validateUniqueLogin(
+    login: string,
+    excludeUserId?: string,
+  ): Promise<void> {
     if (!login) {
       return;
     }
 
     const existingUser = await this.getByLogin(login);
-    if (existingUser && (!excludeUserId || existingUser._id.toString() !== excludeUserId)) {
+    if (
+      existingUser &&
+      (!excludeUserId || existingUser._id.toString() !== excludeUserId)
+    ) {
       throw new ConflictException('User with this login already exists');
     }
   }
