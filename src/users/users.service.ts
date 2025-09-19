@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
 import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
 import {
@@ -16,7 +17,20 @@ import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
+  private readonly saltRounds = 12;
+
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, this.saltRounds);
+  }
+
+  private async comparePassword(
+    password: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
+    return bcrypt.compare(password, hashedPassword);
+  }
 
   async getAll(): Promise<Array<UserDocument>> {
     return this.userModel.find().exec();
@@ -59,15 +73,22 @@ export class UsersService {
   async getByAuthUser(authUser: AuthUserDto): Promise<UserDocument> {
     const sanitizedAuthUser = sanitizeObject(authUser) as AuthUserDto;
 
-    console.log('@@@ Sanitized Auth User:', sanitizedAuthUser);
-
-    // TODO: add password hashing
-    return await this.userModel
+    const user = await this.userModel
       .findOne({
         login: sanitizedAuthUser.login,
-        password: sanitizedAuthUser.password,
       })
       .exec();
+
+    if (!user || !user.password) {
+      return null;
+    }
+
+    const isPasswordValid = await this.comparePassword(
+      sanitizedAuthUser.password,
+      user.password,
+    );
+
+    return isPasswordValid ? user : null;
   }
 
   async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {
@@ -88,7 +109,13 @@ export class UsersService {
   }
 
   async create(createData: CreateUserDto): Promise<UserDocument> {
-    return this.userModel.create(createData);
+    const userData = { ...createData };
+
+    if (userData.password) {
+      userData.password = await this.hashPassword(userData.password);
+    }
+
+    return this.userModel.create(userData);
   }
 
   async createFromTelegram(telegram: TelegramUserDto): Promise<UserDocument> {
@@ -115,6 +142,12 @@ export class UsersService {
       return null;
     }
 
+    const userData = { ...updateData };
+
+    if (userData.password) {
+      userData.password = await this.hashPassword(userData.password);
+    }
+
     // NOTICE: add notification about roles update - ?
     // const { roles = [] } = updateData;
     // const user = await this.userModel.findById(id).exec();
@@ -137,7 +170,7 @@ export class UsersService {
     //   // }
     // }
 
-    await this.userModel.findByIdAndUpdate(validId, updateData, { new: true });
+    await this.userModel.findByIdAndUpdate(validId, userData, { new: true });
     return this.getById(validId);
   }
 
