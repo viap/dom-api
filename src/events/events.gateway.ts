@@ -63,6 +63,10 @@ export class EventsGateway implements OnModuleInit {
             clientId: client.id,
             apiClient: initClient.name,
           });
+        } else {
+          client.emit('unauthorized', {
+            message: 'Unauthorized API client',
+          });
         }
       }
     });

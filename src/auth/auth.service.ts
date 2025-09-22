@@ -25,8 +25,8 @@ export class AuthService {
     return this.jwtService.decode(token);
   }
 
-  async isAvailableClient(initClient: ApiClientDto) {
-    const apiClient = await this.clientService.findOne(initClient.name);
+  isAvailableClient(initClient: ApiClientDto) {
+    const apiClient = this.clientService.findOne(initClient.name);
 
     if (apiClient?.password !== initClient.password) {
       return false;

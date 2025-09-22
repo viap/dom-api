@@ -13,7 +13,7 @@ export class ApiClientsService {
       password: process.env.WEB_CLIENT_PASSWORD,
     },
   ];
-  async findOne(name: string): Promise<ApiClientDto | undefined> {
+  findOne(name: string): ApiClientDto | undefined {
     return this.clients.find((client) => client.name === name);
   }
 }
