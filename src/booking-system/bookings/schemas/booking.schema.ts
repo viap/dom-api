@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { RoomDocument } from '../../rooms/schemas/room.schema';
 import { UserDocument } from '../../../users/schemas/user.schema';
+import { RoomDocument } from '../../rooms/schemas/room.schema';
 import { BookingStatus } from '../enums/booking-status.enum';
 import { RecurrenceType } from '../enums/recurrence-type.enum';
 
@@ -46,9 +46,6 @@ export class Booking {
   @Prop()
   canceledAt: Date;
 
-  @Prop({ required: true, enum: RecurrenceType, default: RecurrenceType.NONE })
-  recurrenceType: RecurrenceType;
-
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Booking' })
   parentBooking: BookingDocument;
 
@@ -57,6 +54,9 @@ export class Booking {
     default: [],
   })
   childBookings: BookingDocument[];
+
+  @Prop({ required: true, enum: RecurrenceType, default: RecurrenceType.NONE })
+  recurrenceType: RecurrenceType;
 
   @Prop()
   recurrenceEndDate: Date;
