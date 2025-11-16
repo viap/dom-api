@@ -191,21 +191,25 @@ export function validateRoles(roles: unknown): string[] {
  * Sanitizes date range parameters
  */
 export function sanitizeDateRange(
-  from?: string | number | null,
-  to?: string | number | null,
+  from?: Date | string | number | null,
+  to?: Date | string | number | null,
 ): { from?: number; to?: number } {
-  const result: { from?: number; to?: number } = {};
+  const result: { from?: number; to?: number } = {
+    from: undefined,
+    to: undefined,
+  };
 
-  if (from !== undefined && from !== null) {
-    const fromNum = Number(from);
-    if (!isNaN(fromNum) && fromNum > 0) {
+  if (from) {
+    const fromNum =
+      from instanceof Date ? from.valueOf() : new Date(from).valueOf();
+    if (!isNaN(fromNum)) {
       result.from = fromNum;
     }
   }
 
-  if (to !== undefined && to !== null) {
-    const toNum = Number(to);
-    if (!isNaN(toNum) && toNum > 0) {
+  if (to) {
+    const toNum = to instanceof Date ? to.valueOf() : new Date(to).valueOf();
+    if (!isNaN(toNum)) {
       result.to = toNum;
     }
   }

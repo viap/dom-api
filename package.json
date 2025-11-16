@@ -28,6 +28,8 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.2.6",
     "@nestjs/websockets": "^10.2.6",
+    "@types/bcrypt": "^6.0.0",
+    "bcrypt": "^6.0.0",
     "joi": "^17.9.2",
     "mongoose": "^7.3.4",
     "reflect-metadata": "^0.1.13",
@@ -72,6 +74,9 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    }
   }
 }

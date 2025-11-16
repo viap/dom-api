@@ -16,6 +16,33 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "noFallthroughCasesInSwitch": false,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "@auth/*": ["src/auth/*"],
+      "@common/*": ["src/common/*"],
+      "@users/*": ["src/users/*"],
+      "@psychologists/*": ["src/psychologists/*"],
+      "@therapy-sessions/*": ["src/therapy-sessions/*"],
+      "@therapy-requests/*": ["src/therapy-requests/*"],
+      "@notifications/*": ["src/notifications/*"],
+      "@booking-system/*": ["src/booking-system/*"],
+      "@events/*": ["src/events/*"],
+      "@roles/*": ["src/roles/*"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts",
+    "coverage"
+  ],
+  "include": [
+    "src/**/*"
+  ]
 }

@@ -38,3 +38,8 @@ export class TherapySession {
 export type TherapySessionDocument = TherapySession & Document;
 export const therapySessionSchema =
   SchemaFactory.createForClass(TherapySession);
+
+therapySessionSchema.index({ psychologist: 1, dateTime: 1 });
+therapySessionSchema.index({ psychologist: 1, client: 1 });
+therapySessionSchema.index({ dateTime: 1 });
+therapySessionSchema.index({ client: 1 });

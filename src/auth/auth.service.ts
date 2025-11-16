@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ApiClientsService } from 'src/api-clients/api-clients.service';
 import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
+import { AuthUserDto } from './dto/auth-user.dto';
 import { TelegramUserDto } from './dto/telegram.dto';
 import { TokenPayloadDto } from './dto/token-payload.dto';
 
@@ -24,8 +25,8 @@ export class AuthService {
     return this.jwtService.decode(token);
   }
 
-  async isAvailableClient(initClient: ApiClientDto) {
-    const apiClient = await this.clientService.findOne(initClient.name);
+  isAvailableClient(initClient: ApiClientDto) {
+    const apiClient = this.clientService.findOne(initClient.name);
 
     if (apiClient?.password !== initClient.password) {
       return false;
@@ -45,6 +46,29 @@ export class AuthService {
     const user =
       (await this.userService.getByTelegramId(telegram.id)) ||
       (await this.userService.createFromTelegram(telegram));
+
+    const payload: TokenPayloadDto = {
+      userId: user._id,
+      roles: user.roles,
+      clientName: initClient.name,
+    };
+
+    return { auth_token: await this.jwtService.signAsync(payload) };
+  }
+
+  async signInByAuthUser(
+    initClient: ApiClientDto,
+    authUser: AuthUserDto,
+  ): Promise<{ auth_token: string }> | never {
+    if (!this.isAvailableClient(initClient)) {
+      throw new UnauthorizedException();
+    }
+
+    const user = await this.userService.getByAuthUser(authUser);
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
 
     const payload: TokenPayloadDto = {
       userId: user._id,

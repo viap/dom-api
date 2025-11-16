@@ -11,7 +11,9 @@ import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
 import { AuthByTelegramDto } from './dto/auth-by-telegram.dto';
+import { AuthByUserDto } from './dto/auth-by-user.dto';
 import { joiAuthByTelegramSchema } from './schemas/joi.auth-by-telegram.schema';
+import { joiAuthByUserSchema } from './schemas/joi.auth-by-user.schema';
 
 @Controller('auth')
 export class AuthController {
@@ -23,6 +25,14 @@ export class AuthController {
   @UsePipes(new JoiValidationPipe(joiAuthByTelegramSchema))
   getAuthTokenForTelegram(@Body() data: AuthByTelegramDto) {
     return this.authService.signInByTelegram(data.apiClient, data.telegram);
+  }
+
+  @Public()
+  @Post('login/user')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new JoiValidationPipe(joiAuthByUserSchema))
+  getAuthTokenForUser(@Body() data: AuthByUserDto) {
+    return this.authService.signInByAuthUser(data.apiClient, data.user);
   }
 
   @Get('check-token')
