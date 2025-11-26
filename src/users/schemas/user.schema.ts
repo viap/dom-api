@@ -10,6 +10,12 @@ export class User {
   @Prop({ required: true })
   name: string;
 
+  @Prop({ unique: true })
+  login: string;
+
+  @Prop({ select: false })
+  password: string;
+
   @Prop({ required: true, default: [Role.User] })
   roles: Array<Role>;
 
@@ -25,3 +31,14 @@ export class User {
 }
 
 export const userSchema = SchemaFactory.createForClass(User);
+
+// Transform function to ensure password is never included in JSON output
+userSchema.set('toJSON', {
+  transform: function (_, ret) {
+    delete ret.password;
+    return ret;
+  },
+});
+
+userSchema.index({ roles: 1 });
+userSchema.index({ name: 'text' });

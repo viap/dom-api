@@ -33,7 +33,10 @@ import { AuthService } from './auth.service';
 
         return {
           secret,
-          signOptions: { expiresIn: '1d' },
+          signOptions: {
+            expiresIn: '1d',
+            algorithm: 'HS256',
+          },
         };
       },
     }),

@@ -39,3 +39,8 @@ export class TherapyRequest {
 
 export const schemaTherapyRequest =
   SchemaFactory.createForClass(TherapyRequest);
+
+schemaTherapyRequest.index({ psychologist: 1, timestamp: 1 });
+schemaTherapyRequest.index({ user: 1, timestamp: 1 });
+schemaTherapyRequest.index({ accepted: 1, timestamp: 1 });
+schemaTherapyRequest.index({ timestamp: 1 });

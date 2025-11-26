@@ -26,6 +26,8 @@ const webSocketPort = process.env.WEBSOCKET_PORT
   transports: ['websocket'],
   cors: {
     origin: '*',
+    credentials: true,
+    methods: ['GET', 'POST'],
   },
 })
 export class EventsGateway implements OnModuleInit {
@@ -60,6 +62,10 @@ export class EventsGateway implements OnModuleInit {
           client.emit('inited', {
             clientId: client.id,
             apiClient: initClient.name,
+          });
+        } else {
+          client.emit('unauthorized', {
+            message: 'Unauthorized API client',
           });
         }
       }
