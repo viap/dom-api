@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
 import { valueToObjectId } from 'src/common/utils/value-to-object-id';
 import { UsersService } from 'src/users/users.service';
+import { NOTIFICATION_DAYS_LIFETIME } from './consts';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { NotificationStatuses } from './enums/notification-statuses.enum';
@@ -101,19 +102,21 @@ export class NotificationsService {
     createData: CreateNotificationDto,
   ): Promise<NotificationDocument | false> {
     const validationResult = joiCreateNotificationSchema.validate(createData);
+
     if (!validationResult.error) {
-      createData.startsAt = createData.startsAt || Date.now();
-      // NOTICE: finishAt = startAt + one day, if not set another
-      createData.finishAt =
-        createData.finishAt ||
-        new Date().setDate(new Date(createData.startsAt).getDate() + 1);
+      const newNotificationData = {
+        ...validationResult.value,
+        startsAt: validationResult.value.startsAt || Date.now(),
+        // NOTICE: finishAt = startAt + NOTIFICATION_DAYS_LIFETIME, if not set another
+        finishAt:
+          validationResult.value.finishAt ||
+          new Date().setDate(new Date().getDate() + NOTIFICATION_DAYS_LIFETIME),
+        recipients: validationResult.value.recipients
+          ? validationResult.value.recipients.map(valueToObjectId)
+          : undefined,
+      };
 
-      const recipients: Array<mongoose.Types.ObjectId> | undefined =
-        createData.recipients
-          ? createData.recipients.map(valueToObjectId)
-          : undefined;
-
-      return await this.notificationModel.create({ ...createData, recipients });
+      return await this.notificationModel.create(newNotificationData);
     }
 
     return false;

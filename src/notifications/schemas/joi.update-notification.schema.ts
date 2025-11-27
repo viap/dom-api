@@ -8,6 +8,8 @@ export const joiUpdateNotificationSchema = Joi.object<UpdateNotificationDto>({
     ...Object.values(NotificationStatuses),
   ),
   roles: Joi.array<Role>().items(...Object.values(Role)),
+  title: Joi.string(),
+  message: Joi.string(),
   recipients: Joi.array<string>(),
   received: Joi.array<string>(),
   startsAt: Joi.number(),

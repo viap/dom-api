@@ -90,6 +90,7 @@ export class EventsGateway implements OnModuleInit {
     const userId = socketToUser[client.id];
 
     let notifications: Array<NotificationDocument> = [];
+
     if (userId) {
       notifications = await this.notificationsService.getAllByUserId(userId);
     }

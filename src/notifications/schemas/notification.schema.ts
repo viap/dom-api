@@ -18,6 +18,12 @@ export class Notification {
   @Prop({ required: false })
   finishAt: number;
 
+  @Prop({ required: false, default: '' })
+  title: string;
+
+  @Prop({ required: false, default: '' })
+  message: string;
+
   @Prop({ required: true, default: [] })
   roles: Array<Role>;
 
