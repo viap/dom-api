@@ -1,0 +1,1 @@
+export const NOTIFICATION_DAYS_LIFETIME = 7;

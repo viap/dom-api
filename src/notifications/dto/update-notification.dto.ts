@@ -4,6 +4,8 @@ import { NotificationStatuses } from '../enums/notification-statuses.enum';
 export class UpdateNotificationDto {
   roles?: Array<Role>;
   recipients?: Array<string>;
+  title?: string;
+  message?: string;
   received?: Array<string>;
   status?: NotificationStatuses;
   startsAt?: number;
