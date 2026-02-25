@@ -1,73 +1,244 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Dom-Bot API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A comprehensive NestJS-based REST API for a therapy/psychology platform that manages psychologists, therapy sessions, users, and real-time notifications. Built with TypeScript, MongoDB, and WebSocket support for modern therapy practice management.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🔧 Technology Stack
 
-## Description
+- **Framework**: NestJS (TypeScript)
+- **Database**: MongoDB with Mongoose ODM
+- **Authentication**: JWT tokens, Telegram integration, API clients
+- **Real-time**: WebSocket (Socket.IO)
+- **Validation**: Joi schemas + Mongoose schemas
+- **Security**: NoSQL injection prevention, CORS, input sanitization
+- **Testing**: Jest with unit, integration, and e2e tests
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## ✨ Core Features
 
-## Installation
+### 🧠 Psychology Practice Management
+
+- **Psychologist Profiles**: Complete professional profiles with education, specializations, and session pricing
+- **Client Management**: Secure client records and relationship management
+- **Therapy Sessions**: Individual session tracking with statistics and analytics
+- **Therapy Requests**: Request handling and approval workflow
+- **Booking System**: Appointment scheduling and management
+
+### 🔒 Security & Authentication
+
+- **Multi-method Authentication**: JWT tokens, Telegram integration, API client authentication
+- **Role-based Access Control**: User, Psychologist, Admin, Editor roles
+- **NoSQL Injection Prevention**: Comprehensive input sanitization and validation
+- **Request Validation**: Dual-schema validation (Joi + Mongoose)
+- **CORS Protection**: Configurable cross-origin resource sharing
+
+### 🔔 Real-time Features
+
+- **WebSocket Gateway**: Real-time notifications and updates
+- **Notification System**: Targeted messaging and event broadcasting
+- **Live Session Updates**: Real-time therapy session status updates
+- **Multi-client Support**: API client tracking and management
+
+### 📊 Data Management
+
+- **Dual Schema Architecture**: Request validation + database modeling
+- **Data Sanitization**: Automatic input cleaning and security validation
+- **Contact Management**: Social network integration and contact systems
+- **Price Management**: Flexible pricing structures for sessions
+
+## 🚀 Installation
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- MongoDB (v4.4 or higher)
+- npm or yarn
+
+### Setup Steps
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd dom-api
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+3. **Environment Configuration**
+
+   Create `config/.env` file with the following variables:
+
+   ```env
+   # Application
+   PORT=3000
+   WEBSOCKET_PORT=3004
+
+   # Database
+   MONGO_URL=mongodb://localhost:27017
+   MONGO_DBNAME=dom_bot_api
+   MONGO_INITDB_ROOT_USERNAME=admin
+   MONGO_INITDB_ROOT_PASSWORD=password
+
+   # JWT
+   JWT_SECRET=your-secret-key
+   JWT_EXPIRES_IN=1d
+   ```
+
+4. **Database Setup**
+
+   Ensure MongoDB is running and accessible with the configured credentials.
+
+5. **Start the application**
+   ```bash
+   npm run start:dev
+   ```
+
+## 🛠️ Development Commands
 
 ```bash
-$ npm install
+# Development
+npm run start:dev          # Start in watch mode
+npm run start:debug        # Start with debug mode
+
+# Building
+npm run build             # Build the application
+npm run start:prod        # Run production build
+
+# Testing
+npm run test              # Run unit tests
+npm run test:watch        # Run tests in watch mode
+npm run test:e2e          # Run end-to-end tests
+npm run test:cov          # Run tests with coverage
+
+# Code Quality
+npm run lint              # Run ESLint with auto-fix
+npm run format            # Format code with Prettier
 ```
 
-## Running the app
+## 🏗️ Architecture
+
+### Module Structure
+
+```
+src/
+├── auth/                 # JWT & Telegram authentication
+├── users/                # User management and profiles
+├── psychologists/        # Psychologist profiles and clients
+├── therapy-sessions/     # Individual session management
+├── therapy-requests/     # Request handling workflow
+├── notifications/        # Notification system
+├── events/               # WebSocket gateway
+├── api-clients/          # API client management
+├── roles/                # Role-based access control
+├── booking-system/       # Appointment scheduling
+├── common/               # Shared utilities and schemas
+└── joi/                  # Validation pipeline
+```
+
+### Core Design Patterns
+
+- **Dual Schema Validation**: Joi schemas for request validation + Mongoose schemas for database modeling
+- **Role-based Guards**: Decorators and guards for authorization (`@Roles`, `@IsMyData`)
+- **Middleware Pipeline**: Global sanitization and authentication middleware
+- **Service Layer Architecture**: Business logic separation with dependency injection
+
+## 🔒 Security Implementation
+
+### NoSQL Injection Prevention
+
+The API implements comprehensive protection against NoSQL injection attacks:
+
+- **Global Sanitization Middleware**: Automatic cleaning of all incoming requests
+- **Enhanced Validation Pipeline**: Joi validation with built-in sanitization
+- **Service-level Protection**: ObjectId validation and query parameter sanitization
+- **Attack Vector Coverage**: Protection against `$where`, `$regex`, `$ne`, and other MongoDB operators
+
+### Authentication Methods
+
+1. **JWT Tokens**: Standard bearer token authentication with 1-day expiration
+2. **Telegram Integration**: OAuth-style authentication via Telegram
+3. **API Clients**: Name/password authentication for external services
+
+### Authorization
+
+- **Role Hierarchy**: User (default) → Psychologist → Editor → Admin
+- **Resource Ownership**: `@IsMyData` and `@IsMyTherapySession` decorators
+- **Route Protection**: Global AuthGuard and RolesGuard applied to all endpoints
+
+## 🌐 API Overview
+
+### Authentication Endpoints
+
+- `POST /auth/telegram` - Authenticate via Telegram
+- `POST /auth/user` - Standard user authentication
+
+### Core Resources
+
+- `GET /psychologists` - List all psychologists
+- `GET /psychologists/me` - Get current psychologist profile
+- `POST /psychologists/me/add-new-client` - Add new client
+- `GET /therapy-sessions/me` - Get my therapy sessions
+- `POST /therapy-requests` - Create therapy request
+
+### Real-time WebSocket Events
+
+- `auth-by-token` - Authenticate WebSocket connection
+- `notifications/get-my` - Get user notifications
+- `notifications/get-all` - Get all active notifications (API clients)
+- `notifications/add-received` - Mark notification as received
+
+## 🧪 Testing
+
+The project uses Jest for comprehensive testing:
+
+- **Unit Tests**: Service and utility function testing
+- **Integration Tests**: Module interaction testing
+- **E2E Tests**: Full application workflow testing
+- **Security Tests**: NoSQL injection prevention validation
+
+Run with coverage to ensure code quality:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run test:cov
 ```
 
-## Test
+## 📋 Development Guidelines
 
-```bash
-# unit tests
-$ npm run test
+### Code Conventions
 
-# e2e tests
-$ npm run test:e2e
+- Follow existing patterns for new modules
+- Use dual-schema approach (Joi + Mongoose) for validation
+- Implement proper error handling and logging
+- Add comprehensive tests for new features
 
-# test coverage
-$ npm run test:cov
-```
+### Security Best Practices
 
-## Support
+- Never bypass input validation or sanitization
+- Validate all ObjectIds using `validateObjectId()`
+- Use `safeFindParams()` for dynamic database queries
+- Test security measures with attack vector simulations
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Module Creation
 
-## Stay in touch
+- Follow NestJS module structure
+- Include proper decorators and guards
+- Implement service-controller separation
+- Add Joi validation schemas for all DTOs
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 📄 License
 
-## License
+This project is private and unlicensed.
 
-Nest is [MIT licensed](LICENSE).
+## 🤝 Contributing
+
+1. Follow the existing code style and patterns
+2. Add tests for new features
+3. Ensure security measures are maintained
+4. Update documentation as needed
+
+---
+
+Built with ❤️ using NestJS and TypeScript
