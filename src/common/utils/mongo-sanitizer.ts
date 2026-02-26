@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { QueryParams, SafeQueryParams } from '../types/query-params.types';
+import { parseNumericValue } from './parse-numeric-value';
 
 /**
  * MongoDB NoSQL Injection Prevention Utilities
@@ -95,7 +96,7 @@ export function sanitizeObject(obj: SanitizableValue): SanitizableValue {
 /**
  * Validates and sanitizes MongoDB ObjectId
  */
-export function validateObjectId(id: string): string | null {
+export function validateObjectId(id: string | null | undefined): string | null {
   if (!id || typeof id !== 'string') {
     return null;
   }
@@ -194,25 +195,8 @@ export function sanitizeDateRange(
   from?: Date | string | number | null,
   to?: Date | string | number | null,
 ): { from?: number; to?: number } {
-  const result: { from?: number; to?: number } = {
-    from: undefined,
-    to: undefined,
+  return {
+    from: parseNumericValue(from, true) || undefined,
+    to: parseNumericValue(to, true) || undefined,
   };
-
-  if (from) {
-    const fromNum =
-      from instanceof Date ? from.valueOf() : new Date(from).valueOf();
-    if (!isNaN(fromNum)) {
-      result.from = fromNum;
-    }
-  }
-
-  if (to) {
-    const toNum = to instanceof Date ? to.valueOf() : new Date(to).valueOf();
-    if (!isNaN(toNum)) {
-      result.to = toNum;
-    }
-  }
-
-  return result;
 }

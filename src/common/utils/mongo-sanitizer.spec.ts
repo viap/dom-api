@@ -1,13 +1,13 @@
-import {
-  sanitizeObject,
-  validateObjectId,
-  sanitizeQueryParams,
-  safeFindParams,
-  validateRoles,
-  sanitizeDateRange,
-  SanitizableObject,
-} from './mongo-sanitizer';
 import { Types } from 'mongoose';
+import {
+  safeFindParams,
+  SanitizableObject,
+  sanitizeDateRange,
+  sanitizeObject,
+  sanitizeQueryParams,
+  validateObjectId,
+  validateRoles,
+} from './mongo-sanitizer';
 
 describe('MongoDB Sanitization Utilities', () => {
   describe('sanitizeObject', () => {
