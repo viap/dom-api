@@ -7,12 +7,43 @@ on:
       - '.github/workflows/*'
   workflow_dispatch:
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-    environment: prod
     steps:
       - name: Get the project code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Run e2e tests
+        run: npm run test:e2e
+
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    needs: test
+    steps:
+      - name: Get the project code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
       - name: Make env file with secrets
         uses: SpicyPizza/create-envfile@v2.0
         with:
@@ -27,18 +58,19 @@ jobs:
           envkey_MONGO_DBNAME: ${{secrets.MONGO_DBNAME}}
           envkey_MONGO_INITDB_ROOT_USERNAME: ${{secrets.MONGO_INITDB_ROOT_USERNAME}}
           envkey_MONGO_INITDB_ROOT_PASSWORD: ${{secrets.MONGO_INITDB_ROOT_PASSWORD}}
-      - name: Init the project
-        run: npm install
+      - name: Install dependencies
+        run: npm ci
       - name: Build the project
         run: npm run build
-      - name: Run tests
-        run: echo 'There will be tests'
       - name: Remote | Stop project
         uses: fifsky/ssh-action@master
         with:
           command: |
-            pm2 stop domBot &> /dev/null && 
-            pm2 delete domApi &> /dev/null
+            echo "Stopping existing PM2 processes..."
+            pm2 stop domApi || echo "domApi process not running or already stopped"
+            pm2 delete domApi || echo "domApi process not found or already deleted"
+            pm2 stop domBot || echo "domBot process not running or already stopped"
+            echo "PM2 cleanup completed"
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
@@ -50,17 +82,130 @@ jobs:
           REMOTE_HOST: ${{secrets.REMOTE_HOST}}
           REMOTE_USER: ${{secrets.REMOTE_USER}}
           TARGET: ${{secrets.REMOTE_TARGET}}
-          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/'
+          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/, /test/, /coverage/'
           SCRIPT_BEFORE: |
             mkdir -p ${{secrets.REMOTE_TARGET}}
+            echo "Creating backup of current deployment..."
+            if [ -d "${{secrets.REMOTE_TARGET}}" ] && [ "$(ls -A ${{secrets.REMOTE_TARGET}})" ]; then
+              BACKUP_DIR="${{secrets.REMOTE_TARGET}}_backup_$(date +%Y%m%d_%H%M%S)"
+              cp -r ${{secrets.REMOTE_TARGET}} $BACKUP_DIR
+              echo "Backup created at: $BACKUP_DIR"
+              # Keep only the last 5 backups
+              ls -dt ${{secrets.REMOTE_TARGET}}_backup_* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+            else
+              echo "No existing deployment found, skipping backup"
+            fi
       - name: Remote | Init and start the project
         uses: fifsky/ssh-action@master
         with:
           command: |
-            cd ${{secrets.REMOTE_TARGET}} && 
-            npm install && 
-            pm2 start npm --name domApi -- start
-            pm2 start domBot &> /dev/null
+            cd ${{secrets.REMOTE_TARGET}}
+            echo "Creating logs directory..."
+            mkdir -p logs
+            echo "Installing dependencies..."
+            npm install --production
+            echo "Starting applications with PM2 ecosystem..."
+            pm2 start ecosystem.config.js
+            echo "Starting domBot application (if exists)..."
+            pm2 start domBot || echo "Warning: domBot configuration not found - skipping"
+            pm2 status
+            echo "Waiting for application to start..."
+            sleep 10
+            echo "Performing health check..."
+            # Check if the application is responding
+            if curl -f -s http://localhost:${{secrets.PORT}}/ | grep -q "Hello World!" || curl -f -s http://localhost:3003/ | grep -q "Hello World!"; then
+              echo "Health check passed - application is responding"
+            else
+              echo "Health check failed - application may not be running correctly"
+              echo "Checking application logs..."
+              pm2 logs domApi --lines 20
+              echo "Checking process status..."
+              pm2 status
+              exit 1
+            fi
+            echo "Deployment completed successfully"
+          host: ${{secrets.REMOTE_HOST}}
+          user: ${{secrets.REMOTE_USER}}
+          key: ${{secrets.SSH_PRIVATE_KEY}}
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed at: $(date)"
+          echo "Environment: production"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Failed at: $(date)"
+          echo "Please check logs and consider rollback if necessary"
+          echo "Manual rollback can be triggered with: gh workflow run deployment.yml -f manual_rollback=true"
+
+      - name: Create deployment summary
+        if: always()
+        run: |
+          echo "# 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ **Deployment completed successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Monitor application logs for any issues" >> $GITHUB_STEP_SUMMARY
+            echo "- Verify application functionality manually if needed" >> $GITHUB_STEP_SUMMARY
+            echo "- Check monitoring dashboards (if configured)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment failed**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Troubleshooting steps:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Review the workflow logs above for error details" >> $GITHUB_STEP_SUMMARY
+            echo "2. Check server logs via SSH if needed" >> $GITHUB_STEP_SUMMARY
+            echo "3. Consider running a manual rollback if necessary" >> $GITHUB_STEP_SUMMARY
+            echo "4. Verify the build was successful in the test job" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  rollback:
+    runs-on: ubuntu-latest
+    environment: prod
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: deploy
+    steps:
+      - name: Rollback to previous deployment
+        uses: fifsky/ssh-action@master
+        with:
+          command: |
+            echo "Rolling back to previous deployment..."
+            cd $(dirname ${{secrets.REMOTE_TARGET}})
+            LATEST_BACKUP=$(ls -dt ${{secrets.REMOTE_TARGET}}_backup_* 2>/dev/null | head -n 1)
+            if [ -n "$LATEST_BACKUP" ]; then
+              echo "Stopping current applications..."
+              pm2 stop domApi domBot || true
+              pm2 delete domApi || true
+              echo "Restoring from backup: $LATEST_BACKUP"
+              rm -rf ${{secrets.REMOTE_TARGET}}
+              cp -r $LATEST_BACKUP ${{secrets.REMOTE_TARGET}}
+              cd ${{secrets.REMOTE_TARGET}}
+              echo "Restarting applications..."
+              pm2 start ecosystem.config.js || pm2 start npm --name domApi -- start
+              pm2 start domBot || echo "domBot not available"
+              pm2 status
+              echo "Rollback completed successfully"
+            else
+              echo "No backup found for rollback"
+              exit 1
+            fi
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
