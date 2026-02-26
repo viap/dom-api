@@ -113,12 +113,12 @@ jobs:
             sleep 10
             echo "Performing health check..."
             # Check if the application is responding
-            if curl -f -s http://localhost:${{secrets.PORT}}/ | grep -q "Hello World!" || curl -f -s http://localhost:3003/ | grep -q "Hello World!"; then
+            if curl -f -s http://localhost:${{secrets.PORT}}/auth/ping | grep -q "pong" || curl -f -s http://localhost:3003/auth/ping | grep -q "pong"; then
               echo "Health check passed - application is responding"
             else
               echo "Health check failed - application may not be running correctly"
               echo "Checking application logs..."
-              pm2 logs domApi --lines 20
+              pm2 logs domApi --lines 20 --nostream
               echo "Checking process status..."
               pm2 status
               exit 1
