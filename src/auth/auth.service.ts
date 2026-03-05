@@ -3,9 +3,9 @@ import { JwtService } from '@nestjs/jwt';
 import { ApiClientsService } from 'src/api-clients/api-clients.service';
 import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
 import { UsersService } from 'src/users/users.service';
+import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthUserDto } from './dto/auth-user.dto';
 import { TelegramUserDto } from './dto/telegram.dto';
-import { TokenPayloadDto } from './dto/token-payload.dto';
 
 @Injectable()
 export class AuthService {
@@ -15,7 +15,7 @@ export class AuthService {
     private userService: UsersService,
   ) {}
 
-  async verifyToken(token: string): Promise<TokenPayloadDto | undefined> {
+  async verifyToken(token: string): Promise<UserContext | undefined> {
     return await this.jwtService.verifyAsync(token).catch(() => undefined);
   }
 
@@ -47,7 +47,7 @@ export class AuthService {
       (await this.userService.getByTelegramId(telegram.id)) ||
       (await this.userService.createFromTelegram(telegram));
 
-    const payload: TokenPayloadDto = {
+    const payload: UserContext = {
       userId: user._id,
       roles: user.roles,
       clientName: initClient.name,
@@ -70,7 +70,7 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    const payload: TokenPayloadDto = {
+    const payload: UserContext = {
       userId: user._id,
       roles: user.roles,
       clientName: initClient.name,

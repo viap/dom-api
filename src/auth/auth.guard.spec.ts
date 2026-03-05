@@ -1,13 +1,12 @@
 import { Reflector } from '@nestjs/core';
+
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
-import { UsersService } from '../users/users.service';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
   let authService: jest.Mocked<AuthService>;
   let reflector: jest.Mocked<Reflector>;
-  let usersService: jest.Mocked<UsersService>;
 
   beforeEach(() => {
     authService = {
@@ -18,11 +17,7 @@ describe('AuthGuard', () => {
       getAllAndOverride: jest.fn(),
     } as any;
 
-    usersService = {
-      getById: jest.fn(),
-    } as any;
-
-    guard = new AuthGuard(authService, reflector, usersService);
+    guard = new AuthGuard(authService, reflector);
   });
 
   it('should be defined', () => {

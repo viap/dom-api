@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UsersController } from './users.controller';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UsersService } from './users.service';
 import { Role } from '../roles/enums/roles.enum';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
 
 describe('Users Controller', () => {
   let controller: UsersController;
@@ -64,6 +64,8 @@ describe('Users Controller', () => {
 
   describe('getAll()', () => {
     it('should return an array of users', async () => {
+      const createSpy = jest.spyOn(service, 'getAll');
+
       expect(controller.getAll()).resolves.toEqual([
         {
           name: 'User #1',
@@ -78,7 +80,8 @@ describe('Users Controller', () => {
           descr: 'Breed #3',
         },
       ]);
-      expect(service.getAll).toHaveBeenCalled();
+
+      expect(createSpy).toHaveBeenCalled();
     });
   });
 });

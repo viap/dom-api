@@ -18,13 +18,13 @@ import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/enums/roles.enum';
 import { IsMyTherapySessions } from './decorators/is-my-therapy-session.decorator';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
+import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
 import { UpdateTherapySessionDto } from './dto/update-therapy-session.dto';
 import { joiCreateTherapySessionSchema } from './schemas/joi.create-therapy-session.schema';
 import { joiUpdateTherapySessionSchema } from './schemas/joi.update-therapy-session.schema';
 import { TherapySessionDocument } from './schemas/therapy-session.schema';
 import { TherapySessionsGuard } from './therapy-sessions.guard';
 import { TherapySessionsService } from './therapy-sessions.service';
-import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
 
 @Controller('therapy-sessions')
 @Roles(Role.Admin, Role.Editor, Role.Psychologist)

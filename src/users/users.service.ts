@@ -15,6 +15,13 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserDocument } from './schemas/user.schema';
 
+type MongoDuplicateLoginError = {
+  code: number;
+  keyPattern?: {
+    login?: unknown;
+  };
+};
+
 @Injectable()
 export class UsersService {
   private readonly saltRounds = 12;
@@ -134,6 +141,21 @@ export class UsersService {
     }
   }
 
+  private isMongoDuplicateLoginError(
+    error: unknown,
+  ): error is MongoDuplicateLoginError {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    if (!('code' in error) || !('keyPattern' in error)) {
+      return false;
+    }
+
+    const mongoError = error as MongoDuplicateLoginError;
+    return mongoError.code === 11000 && !!mongoError.keyPattern?.login;
+  }
+
   async create(createData: CreateUserDto): Promise<UserDocument> {
     const userData = { ...createData };
 
@@ -147,8 +169,7 @@ export class UsersService {
     try {
       return await this.userModel.create(userData);
     } catch (error) {
-      // Handle MongoDB duplicate key error
-      if (error.code === 11000 && error.keyPattern?.login) {
+      if (this.isMongoDuplicateLoginError(error)) {
         throw new ConflictException('User with this login already exists');
       }
       throw error;
@@ -216,8 +237,7 @@ export class UsersService {
       await this.userModel.findByIdAndUpdate(validId, userData, { new: true });
       return this.getById(validId);
     } catch (error) {
-      // Handle MongoDB duplicate key error
-      if (error.code === 11000 && error.keyPattern?.login) {
+      if (this.isMongoDuplicateLoginError(error)) {
         throw new ConflictException('User with this login already exists');
       }
       throw error;
