@@ -1,9 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
-import { TherapyRequestsController } from './therapy-requests.controller';
-import { TherapyRequestsService } from './therapy-requests.service';
-import { TherapyRequestsGuard } from './therapy-requests.guard';
+import { Test, TestingModule } from '@nestjs/testing';
 import { PsychologistsService } from '../psychologists/psychologists.service';
+import { TherapyRequestsController } from './therapy-requests.controller';
+import { TherapyRequestsGuard } from './therapy-requests.guard';
+import { TherapyRequestsService } from './therapy-requests.service';
 
 describe('RequestsController', () => {
   let controller: TherapyRequestsController;

@@ -5,18 +5,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import {
+  EnhancedRequest,
+  UserContext,
+} from 'src/common/user-context/user-context.interface';
 import extractTokenFromHeaders from 'src/common/utils/extract-token-from-headers';
-import { UsersService } from 'src/users/users.service';
+import { Role } from 'src/roles/enums/roles.enum';
 import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(
-    private authService: AuthService,
-    private reflector: Reflector,
-    private userService: UsersService,
-  ) {}
+  constructor(private authService: AuthService, private reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -28,7 +28,7 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<EnhancedRequest>();
     const token = extractTokenFromHeaders(request.headers);
     if (!token) {
       throw new UnauthorizedException();
@@ -36,17 +36,17 @@ export class AuthGuard implements CanActivate {
 
     try {
       const payload = await this.authService.verifyToken(token);
-      // NOTICE: We're assigning the payload to the request object here
-      // so that we can access it in our route handlers
-      const user = payload?.userId
-        ? await this.userService.getById(payload.userId)
-        : undefined;
 
-      if (!user) {
-        throw new Error();
+      if (!payload?.userId) {
+        throw new Error('Invalid token payload');
       }
 
-      request['user'] = user;
+      // User context from JWT payload
+      request.userContext = {
+        userId: payload.userId,
+        roles: payload.roles as Role[],
+        clientName: payload.clientName,
+      } as UserContext;
     } catch {
       throw new UnauthorizedException();
     }

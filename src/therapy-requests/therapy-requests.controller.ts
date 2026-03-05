@@ -10,18 +10,18 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { TherapyRequestsService } from './therapy-requests.service';
-import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { TherapyRequestQueryParams } from 'src/common/types/therapy-request-params.types';
-import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-request.schema';
-import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
-import { joiUpdateTherapyRequestSchema } from './schemas/joi.update-therapy-request.schema';
-import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
-import { TherapyRequestsGuard } from './therapy-requests.guard';
-import { IsMyData } from './decorators/is-my-data.decorator';
+import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/enums/roles.enum';
+import { IsMyData } from './decorators/is-my-data.decorator';
+import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
+import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
+import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-request.schema';
+import { joiUpdateTherapyRequestSchema } from './schemas/joi.update-therapy-request.schema';
+import { TherapyRequestsGuard } from './therapy-requests.guard';
+import { TherapyRequestsService } from './therapy-requests.service';
 
 @Controller('therapy-requests')
 @Roles(Role.Admin, Role.Editor, Role.Psychologist)

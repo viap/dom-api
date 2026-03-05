@@ -1,6 +1,6 @@
+import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
-import { ExecutionContext } from '@nestjs/common';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;

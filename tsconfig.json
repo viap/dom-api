@@ -20,6 +20,7 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "types": ["node", "jest"],
     "paths": {
       "@/*": ["src/*"],
       "@auth/*": ["src/auth/*"],
@@ -37,12 +38,10 @@
   "exclude": [
     "node_modules",
     "dist",
-    "test",
-    "**/*.spec.ts",
-    "**/*.e2e-spec.ts",
     "coverage"
   ],
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "test/**/*"
   ]
 }
