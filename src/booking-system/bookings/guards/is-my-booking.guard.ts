@@ -1,9 +1,10 @@
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { UserContext } from '../../../common/user-context/user-context.interface';
 import { includesOther } from '../../../common/utils/includes-other';
 import { ROLES_KEY } from '../../../roles/decorators/role.docorator';
 import { Role } from '../../../roles/enums/roles.enum';
-import { UserDocument } from '../../../users/schemas/user.schema';
 import { BookingsService } from '../bookings.service';
 import { IS_MY_BOOKING_KEY } from '../decorators/is-my-booking.decorator';
 
@@ -15,7 +16,7 @@ export class IsMyBookingGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<EnhancedRequest>();
     const shouldBeMyBooking =
       this.reflector.getAllAndOverride<boolean>(IS_MY_BOOKING_KEY, [
         context.getHandler(),
@@ -29,9 +30,7 @@ export class IsMyBookingGuard implements CanActivate {
 
     if (shouldBeMyBooking) {
       try {
-        const user = request.user as UserDocument;
-
-        if (!user) {
+        if (!request.userContext) {
           return false;
         }
 
@@ -39,23 +38,27 @@ export class IsMyBookingGuard implements CanActivate {
 
         // NOTICE: check if user has any required role except regular user roles
         // Admins can access any booking
-        if (includesOther<Role>(requiredRoles, user.roles, [Role.User])) {
+        if (
+          includesOther<Role>(requiredRoles, request.userContext.roles, [
+            Role.User,
+          ])
+        ) {
           return true;
         }
 
         // Allow admins to access any booking
-        if (user.roles.includes(Role.Admin)) {
+        if (request.userContext.roles.includes(Role.Admin)) {
           return true;
         }
 
         // For user-specific endpoints like /by-user/:userId
         if (params.userId) {
-          return user._id.toString() === params.userId;
+          return request.userContext.userId === params.userId;
         }
 
         // For booking-specific endpoints like /:id
         if (params.id) {
-          return this.checkIfIsMyBooking(user, params.id);
+          return this.checkIfIsMyBooking(request.userContext, params.id);
         }
 
         return true;
@@ -68,7 +71,7 @@ export class IsMyBookingGuard implements CanActivate {
   }
 
   async checkIfIsMyBooking(
-    user: UserDocument,
+    userContext: UserContext,
     bookingId: string | undefined,
   ): Promise<boolean> {
     if (!bookingId) {
@@ -82,12 +85,12 @@ export class IsMyBookingGuard implements CanActivate {
       }
 
       // Admin can access any booking
-      if (user.roles.includes(Role.Admin)) {
+      if (userContext.roles.includes(Role.Admin)) {
         return true;
       }
 
       // Regular users can only access their own bookings
-      return booking.bookedBy._id.toString() === user._id.toString();
+      return booking.bookedBy._id.toString() === userContext.userId;
     } catch {
       return false;
     }

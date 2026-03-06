@@ -3,7 +3,7 @@ import { UserDocument } from '../schemas/user.schema';
 
 export function transformUserToDto(user: UserDocument): UserResponseDto {
   return new UserResponseDto({
-    id: user._id.toString(),
+    _id: user._id.toString(),
     name: user.name,
     login: user.login,
     roles: user.roles,

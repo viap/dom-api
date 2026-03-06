@@ -1,18 +1,18 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
-  ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Company, CompanyDocument } from './schemas/company.schema';
+import { Error, Model } from 'mongoose';
 import {
-  validateObjectId,
   safeFindParams,
+  validateObjectId,
 } from '../../common/utils/mongo-sanitizer';
+import { CompanyQueryParams } from '../shared/types/query-params.interface';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { CompanyQueryParams } from '../shared/types/query-params.interface';
+import { Company, CompanyDocument } from './schemas/company.schema';
 
 @Injectable()
 export class CompaniesService {
@@ -36,7 +36,8 @@ export class CompaniesService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new Error(`Failed to create company: ${error.message}`);
+      const message = error instanceof Error ? error.message : '';
+      throw new Error(`Failed to create company: ${message}`);
     }
   }
 

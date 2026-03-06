@@ -8,6 +8,8 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
+import { GetUserContext } from '../common/user-context/user-context.decorator';
+import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
 import { AuthByTelegramDto } from './dto/auth-by-telegram.dto';
@@ -33,6 +35,12 @@ export class AuthController {
   @UsePipes(new JoiValidationPipe(joiAuthByUserSchema))
   getAuthTokenForUser(@Body() data: AuthByUserDto) {
     return this.authService.signInByAuthUser(data.apiClient, data.user);
+  }
+
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  refreshToken(@GetUserContext() userContext: UserContext) {
+    return this.authService.refreshToken(userContext);
   }
 
   @Get('check-token')

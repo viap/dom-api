@@ -13,9 +13,9 @@ import {
 } from '@nestjs/common';
 import { currentUserAlias } from 'src/common/const/current-user-alias';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/enums/roles.enum';
+import { EnhancedRequest } from '../common/types/enhanced-request.interface';
 import { IsMyTherapySessions } from './decorators/is-my-therapy-session.decorator';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
 import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
@@ -88,29 +88,25 @@ export class TherapySessionsController {
   @Get('/psychologist/:psychologistId')
   @IsMyTherapySessions()
   getAllForPsychologist(
-    @Request() req,
+    @Request() request: EnhancedRequest,
   ): Promise<Array<TherapySessionDocument>> {
-    if (req.psychologist) {
-      const psychologistId = (
-        req.psychologist as PsychologistDocument
-      )._id.toString();
-      return this.therapySessionService.getAllForPsychologist(psychologistId);
+    if (request.psychologistContext) {
+      return this.therapySessionService.getAllForPsychologist(
+        request.psychologistContext.id,
+      );
     }
   }
 
   @Get('/psychologist/:psychologistId/from/:from/to/:to')
   @IsMyTherapySessions()
   getAllForPsychologistForPeriod(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Param('from', new ParseIntPipe()) from: number,
     @Param('to', new ParseIntPipe()) to: number,
   ): Promise<Array<TherapySessionDocument>> {
-    if (req.psychologist) {
-      const psychologistId = (
-        req.psychologist as PsychologistDocument
-      )._id.toString();
+    if (request.psychologistContext) {
       return this.therapySessionService.getAllForPsychologist(
-        psychologistId,
+        request.psychologistContext.id,
         from,
         to,
       );
@@ -120,15 +116,12 @@ export class TherapySessionsController {
   @Get('/psychologist/:psychologistId/client/:clientId')
   @IsMyTherapySessions()
   getAllForPsychologistAndClient(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Param('clientId') clientId: string,
   ): Promise<Array<TherapySessionDocument>> {
-    if (req.psychologist) {
-      const psychologistId = (
-        req.psychologist as PsychologistDocument
-      )._id.toString();
+    if (request.psychologistContext) {
       return this.therapySessionService.getAllForPsychologistAndClient(
-        psychologistId,
+        request.psychologistContext.id,
         clientId,
       );
     }
@@ -147,11 +140,14 @@ export class TherapySessionsController {
   @IsMyTherapySessions()
   @UsePipes(new JoiValidationPipe(joiCreateTherapySessionSchema))
   createForMe(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Body() createData: CreateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
-    if (req.psychologist) {
-      return this.therapySessionService.createFor(req.psychologist, createData);
+    if (request.psychologistContext) {
+      return this.therapySessionService.createFor(
+        request.psychologistContext.id,
+        createData,
+      );
     }
   }
 

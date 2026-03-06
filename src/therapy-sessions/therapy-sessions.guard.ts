@@ -1,7 +1,7 @@
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { currentUserAlias } from 'src/common/const/current-user-alias';
-import { EnhancedRequest } from 'src/common/user-context/user-context.interface';
 import { includesOther } from 'src/common/utils/includes-other';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
@@ -32,12 +32,12 @@ export class TherapySessionsGuard implements CanActivate {
 
     if (ShouldBeMyTherapySessions) {
       try {
-        if (!request.user) {
+        if (!request.userContext) {
           return false;
         }
 
         const psychologist = await this.psychologistsService.getByUserId(
-          request.user._id.toString(),
+          request.userContext.userId,
         );
 
         if (!psychologist) {
@@ -45,11 +45,13 @@ export class TherapySessionsGuard implements CanActivate {
         }
 
         const params = request.params || {};
-        request['psychologist'] = psychologist;
+        request.psychologistContext = {
+          id: psychologist._id,
+        };
 
         // NOTICE: check if user have any required role except psychologist
         if (
-          includesOther<Role>(requiredRoles, request.user.roles, [
+          includesOther<Role>(requiredRoles, request.userContext.roles, [
             Role.Psychologist,
           ])
         ) {

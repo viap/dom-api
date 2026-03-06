@@ -2,7 +2,7 @@ import { Contact } from 'src/common/schemas/contact.schema';
 import { Role } from 'src/roles/enums/roles.enum';
 
 export class UserResponseDto {
-  id: string;
+  _id: string;
   name: string;
   login?: string;
   roles: Array<Role>;

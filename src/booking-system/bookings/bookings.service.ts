@@ -6,14 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { Error, FilterQuery, Model } from 'mongoose';
+import { UserContext } from '../../common/user-context/user-context.interface';
 import {
   safeFindParams,
   sanitizeDateRange,
   validateObjectId,
 } from '../../common/utils/mongo-sanitizer';
 import { Role } from '../../roles/enums/roles.enum';
-import { UserDocument } from '../../users/schemas/user.schema';
 import { UsersService } from '../../users/users.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { SchedulesService } from '../schedules/schedules.service';
@@ -66,7 +66,7 @@ export class BookingsService {
 
   async create(
     createBookingDto: CreateBookingDto,
-    currentUser: UserDocument,
+    currentUser: UserContext,
   ): Promise<BookingDocument> {
     try {
       // Validate referenced entities
@@ -118,14 +118,15 @@ export class BookingsService {
       ) {
         throw error;
       }
-      throw new Error(`Failed to create booking: ${error.message}`);
+      const message = error instanceof Error ? error.message : '';
+      throw new Error(`Failed to create booking: ${message}`);
     }
   }
 
   async createRecurringSeries(
     bookingData: CreateBookingDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _currentUser: UserDocument,
+    _currentUser: UserContext,
   ): Promise<BookingDocument> {
     const recurrenceOptions: RecurrenceOptions = {
       type: bookingData.recurrenceType,
@@ -485,7 +486,7 @@ export class BookingsService {
 
   async approveBooking(
     id: string,
-    adminUserId: string,
+    adminUserId?: string,
   ): Promise<BookingDocument> {
     const validId = validateObjectId(id);
     const validAdminId = validateObjectId(adminUserId);

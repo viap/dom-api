@@ -1,6 +1,6 @@
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { EnhancedRequest } from '../common/user-context/user-context.interface';
 import { ROLES_KEY } from './decorators/role.docorator';
 import { Role } from './enums/roles.enum';
 

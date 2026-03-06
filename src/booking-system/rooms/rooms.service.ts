@@ -1,20 +1,20 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
-  ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Room, RoomDocument } from './schemas/room.schema';
-import { CompaniesService } from '../companies/companies.service';
 import {
-  validateObjectId,
   safeFindParams,
+  validateObjectId,
 } from '../../common/utils/mongo-sanitizer';
+import { CompaniesService } from '../companies/companies.service';
+import { RoomQueryParams } from '../shared/types/query-params.interface';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { RoomQueryParams } from '../shared/types/query-params.interface';
+import { Room, RoomDocument } from './schemas/room.schema';
 
 @Injectable()
 export class RoomsService {
@@ -52,7 +52,8 @@ export class RoomsService {
       ) {
         throw error;
       }
-      throw new Error(`Failed to create room: ${error.message}`);
+      const message = error instanceof Error ? error.message : '';
+      throw new Error(`Failed to create room: ${message}`);
     }
   }
 

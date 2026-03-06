@@ -78,4 +78,19 @@ export class AuthService {
 
     return { auth_token: await this.jwtService.signAsync(payload) };
   }
+
+  async refreshToken(userContext?: UserContext) {
+    const user = await this.userService.getById(userContext.userId);
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const tokenPayload: UserContext = {
+      ...userContext,
+      roles: user.roles,
+    };
+
+    return { auth_token: await this.jwtService.signAsync(tokenPayload) };
+  }
 }

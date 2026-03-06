@@ -121,8 +121,9 @@ describe('JoiValidationPipe with NoSQL Injection Prevention', () => {
       pipe.transform(invalidInput);
       fail('Should have thrown BadRequestException');
     } catch (error) {
+      const message = error instanceof Error ? error.message : '';
       expect(error).toBeInstanceOf(BadRequestException);
-      expect(error.message).toContain('Validation failed:');
+      expect(message).toContain('Validation failed:');
     }
   });
 });
