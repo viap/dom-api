@@ -9,7 +9,6 @@ import {
 } from 'src/common/utils/mongo-sanitizer';
 import { Currencies } from 'src/psychologists/enums/currencies.enum';
 import { PsychologistsService } from 'src/psychologists/psychologists.service';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { UsersService } from 'src/users/users.service';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
 import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
@@ -82,23 +81,22 @@ export class TherapySessionsService {
       `${session.psychologist._id}-${session.client._id}`;
 
     const calcPrices = (prices: Array<Price>) => {
-      const aggregatedPrices = prices.reduce((acc, cur) => {
-        if (acc[cur.currency]) {
-          acc[cur.currency] = acc[cur.currency] + cur.value;
-        } else {
-          acc[cur.currency] = cur.value;
-        }
-        return acc;
-      }, {});
+      const aggregatedPrices: Partial<Record<Currencies, number>> =
+        prices.reduce((acc, cur) => {
+          if (acc[cur.currency]) {
+            acc[cur.currency] = acc[cur.currency] + cur.value;
+          } else {
+            acc[cur.currency] = cur.value;
+          }
+          return acc;
+        }, {});
 
-      return Object.entries(aggregatedPrices).map(
-        ([currency, price]: [Currencies, number]) => {
-          return {
-            currency,
-            value: price,
-          } as Price;
-        },
-      );
+      return Object.entries(aggregatedPrices).map(([currency, price]) => {
+        return {
+          currency,
+          value: price,
+        } as Price;
+      });
     };
 
     const sessions = psychologistId
@@ -199,11 +197,11 @@ export class TherapySessionsService {
       createData.psychologist,
     );
 
-    return this.createFor(psychologist, createData);
+    return this.createFor(psychologist._id, createData);
   }
 
   async createFor(
-    psychologist: PsychologistDocument,
+    psychologistId: string,
     createData: CreateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
     const client = await this.usersService.getById(createData.client);
@@ -213,7 +211,7 @@ export class TherapySessionsService {
     return this.therapySessionModel.create({
       ...createData,
       dateTime,
-      psychologist: psychologist._id,
+      psychologist: psychologistId,
       client: client._id,
     });
   }

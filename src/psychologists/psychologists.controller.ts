@@ -1,3 +1,4 @@
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import {
   Body,
   Controller,
@@ -11,23 +12,23 @@ import {
   Request,
   UsePipes,
 } from '@nestjs/common';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/enums/roles.enum';
-import { UserDocument } from 'src/users/schemas/user.schema';
 import { CreateNewClientDto } from './dto/create-new-client.dto';
 import { CreatePsychologistDto } from './dto/create-psychologist.dto';
+import { EditMyClientDto } from './dto/edit-my-client.dto';
 import { UpdatePsychologistDto } from './dto/update-psychologist.dto';
 import { PsychologistsService } from './psychologists.service';
 import { Client } from './schemas/clients.schema';
 import { joiCreateNewClientSchema } from './schemas/joi.create-new-client.schema';
 import { joiCreatePsychologistSchema } from './schemas/joi.create-psychologist.schema';
+import { joiEditMyClientSchema } from './schemas/joi.edit-my-client.schema';
 import { joiUpdatePsychologistSchema } from './schemas/joi.update-psychologist.schema';
 import { PsychologistDocument } from './schemas/psychologist.schema';
-import { joiEditMyClientSchema } from './schemas/joi.edit-my-client.schema';
-import { EditMyClientDto } from './dto/edit-my-client.dto';
-import { currentUserAlias } from 'src/common/const/current-user-alias';
 
+// TODO: create a psychologist guard
 @Controller('psychologists')
 export class PsychologistsController {
   constructor(private readonly psychologistService: PsychologistsService) {}
@@ -40,17 +41,18 @@ export class PsychologistsController {
 
   @Get(currentUserAlias)
   @Roles(Role.Psychologist)
-  getMe(@Request() req): Promise<PsychologistDocument> {
-    const user = req.user as UserDocument;
-    if (user) {
-      return this.psychologistService.getByUserId(user._id.toString());
+  getMe(@Request() request: EnhancedRequest): Promise<PsychologistDocument> {
+    if (request.userContext) {
+      return this.psychologistService.getByUserId(request.userContext.userId);
     }
   }
 
   @Get(currentUserAlias + '/clients')
   @Roles(Role.Psychologist)
-  async getClients(@Request() req): Promise<Array<Client>> {
-    const psychologist = await this.getMe(req);
+  async getClients(
+    @Request() request: EnhancedRequest,
+  ): Promise<Array<Client>> {
+    const psychologist = await this.getMe(request);
     if (psychologist) {
       return this.psychologistService.getClients(psychologist._id.toString());
     }
@@ -75,11 +77,11 @@ export class PsychologistsController {
   @Post(currentUserAlias + '/add-new-client')
   @Roles(Role.Psychologist)
   async addMyNewClient(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Body(new JoiValidationPipe(joiCreateNewClientSchema))
     clientData: CreateNewClientDto,
   ): Promise<boolean> {
-    const psychologist = await this.getMe(req);
+    const psychologist = await this.getMe(request);
     if (psychologist) {
       return this.psychologistService.addNewClient(
         psychologist._id.toString(),
@@ -91,12 +93,12 @@ export class PsychologistsController {
   @Put(currentUserAlias + '/edit-client/:userId')
   @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   async editMyClient(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Param('userId') userId: string,
     @Body(new JoiValidationPipe(joiEditMyClientSchema))
     clientData: EditMyClientDto,
   ): Promise<boolean> {
-    const psychologist = await this.getMe(req);
+    const psychologist = await this.getMe(request);
     if (psychologist) {
       return this.psychologistService.editPsychologistClient(
         psychologist._id.toString(),
@@ -128,10 +130,10 @@ export class PsychologistsController {
   @Delete(currentUserAlias + '/delete-client/:userId')
   @Roles(Role.Admin, Role.Psychologist)
   async deleteClient(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Param('userId') userId: string,
   ): Promise<boolean> {
-    const psychologist = await this.getMe(req);
+    const psychologist = await this.getMe(request);
     if (psychologist) {
       return this.psychologistService.deleteClient(psychologist._id, userId);
     }

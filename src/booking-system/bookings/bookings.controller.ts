@@ -22,7 +22,7 @@ import { IsMyBooking } from './decorators/is-my-booking.decorator';
 import { createBookingSchema } from './schemas/joi.create-booking.schema';
 import { updateBookingSchema } from './schemas/joi.update-booking.schema';
 
-import { UserDocument } from '../../users/schemas/user.schema';
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { ApproveBookingDto } from './dto/approve-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -37,7 +37,7 @@ export class BookingsController {
   /**
    * Create a new booking
    * @param createBookingDto Booking data
-   * @param req Request object containing user info
+   * @param request Request object containing user info
    * @returns Created booking
    *
    * Example request:
@@ -77,25 +77,23 @@ export class BookingsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Body(new JoiValidationPipe(createBookingSchema))
     createBookingDto: CreateBookingDto,
   ) {
-    const user = req.user as UserDocument;
-
     // If bookedBy is not provided, default to current user
     if (!createBookingDto.bookedBy) {
-      createBookingDto.bookedBy = user._id.toString();
-    } else if (createBookingDto.bookedBy !== user._id.toString()) {
+      createBookingDto.bookedBy = request.userContext.userId;
+    } else if (createBookingDto.bookedBy !== request.userContext.userId) {
       // Only admins can create bookings for other users
-      if (!user.roles.includes(Role.Admin)) {
+      if (!request.userContext.roles.includes(Role.Admin)) {
         throw new ForbiddenException(
           'Only administrators can create bookings on behalf of other users',
         );
       }
     }
 
-    return this.bookingsService.create(createBookingDto, user);
+    return this.bookingsService.create(createBookingDto, request.userContext);
   }
 
   /**
@@ -284,9 +282,8 @@ export class BookingsController {
    */
   @Patch(':id/approve')
   @Roles(Role.Admin)
-  approveBooking(@Param('id') id: string, @Request() req: any) {
-    const adminUserId = req.user?.id || req.user?._id;
-    return this.bookingsService.approveBooking(id, adminUserId);
+  approveBooking(@Param('id') id: string, @Request() request: EnhancedRequest) {
+    return this.bookingsService.approveBooking(id, request.userContext.userId);
   }
 
   /**
@@ -344,11 +341,13 @@ export class BookingsController {
    */
   @Patch('bulk-approve')
   @Roles(Role.Admin)
-  bulkApproveBookings(@Body() body: ApproveBookingDto, @Request() req: any) {
-    const adminUserId = req.user?.id || req.user?._id;
+  bulkApproveBookings(
+    @Body() body: ApproveBookingDto,
+    @Request() request: EnhancedRequest,
+  ) {
     return this.bookingsService.bulkApproveBookings(
       body.bookingIds,
-      adminUserId,
+      request.userContext.userId,
     );
   }
 

@@ -1,3 +1,4 @@
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import {
   Body,
   Controller,
@@ -12,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { TherapyRequestQueryParams } from 'src/common/types/therapy-request-params.types';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { Roles } from 'src/roles/decorators/role.docorator';
 import { Role } from 'src/roles/enums/roles.enum';
 import { IsMyData } from './decorators/is-my-data.decorator';
@@ -50,7 +50,7 @@ export class TherapyRequestsController {
   @Get('/psychologist/:psychologistId')
   @IsMyData()
   getAllForPsychologist(
-    @Request() req,
+    @Request() request: EnhancedRequest,
     @Param('psychologistId') psychologistId: string,
     @Query() params?: TherapyRequestQueryParams,
   ) {
@@ -63,10 +63,8 @@ export class TherapyRequestsController {
       accepted = undefined;
     }
 
-    if (req.psychologist) {
-      const psychologistId = (
-        req.psychologist as PsychologistDocument
-      )._id.toString();
+    if (request.psychologistContext) {
+      const psychologistId = request.psychologistContext.id;
       return this.therapyRequestService.getAllForPsychologist(psychologistId, {
         accepted,
       });

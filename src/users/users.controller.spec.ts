@@ -3,9 +3,9 @@ import { Role } from '../roles/enums/roles.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UserDocument } from './schemas/user.schema';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { UserDocument } from './schemas/user.schema';
 
 describe('Users Controller', () => {
   let controller: UsersController;
@@ -99,7 +99,7 @@ describe('Users Controller', () => {
         .mockResolvedValueOnce(mockUserDocument);
 
       const expectedResponse = new UserResponseDto({
-        id: '507f1f77bcf86cd799439011',
+        _id: '507f1f77bcf86cd799439011',
         name: 'User #1',
         login: 'user1@test.com',
         roles: [Role.User],
@@ -123,7 +123,7 @@ describe('Users Controller', () => {
 
       const expectedResponse = [
         new UserResponseDto({
-          id: '507f1f77bcf86cd799439011',
+          _id: '507f1f77bcf86cd799439011',
           name: 'User #1',
           login: 'user1@test.com',
           descr: 'Test user 1',
@@ -131,7 +131,7 @@ describe('Users Controller', () => {
           contacts: [],
         }),
         new UserResponseDto({
-          id: '507f1f77bcf86cd799439012',
+          _id: '507f1f77bcf86cd799439012',
           name: 'User #2',
           login: 'user2@test.com',
           descr: 'Test user 2',
@@ -139,7 +139,7 @@ describe('Users Controller', () => {
           contacts: [],
         }),
         new UserResponseDto({
-          id: '507f1f77bcf86cd799439013',
+          _id: '507f1f77bcf86cd799439013',
           name: 'User #3',
           login: 'user3@test.com',
           descr: 'Test user 3',
@@ -170,7 +170,7 @@ describe('Users Controller', () => {
   describe('getMe()', () => {
     it('should return current user as UserResponseDto', () => {
       const expectedResponse = new UserResponseDto({
-        id: '507f1f77bcf86cd799439011',
+        _id: '507f1f77bcf86cd799439011',
         name: 'User #1',
         login: 'user1@test.com',
         roles: [Role.User],
@@ -193,7 +193,7 @@ describe('Users Controller', () => {
         .mockResolvedValueOnce(mockUserDocument);
 
       const expectedResponse = new UserResponseDto({
-        id: '507f1f77bcf86cd799439011',
+        _id: '507f1f77bcf86cd799439011',
         name: 'User #1',
         login: 'user1@test.com',
         roles: [Role.User],
@@ -217,7 +217,7 @@ describe('Users Controller', () => {
         .mockResolvedValueOnce(mockUpdatedUserDocument);
 
       const expectedResponse = new UserResponseDto({
-        id: '507f1f77bcf86cd799439011',
+        _id: '507f1f77bcf86cd799439011',
         name: 'Updated User',
         login: 'user1@test.com',
         roles: [Role.User],

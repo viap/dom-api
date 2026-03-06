@@ -56,7 +56,8 @@ export class SchedulesService {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Failed to create schedule: ${error.message}`);
+      const message = error instanceof Error ? error.message : '';
+      throw new Error(`Failed to create schedule: ${message}`);
     }
   }
 
