@@ -48,7 +48,7 @@ export class AuthService {
       (await this.userService.createFromTelegram(telegram));
 
     const payload: UserContext = {
-      userId: user._id,
+      userId: user._id.toString(),
       roles: user.roles,
       clientName: initClient.name,
     };
@@ -71,7 +71,7 @@ export class AuthService {
     }
 
     const payload: UserContext = {
-      userId: user._id,
+      userId: user._id.toString(),
       roles: user.roles,
       clientName: initClient.name,
     };

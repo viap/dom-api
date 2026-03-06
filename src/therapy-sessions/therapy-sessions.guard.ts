@@ -46,7 +46,7 @@ export class TherapySessionsGuard implements CanActivate {
 
         const params = request.params || {};
         request.psychologistContext = {
-          id: psychologist._id,
+          id: psychologist._id.toString(),
         };
 
         // NOTICE: check if user have any required role except psychologist
