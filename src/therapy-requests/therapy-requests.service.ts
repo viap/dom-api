@@ -3,11 +3,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SocialNetworks } from 'src/common/enums/social-networks.enum';
 import { Contact } from 'src/common/schemas/contact.schema';
+import { TherapyRequestFilters } from 'src/common/types/therapy-request-params.types';
 import {
   safeFindParams,
   validateObjectId,
 } from 'src/common/utils/mongo-sanitizer';
-import { TherapyRequestFilters } from 'src/common/types/therapy-request-params.types';
 import { valueToObjectId } from 'src/common/utils/value-to-object-id';
 import { NotificationTypes } from 'src/notifications/enums/notification-types.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';

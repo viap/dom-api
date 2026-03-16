@@ -1,3 +1,4 @@
+import { currentUserAlias } from '@/common/const/current-user-alias';
 import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import {
   Body,
@@ -24,7 +25,7 @@ import { TherapyRequestsGuard } from './therapy-requests.guard';
 import { TherapyRequestsService } from './therapy-requests.service';
 
 @Controller('therapy-requests')
-@Roles(Role.Admin, Role.Editor, Role.Psychologist)
+@Roles(Role.Admin, Role.Editor)
 @UseGuards(TherapyRequestsGuard)
 export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
@@ -43,6 +44,7 @@ export class TherapyRequestsController {
   }
 
   @Get(':therapyRequestId')
+  @IsMyData()
   getOne(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.getById(therapyRequestId);
   }
@@ -63,15 +65,17 @@ export class TherapyRequestsController {
       accepted = undefined;
     }
 
-    if (request.psychologistContext) {
-      const psychologistId = request.psychologistContext.id;
+    if (psychologistId && psychologistId !== currentUserAlias) {
       return this.therapyRequestService.getAllForPsychologist(psychologistId, {
         accepted,
       });
-    } else if (psychologistId) {
-      return this.therapyRequestService.getAllForPsychologist(psychologistId, {
-        accepted,
-      });
+    } else if (request.psychologistContext) {
+      return this.therapyRequestService.getAllForPsychologist(
+        request.psychologistContext.id,
+        {
+          accepted,
+        },
+      );
     }
   }
 
@@ -85,16 +89,19 @@ export class TherapyRequestsController {
   }
 
   @Post(':therapyRequestId/accept')
+  @IsMyData()
   acceptRequest(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.acceptRequest(therapyRequestId);
   }
 
   @Post(':therapyRequestId/reject')
+  @IsMyData()
   rejectRequest(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.rejectRequest(therapyRequestId);
   }
 
   @Put(':therapyRequestId')
+  @IsMyData()
   update(
     @Param('therapyRequestId') therapyRequestId: string,
     @Body(new JoiValidationPipe(joiUpdateTherapyRequestSchema))
