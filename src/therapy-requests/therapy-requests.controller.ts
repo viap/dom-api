@@ -1,5 +1,3 @@
-import { currentUserAlias } from '@/common/const/current-user-alias';
-import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import {
   Body,
   Controller,
@@ -12,6 +10,8 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { currentUserAlias } from 'src/common/const/current-user-alias';
+import { EnhancedRequest } from 'src/common/types/enhanced-request.interface';
 import { TherapyRequestQueryParams } from 'src/common/types/therapy-request-params.types';
 import { JoiValidationPipe } from 'src/joi/joi.pipe';
 import { Roles } from 'src/roles/decorators/role.docorator';
