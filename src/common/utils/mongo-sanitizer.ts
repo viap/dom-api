@@ -139,10 +139,9 @@ export function sanitizeQueryParams(
         typeof value === 'string' ||
         typeof value === 'number' ||
         typeof value === 'boolean' ||
-        value === null ||
-        value === undefined
+        value === null
       ) {
-        cleaned[key] = value as string | number | boolean | null | undefined;
+        cleaned[key] = value as string | number | boolean | null;
       } else if (Array.isArray(value)) {
         // Filter array to only contain primitive values
         const primitiveValues = value.filter(

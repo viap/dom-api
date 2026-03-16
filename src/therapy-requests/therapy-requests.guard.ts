@@ -17,7 +17,7 @@ export class TherapyRequestsGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<EnhancedRequest>();
-    const ShouldBeMyData =
+    const ShouldBeAvailableIfMyData =
       this.reflector.getAllAndOverride<boolean>(IS_MY_DATA, [
         context.getHandler(),
       ]) || false;
@@ -28,47 +28,40 @@ export class TherapyRequestsGuard implements CanActivate {
         context.getClass(),
       ]) || [];
 
-    if (ShouldBeMyData) {
-      try {
-        if (!request.userContext) {
-          return false;
-        }
+    try {
+      if (!request.userContext) {
+        return false;
+      }
 
-        const psychologist = await this.psychologistsService.getByUserId(
-          request.userContext.userId,
+      const psychologist = await this.psychologistsService.getByUserId(
+        request.userContext.userId,
+      );
+
+      if (!psychologist) {
+        return false;
+      }
+
+      const params = request.params || {};
+      request.psychologistContext = {
+        id: psychologist._id.toString(),
+      };
+
+      //NOTICE: user's own data is available even if there is no suitable role
+      if (params.psychologistId && ShouldBeAvailableIfMyData) {
+        return (
+          request.psychologistContext.id === params.psychologistId ||
+          params.psychologistId === currentUserAlias
         );
+      }
 
-        if (!psychologist) {
-          return false;
-        }
-
-        const params = request.params || {};
-        request.psychologistContext = {
-          id: psychologist._id,
-        };
-
-        // NOTICE: check if user have any required role except psychologist
-        if (
-          includesOther<Role>(requiredRoles, request.userContext.roles, [
-            Role.Psychologist,
-          ])
-        ) {
-          return true;
-        }
-
-        if (params.psychologistId) {
-          return (
-            psychologist._id.toString() === params.psychologistId ||
-            params.psychologistId === currentUserAlias
-          );
-        }
-
+      // NOTICE: check if user have any required role
+      if (includesOther<Role>(requiredRoles, request.userContext.roles)) {
         return true;
-      } catch {}
+      }
 
-      return false;
-    }
+      return true;
+    } catch {}
 
-    return true;
+    return false;
   }
 }
