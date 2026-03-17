@@ -25,7 +25,7 @@ import { TherapyRequestsGuard } from './therapy-requests.guard';
 import { TherapyRequestsService } from './therapy-requests.service';
 
 @Controller('therapy-requests')
-@Roles(Role.Admin, Role.Editor)
+@Roles(Role.Admin, Role.Editor, Role.Psychologist)
 @UseGuards(TherapyRequestsGuard)
 export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
