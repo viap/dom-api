@@ -54,8 +54,12 @@ export class TherapyRequestsGuard implements CanActivate {
         );
       }
 
-      // NOTICE: check if user have any required role
-      if (includesOther<Role>(requiredRoles, request.userContext.roles)) {
+      // NOTICE: check if user have any required role except psychologist role
+      if (
+        includesOther<Role>(requiredRoles, request.userContext.roles, [
+          Role.Psychologist,
+        ])
+      ) {
         return true;
       }
 
