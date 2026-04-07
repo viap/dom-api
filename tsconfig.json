@@ -38,7 +38,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "coverage"
+    "coverage",
+    "scripts"
   ],
   "include": [
     "src/**/*",

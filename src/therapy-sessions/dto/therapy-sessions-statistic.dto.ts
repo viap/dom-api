@@ -8,7 +8,7 @@ export class TherapySessionsControllerStatistic {
   from: string;
   to: string;
   price: Array<Price>;
-  comission: Array<Price>;
+  commission: Array<Price>;
   countForPeriod: number;
   countAll: number;
 }

@@ -4,12 +4,8 @@ import mongoose, { Document } from 'mongoose';
 import { Contact, contactSchema } from 'src/common/schemas/contact.schema';
 import { UserDocument } from 'src/users/schemas/user.schema';
 
-export type TherapyRequestDocument = TherapyRequest & Document;
-
-@Schema()
+@Schema({ timestamps: true })
 export class TherapyRequest {
-  @Prop({ required: true, default: () => Date.now() })
-  timestamp: number;
 
   @Prop({ required: true })
   name: string;
@@ -37,10 +33,11 @@ export class TherapyRequest {
   accepted: boolean;
 }
 
+export type TherapyRequestDocument = TherapyRequest & Document & { createdAt: Date; updatedAt: Date };
 export const schemaTherapyRequest =
   SchemaFactory.createForClass(TherapyRequest);
 
-schemaTherapyRequest.index({ psychologist: 1, timestamp: 1 });
-schemaTherapyRequest.index({ user: 1, timestamp: 1 });
-schemaTherapyRequest.index({ accepted: 1, timestamp: 1 });
-schemaTherapyRequest.index({ timestamp: 1 });
+schemaTherapyRequest.index({ psychologist: 1, createdAt: 1 });
+schemaTherapyRequest.index({ user: 1, createdAt: 1 });
+schemaTherapyRequest.index({ accepted: 1, createdAt: 1 });
+schemaTherapyRequest.index({ createdAt: 1 });

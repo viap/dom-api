@@ -29,7 +29,7 @@ const submodels = [
 export class NotificationsService {
   constructor(
     @InjectModel(Notification.name)
-    private notificationModel: Model<Notification>,
+    private notificationModel: Model<NotificationDocument>,
     private userService: UsersService,
   ) {}
 
