@@ -114,13 +114,15 @@ export class TherapyRequestsService {
       })
     ).populate(submodels);
 
+    const hasPsychologist =
+      therapyRequest.psychologist && therapyRequest.psychologist.user;
+
     this.notificationService.create({
       type: NotificationTypes.NEW_THERAPY_REQUEST,
-      roles: [Role.Psychologist],
-      recipients:
-        therapyRequest.psychologist && therapyRequest.psychologist.user
-          ? [therapyRequest.psychologist.user._id.toString()]
-          : undefined,
+      roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
+      recipients: hasPsychologist
+        ? [therapyRequest.psychologist.user._id.toString()]
+        : undefined,
     });
 
     return therapyRequest;

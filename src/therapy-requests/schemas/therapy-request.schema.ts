@@ -6,7 +6,6 @@ import { UserDocument } from 'src/users/schemas/user.schema';
 
 @Schema({ timestamps: true })
 export class TherapyRequest {
-
   @Prop({ required: true })
   name: string;
 
@@ -33,7 +32,8 @@ export class TherapyRequest {
   accepted: boolean;
 }
 
-export type TherapyRequestDocument = TherapyRequest & Document & { createdAt: Date; updatedAt: Date };
+export type TherapyRequestDocument = TherapyRequest &
+  Document & { createdAt: Date; updatedAt: Date };
 export const schemaTherapyRequest =
   SchemaFactory.createForClass(TherapyRequest);
 
