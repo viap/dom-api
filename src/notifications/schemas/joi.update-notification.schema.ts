@@ -12,6 +12,6 @@ export const joiUpdateNotificationSchema = Joi.object<UpdateNotificationDto>({
   message: Joi.string(),
   recipients: Joi.array<string>(),
   received: Joi.array<string>(),
-  startsAt: Joi.number(),
-  finishAt: Joi.number(),
+  startsAt: Joi.date().iso(),
+  finishAt: Joi.date().iso(),
 });

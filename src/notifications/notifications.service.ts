@@ -25,6 +25,19 @@ const submodels = [
   },
 ];
 
+function parseDateValue(value?: string | Date): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -55,12 +68,12 @@ export class NotificationsService {
           },
           {
             // NOTICE: only events that have occurred
-            startsAt: { $lte: Date.now() },
+            startsAt: { $lte: new Date() },
           },
           {
             // NOTICE: only events that have not ended
             $or: [
-              { finishAt: { $gte: Date.now() } },
+              { finishAt: { $gte: new Date() } },
               { finishAt: { $exists: false } },
             ],
           },
@@ -104,13 +117,19 @@ export class NotificationsService {
     const validationResult = joiCreateNotificationSchema.validate(createData);
 
     if (!validationResult.error) {
+      const startsAt =
+        parseDateValue(validationResult.value.startsAt) ?? new Date();
+      const finishAt =
+        parseDateValue(validationResult.value.finishAt) ??
+        new Date(
+          startsAt.getTime() + NOTIFICATION_DAYS_LIFETIME * 24 * 60 * 60 * 1000,
+        );
+
       const newNotificationData = {
         ...validationResult.value,
-        startsAt: validationResult.value.startsAt || Date.now(),
+        startsAt,
         // NOTICE: finishAt = startAt + NOTIFICATION_DAYS_LIFETIME, if not set another
-        finishAt:
-          validationResult.value.finishAt ||
-          new Date().setDate(new Date().getDate() + NOTIFICATION_DAYS_LIFETIME),
+        finishAt,
         recipients: validationResult.value.recipients
           ? validationResult.value.recipients.map(valueToObjectId)
           : undefined,
@@ -183,9 +202,14 @@ export class NotificationsService {
 
   async updateNotificationStatus(notificationId: string) {
     const notification = await this.notificationModel.findById(notificationId);
+    if (!notification) {
+      return;
+    }
 
     let isEveryoneWasNotified = false;
-    const isTimeOver = notification.finishAt < Date.now();
+    const isTimeOver = notification.finishAt
+      ? notification.finishAt < new Date()
+      : false;
 
     if (!isTimeOver) {
       if (

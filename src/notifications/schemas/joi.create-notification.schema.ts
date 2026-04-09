@@ -13,6 +13,6 @@ export const joiCreateNotificationSchema = Joi.object<CreateNotificationDto>({
   message: Joi.string(),
   roles: Joi.array<Role>().items(...Object.values(Role)),
   recipients: Joi.array<string>(),
-  startsAt: Joi.number(),
-  finishAt: Joi.number(),
+  startsAt: Joi.date().iso(),
+  finishAt: Joi.date().iso(),
 });

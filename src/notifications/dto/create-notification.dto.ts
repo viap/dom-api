@@ -9,6 +9,6 @@ export class CreateNotificationDto {
   message?: string;
   roles?: Array<Role>;
   recipients?: Array<string>;
-  startsAt?: number;
-  finishAt?: number;
+  startsAt?: string;
+  finishAt?: string;
 }

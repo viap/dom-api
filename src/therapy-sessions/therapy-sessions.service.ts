@@ -232,7 +232,10 @@ export class TherapySessionsService {
 
   async remove(id: string): Promise<boolean> {
     const therapySession = await this.getById(id);
-    if (therapySession && Date.now() - therapySession.createdAt.getTime() < oneDay * 7) {
+    if (
+      therapySession &&
+      Date.now() - therapySession.createdAt.getTime() < oneDay * 7
+    ) {
       return !!(await therapySession.deleteOne());
     }
 

@@ -32,7 +32,8 @@ export class TherapySession {
   descr: string;
 }
 
-export type TherapySessionDocument = TherapySession & Document & { createdAt: Date; updatedAt: Date };
+export type TherapySessionDocument = TherapySession &
+  Document & { createdAt: Date; updatedAt: Date };
 export const therapySessionSchema =
   SchemaFactory.createForClass(TherapySession);
 

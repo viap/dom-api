@@ -8,6 +8,6 @@ export class UpdateNotificationDto {
   message?: string;
   received?: Array<string>;
   status?: NotificationStatuses;
-  startsAt?: number;
-  finishAt?: number;
+  startsAt?: string;
+  finishAt?: string;
 }
