@@ -30,7 +30,7 @@ const webSocketPort = process.env.WEBSOCKET_PORT
     methods: ['GET', 'POST'],
   },
 })
-export class EventsGateway implements OnModuleInit {
+export class WsGateway implements OnModuleInit {
   @WebSocketServer()
   server: Server;
 

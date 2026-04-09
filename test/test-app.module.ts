@@ -31,7 +31,7 @@ import { cwd } from 'process';
     PsychologistsModule,
     TherapySessionsModule,
     TherapyRequestsModule,
-    // EventsModule excluded to avoid WebSocket port conflicts
+    // WsModule excluded to avoid WebSocket port conflicts
     NotificationsModule,
     BookingSystemModule,
   ],

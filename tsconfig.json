@@ -31,7 +31,7 @@
       "@therapy-requests/*": ["src/therapy-requests/*"],
       "@notifications/*": ["src/notifications/*"],
       "@booking-system/*": ["src/booking-system/*"],
-      "@events/*": ["src/events/*"],
+      "@ws/*": ["src/ws/*"],
       "@roles/*": ["src/roles/*"]
     }
   },

@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { EventsGateway } from './events.gateway';
+import { WsGateway } from './ws.gateway';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
-describe('EventsGateway', () => {
-  let gateway: EventsGateway;
+describe('WsGateway', () => {
+  let gateway: WsGateway;
 
   beforeEach(async () => {
     const mockAuthService = {
@@ -21,7 +21,7 @@ describe('EventsGateway', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        EventsGateway,
+        WsGateway,
         {
           provide: AuthService,
           useValue: mockAuthService,
@@ -33,7 +33,7 @@ describe('EventsGateway', () => {
       ],
     }).compile();
 
-    gateway = module.get<EventsGateway>(EventsGateway);
+    gateway = module.get<WsGateway>(WsGateway);
   });
 
   it('should be defined', () => {

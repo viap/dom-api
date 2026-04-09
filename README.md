@@ -130,7 +130,7 @@ src/
 ├── therapy-sessions/     # Individual session management
 ├── therapy-requests/     # Request handling workflow
 ├── notifications/        # Notification system
-├── events/               # WebSocket gateway
+├── ws/                   # WebSocket gateway
 ├── api-clients/          # API client management
 ├── roles/                # Role-based access control
 ├── booking-system/       # Appointment scheduling

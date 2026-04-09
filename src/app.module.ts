@@ -11,7 +11,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
-import { EventsModule } from './events/events.module';
+import { WsModule } from './ws/ws.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PsychologistsModule } from './psychologists/psychologists.module';
 import { RolesGuard } from './roles/roles.guard';
@@ -39,7 +39,7 @@ import { cwd } from 'process';
     PsychologistsModule,
     TherapySessionsModule,
     TherapyRequestsModule,
-    EventsModule,
+    WsModule,
     NotificationsModule,
     BookingSystemModule,
   ],
