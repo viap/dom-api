@@ -9,6 +9,7 @@ export function transformUserToDto(user: UserDocument): UserResponseDto {
     roles: user.roles,
     descr: user.descr,
     contacts: user.contacts,
+    timeZone: user.timeZone,
   });
 }
 

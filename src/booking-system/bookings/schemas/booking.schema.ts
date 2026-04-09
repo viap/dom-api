@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
+import { DEFAULT_TIMEZONE } from 'src/common/const/timezone';
 import { RoomDocument } from '../../rooms/schemas/room.schema';
 import { UserDocument } from '../../../users/schemas/user.schema';
 import { BookingStatus } from '../enums/booking-status.enum';
@@ -70,7 +71,7 @@ export class Booking {
   @Prop({ type: [String], default: [] })
   attendees: string[];
 
-  @Prop({ trim: true, default: 'UTC' })
+  @Prop({ trim: true, default: DEFAULT_TIMEZONE })
   timeZone: string;
 
   @Prop({ type: Object })

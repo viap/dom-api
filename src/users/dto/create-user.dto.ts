@@ -7,4 +7,5 @@ export class CreateUserDto {
   readonly roles?: Array<string>;
   readonly descr?: string;
   readonly contacts?: Array<Contact>;
+  readonly timeZone?: string;
 }

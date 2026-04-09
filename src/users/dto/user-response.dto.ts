@@ -8,6 +8,7 @@ export class UserResponseDto {
   roles: Array<Role>;
   descr?: string;
   contacts: Array<Contact>;
+  timeZone?: string;
 
   constructor(partial: Partial<UserResponseDto>) {
     Object.assign(this, partial);

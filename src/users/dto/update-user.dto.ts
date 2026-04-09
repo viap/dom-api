@@ -8,4 +8,5 @@ export class UpdateUserDto {
   readonly roles?: Array<Role>;
   readonly descr?: string;
   readonly contacts?: Array<Contact>;
+  readonly timeZone?: string;
 }

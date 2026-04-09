@@ -1,0 +1,1 @@
+export const timeZoneRegEx = /^[+-](0\d|1[0-4]):[0-5]\d$/;

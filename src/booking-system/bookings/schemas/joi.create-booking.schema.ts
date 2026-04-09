@@ -1,4 +1,6 @@
+import { timeZoneRegEx } from 'src/common/const/time-zone-pattern';
 import * as Joi from 'joi';
+import { DEFAULT_TIMEZONE } from 'src/common/const/timezone';
 
 export const createBookingSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required().messages({
@@ -91,9 +93,13 @@ export const createBookingSchema = Joi.object({
       'string.email': 'Each attendee must be a valid email address',
     }),
 
-  timeZone: Joi.string().trim().max(50).default('UTC').optional().messages({
-    'string.max': 'Time zone cannot exceed 50 characters',
-  }),
+  timeZone: Joi.string()
+    .pattern(timeZoneRegEx)
+    .default(DEFAULT_TIMEZONE)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Time zone must be a UTC offset in ±HH:MM format',
+    }),
 
   metadata: Joi.object({
     purpose: Joi.string().trim().max(200).optional().messages({

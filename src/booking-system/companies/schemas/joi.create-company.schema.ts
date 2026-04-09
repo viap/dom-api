@@ -1,3 +1,4 @@
+import { timeZoneRegEx } from 'src/common/const/time-zone-pattern';
 import * as Joi from 'joi';
 
 export const createCompanySchema = Joi.object({
@@ -65,8 +66,8 @@ export const createCompanySchema = Joi.object({
       'string.max': 'Cancellation policy cannot exceed 1000 characters',
     }),
 
-    timeZone: Joi.string().trim().max(50).optional().messages({
-      'string.max': 'Time zone cannot exceed 50 characters',
+    timeZone: Joi.string().pattern(timeZoneRegEx).optional().messages({
+      'string.pattern.base': 'Time zone must be a UTC offset in ±HH:MM format',
     }),
   }).optional(),
 });
