@@ -4,13 +4,10 @@ import { Price, priceSchema } from 'src/common/schemas/price.schema';
 import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
 import { UserDocument } from 'src/users/schemas/user.schema';
 
-@Schema()
+@Schema({ timestamps: true })
 export class TherapySession {
   @Prop({ required: true, default: () => Date.now() })
   dateTime: number;
-
-  @Prop({ required: true, default: () => Date.now() })
-  timestamp: number;
 
   @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
   client: UserDocument;
@@ -29,13 +26,13 @@ export class TherapySession {
   price: Price;
 
   @Prop({ schema: priceSchema })
-  comission: Price;
+  commission: Price;
 
   @Prop({ default: '' })
   descr: string;
 }
 
-export type TherapySessionDocument = TherapySession & Document;
+export type TherapySessionDocument = TherapySession & Document & { createdAt: Date; updatedAt: Date };
 export const therapySessionSchema =
   SchemaFactory.createForClass(TherapySession);
 

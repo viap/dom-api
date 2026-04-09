@@ -36,7 +36,7 @@ const oneDay = 1000 * 60 * 60 * 24;
 export class TherapySessionsService {
   constructor(
     @InjectModel(TherapySession.name)
-    private therapySessionModel: Model<TherapySession>,
+    private therapySessionModel: Model<TherapySessionDocument>,
     private psychologistsService: PsychologistsService,
     private usersService: UsersService,
   ) {}
@@ -128,7 +128,7 @@ export class TherapySessionsService {
         from: new Date(from).toLocaleDateString('ru'),
         to: new Date(to).toLocaleDateString('ru'),
         price: calcPrices(sessionGroup.map((s) => s.price)),
-        comission: calcPrices(sessionGroup.map((s) => s.comission)),
+        commission: calcPrices(sessionGroup.map((s) => s.commission)),
         countForPeriod: sessionGroup.length,
         countAll: sessionNumbers[sessionIndex(session)] || 0,
       } as TherapySessionsControllerStatistic;
@@ -232,7 +232,7 @@ export class TherapySessionsService {
 
   async remove(id: string): Promise<boolean> {
     const therapySession = await this.getById(id);
-    if (therapySession && Date.now() - therapySession.timestamp < oneDay * 7) {
+    if (therapySession && Date.now() - therapySession.createdAt.getTime() < oneDay * 7) {
       return !!(await therapySession.deleteOne());
     }
 

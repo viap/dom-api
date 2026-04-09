@@ -5,6 +5,6 @@ export class UpdateTherapySessionDto {
   dateTime?: number;
   duration?: SessionDuration;
   price?: Price;
-  comission?: Price;
+  commission?: Price;
   descr?: string;
 }

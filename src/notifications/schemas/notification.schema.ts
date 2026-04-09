@@ -5,13 +5,10 @@ import { UserDocument } from 'src/users/schemas/user.schema';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 import { NotificationTypes } from '../enums/notification-types.enum';
 
-export type NotificationDocument = Notification & Document;
+export type NotificationDocument = Notification & Document & { createdAt: Date; updatedAt: Date };
 
-@Schema()
+@Schema({ timestamps: true })
 export class Notification {
-  @Prop({ required: true, default: () => Date.now() })
-  timesatamp: number;
-
   @Prop({ required: true, default: () => Date.now() })
   startsAt: number;
 

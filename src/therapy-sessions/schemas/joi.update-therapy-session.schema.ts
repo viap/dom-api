@@ -5,6 +5,6 @@ export const joiUpdateTherapySessionSchema = Joi.object({
   dateTime: Joi.number(),
   duration: Joi.number(),
   price: joiPriceSchema,
-  comission: joiPriceSchema,
+  commission: joiPriceSchema,
   descr: Joi.string(),
 });

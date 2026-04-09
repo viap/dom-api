@@ -6,6 +6,6 @@ export class CreateTherapySessionDto {
   psychologist: string;
   duration: number;
   price: Price;
-  comission?: Price;
+  commission?: Price;
   descr?: string;
 }

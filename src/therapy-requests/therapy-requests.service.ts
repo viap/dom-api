@@ -39,7 +39,7 @@ const submodels = [
 export class TherapyRequestsService {
   constructor(
     @InjectModel(TherapyRequest.name)
-    private therapyRequestModel: Model<TherapyRequest>,
+    private therapyRequestModel: Model<TherapyRequestDocument>,
     private psychologistService: PsychologistsService,
     private userService: UsersService,
     private notificationService: NotificationsService,

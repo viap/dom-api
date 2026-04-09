@@ -7,6 +7,6 @@ export const joiCreateTherapySessionSchema = Joi.object({
   psychologist: Joi.string().required(),
   duration: Joi.number().required(),
   price: joiPriceSchema.required(),
-  comission: joiPriceSchema,
+  commission: joiPriceSchema,
   descr: Joi.string(),
 });
