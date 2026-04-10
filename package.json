@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "seed:domains": "ts-node -r tsconfig-paths/register src/domains/seeds/domains.seed.ts",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -27,6 +28,7 @@
     "@nestjs/mongoose": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.2.6",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^10.2.6",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
