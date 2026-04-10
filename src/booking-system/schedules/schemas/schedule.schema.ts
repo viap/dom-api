@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
+import { DEFAULT_TIMEZONE } from '@/common/const/timezone';
 import { RoomDocument } from '../../rooms/schemas/room.schema';
 import { CompanyDocument } from '../../companies/schemas/company.schema';
 
@@ -62,7 +63,7 @@ export class Schedule {
   @Prop({ default: true })
   isActive: boolean;
 
-  @Prop({ trim: true, default: 'UTC' })
+  @Prop({ trim: true, default: DEFAULT_TIMEZONE })
   timeZone: string;
 
   @Prop({ type: Object })

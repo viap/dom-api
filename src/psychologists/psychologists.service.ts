@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import { SocialNetworks } from 'src/common/enums/social-networks.enum';
-import { addItems } from 'src/common/utils/add-items';
-import { removeItems } from 'src/common/utils/remove-item';
-import { Role } from 'src/roles/enums/roles.enum';
-import { TherapyRequestDocument } from 'src/therapy-requests/schemas/therapy-request.schema';
-import { UsersService } from 'src/users/users.service';
+import { SocialNetworks } from '@/common/enums/social-networks.enum';
+import { addItems } from '@/common/utils/add-items';
+import { removeItems } from '@/common/utils/remove-item';
+import { Role } from '@/roles/enums/roles.enum';
+import { TherapyRequestDocument } from '@/therapy-requests/schemas/therapy-request.schema';
+import { UsersService } from '@/users/users.service';
 import { CreateNewClientDto } from './dto/create-new-client.dto';
 import { CreatePsychologistDto } from './dto/create-psychologist.dto';
 import { EditMyClientDto } from './dto/edit-my-client.dto';

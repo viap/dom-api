@@ -1,6 +1,6 @@
-import { Price } from 'src/common/schemas/price.schema';
-import { Psychologist } from 'src/psychologists/schemas/psychologist.schema';
-import { User } from 'src/users/schemas/user.schema';
+import { Price } from '@/common/schemas/price.schema';
+import { Psychologist } from '@/psychologists/schemas/psychologist.schema';
+import { User } from '@/users/schemas/user.schema';
 
 export class TherapySessionsControllerStatistic {
   client: User;

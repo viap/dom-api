@@ -1,3 +1,4 @@
+import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
 
 const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -76,8 +77,8 @@ export const updateScheduleSchema = Joi.object({
 
   isActive: Joi.boolean().optional(),
 
-  timeZone: Joi.string().trim().max(50).optional().messages({
-    'string.max': 'Time zone cannot exceed 50 characters',
+  timeZone: Joi.string().pattern(timeZoneRegEx).optional().messages({
+    'string.pattern.base': 'Time zone must be a UTC offset in ±HH:MM format',
   }),
 
   metadata: Joi.object({

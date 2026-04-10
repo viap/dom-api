@@ -1,12 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { PsychologistDocument } from '../../psychologists/schemas/psychologist.schema';
 import mongoose, { Document } from 'mongoose';
-import { Contact, contactSchema } from 'src/common/schemas/contact.schema';
-import { UserDocument } from 'src/users/schemas/user.schema';
+import { Contact, contactSchema } from '@/common/schemas/contact.schema';
+import { UserDocument } from '@/users/schemas/user.schema';
 
 @Schema({ timestamps: true })
 export class TherapyRequest {
-
   @Prop({ required: true })
   name: string;
 
@@ -33,7 +32,8 @@ export class TherapyRequest {
   accepted: boolean;
 }
 
-export type TherapyRequestDocument = TherapyRequest & Document & { createdAt: Date; updatedAt: Date };
+export type TherapyRequestDocument = TherapyRequest &
+  Document & { createdAt: Date; updatedAt: Date };
 export const schemaTherapyRequest =
   SchemaFactory.createForClass(TherapyRequest);
 

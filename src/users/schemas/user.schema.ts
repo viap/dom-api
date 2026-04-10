@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { Contact, contactSchema } from 'src/common/schemas/contact.schema';
-import { Role } from 'src/roles/enums/roles.enum';
+import { Contact, contactSchema } from '@/common/schemas/contact.schema';
+import { Role } from '@/roles/enums/roles.enum';
+import { DEFAULT_TIMEZONE } from '@/common/const/timezone';
 
 export type UserDocument = User & Document;
 
@@ -21,6 +22,9 @@ export class User {
 
   @Prop()
   descr: string;
+
+  @Prop({ trim: true, default: DEFAULT_TIMEZONE })
+  timeZone: string;
 
   @Prop({
     required: true,

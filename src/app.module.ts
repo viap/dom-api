@@ -1,6 +1,8 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TimezoneInterceptor } from './common/interceptors/timezone.interceptor';
+import { UserContextInterceptor } from './common/user-context/user-context.interceptor';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ApiClientsModule } from './api-clients/api-clients.module';
 import { AppController } from './app.controller';
@@ -9,7 +11,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
-import { EventsModule } from './events/events.module';
+import { WsModule } from './ws/ws.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PsychologistsModule } from './psychologists/psychologists.module';
 import { RolesGuard } from './roles/roles.guard';
@@ -37,7 +39,7 @@ import { cwd } from 'process';
     PsychologistsModule,
     TherapySessionsModule,
     TherapyRequestsModule,
-    EventsModule,
+    WsModule,
     NotificationsModule,
     BookingSystemModule,
   ],
@@ -51,6 +53,14 @@ import { cwd } from 'process';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: UserContextInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TimezoneInterceptor,
     },
   ],
 })

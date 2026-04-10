@@ -6,9 +6,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UserContext } from 'src/common/user-context/user-context.interface';
-import extractTokenFromHeaders from 'src/common/utils/extract-token-from-headers';
-import { Role } from 'src/roles/enums/roles.enum';
+import { UserContext } from '@/common/user-context/user-context.interface';
+import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
+import { Role } from '@/roles/enums/roles.enum';
 import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 

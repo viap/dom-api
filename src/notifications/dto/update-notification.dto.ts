@@ -1,4 +1,4 @@
-import { Role } from 'src/roles/enums/roles.enum';
+import { Role } from '@/roles/enums/roles.enum';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 
 export class UpdateNotificationDto {
@@ -8,6 +8,6 @@ export class UpdateNotificationDto {
   message?: string;
   received?: Array<string>;
   status?: NotificationStatuses;
-  startsAt?: number;
-  finishAt?: number;
+  startsAt?: string;
+  finishAt?: string;
 }

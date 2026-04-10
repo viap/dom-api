@@ -1,5 +1,5 @@
 import * as Joi from 'joi';
-import { joiPriceSchema } from 'src/common/schemas/joi.price.schema';
+import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 
 export const joiCreateTherapySessionSchema = Joi.object({
   dateTime: Joi.number(),

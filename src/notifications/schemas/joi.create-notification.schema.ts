@@ -1,5 +1,5 @@
 import * as Joi from 'joi';
-import { Role } from 'src/roles/enums/roles.enum';
+import { Role } from '@/roles/enums/roles.enum';
 import { CreateNotificationDto } from '../dto/create-notification.dto';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 import { NotificationTypes } from '../enums/notification-types.enum';
@@ -13,6 +13,6 @@ export const joiCreateNotificationSchema = Joi.object<CreateNotificationDto>({
   message: Joi.string(),
   roles: Joi.array<Role>().items(...Object.values(Role)),
   recipients: Joi.array<string>(),
-  startsAt: Joi.number(),
-  finishAt: Joi.number(),
+  startsAt: Joi.date().iso(),
+  finishAt: Joi.date().iso(),
 });

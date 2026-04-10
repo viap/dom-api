@@ -1,21 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { SocialNetworks } from 'src/common/enums/social-networks.enum';
-import { Contact } from 'src/common/schemas/contact.schema';
-import { TherapyRequestFilters } from 'src/common/types/therapy-request-params.types';
+import { SocialNetworks } from '@/common/enums/social-networks.enum';
+import { Contact } from '@/common/schemas/contact.schema';
+import { TherapyRequestFilters } from '@/common/types/therapy-request-params.types';
 import {
   safeFindParams,
   validateObjectId,
-} from 'src/common/utils/mongo-sanitizer';
-import { valueToObjectId } from 'src/common/utils/value-to-object-id';
-import { NotificationTypes } from 'src/notifications/enums/notification-types.enum';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { PsychologistsService } from 'src/psychologists/psychologists.service';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
-import { Role } from 'src/roles/enums/roles.enum';
-import { UserDocument } from 'src/users/schemas/user.schema';
-import { UsersService } from 'src/users/users.service';
+} from '@/common/utils/mongo-sanitizer';
+import { valueToObjectId } from '@/common/utils/value-to-object-id';
+import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { PsychologistsService } from '@/psychologists/psychologists.service';
+import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
+import { Role } from '@/roles/enums/roles.enum';
+import { UserDocument } from '@/users/schemas/user.schema';
+import { UsersService } from '@/users/users.service';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
 import {
@@ -114,13 +114,15 @@ export class TherapyRequestsService {
       })
     ).populate(submodels);
 
+    const hasPsychologist =
+      therapyRequest.psychologist && therapyRequest.psychologist.user;
+
     this.notificationService.create({
       type: NotificationTypes.NEW_THERAPY_REQUEST,
-      roles: [Role.Psychologist],
-      recipients:
-        therapyRequest.psychologist && therapyRequest.psychologist.user
-          ? [therapyRequest.psychologist.user._id.toString()]
-          : undefined,
+      roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
+      recipients: hasPsychologist
+        ? [therapyRequest.psychologist.user._id.toString()]
+        : undefined,
     });
 
     return therapyRequest;

@@ -10,12 +10,12 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { currentUserAlias } from 'src/common/const/current-user-alias';
-import { EnhancedRequest } from 'src/common/types/enhanced-request.interface';
-import { TherapyRequestQueryParams } from 'src/common/types/therapy-request-params.types';
-import { JoiValidationPipe } from 'src/joi/joi.pipe';
-import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/enums/roles.enum';
+import { currentUserAlias } from '@/common/const/current-user-alias';
+import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
+import { TherapyRequestQueryParams } from '@/common/types/therapy-request-params.types';
+import { JoiValidationPipe } from '@/joi/joi.pipe';
+import { Roles } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 import { IsMyData } from './decorators/is-my-data.decorator';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';

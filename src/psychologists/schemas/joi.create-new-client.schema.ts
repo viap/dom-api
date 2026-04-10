@@ -1,6 +1,6 @@
 import * as Joi from 'joi';
-import { Contact } from 'src/common/schemas/contact.schema';
-import { joiContactSchema } from 'src/common/schemas/joi.contacts.schema';
+import { Contact } from '@/common/schemas/contact.schema';
+import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { CreateNewClientDto } from '../dto/create-new-client.dto';
 
 export const joiCreateNewClientSchema = Joi.object<CreateNewClientDto>({

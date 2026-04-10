@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Price } from 'src/common/schemas/price.schema';
-import groupBy from 'src/common/utils/group-by';
+import { Price } from '@/common/schemas/price.schema';
+import groupBy from '@/common/utils/group-by';
 import {
   sanitizeDateRange,
   validateObjectId,
-} from 'src/common/utils/mongo-sanitizer';
-import { Currencies } from 'src/psychologists/enums/currencies.enum';
-import { PsychologistsService } from 'src/psychologists/psychologists.service';
-import { UsersService } from 'src/users/users.service';
+} from '@/common/utils/mongo-sanitizer';
+import { Currencies } from '@/psychologists/enums/currencies.enum';
+import { PsychologistsService } from '@/psychologists/psychologists.service';
+import { UsersService } from '@/users/users.service';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
 import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
 import { UpdateTherapySessionDto } from './dto/update-therapy-session.dto';
@@ -232,7 +232,10 @@ export class TherapySessionsService {
 
   async remove(id: string): Promise<boolean> {
     const therapySession = await this.getById(id);
-    if (therapySession && Date.now() - therapySession.createdAt.getTime() < oneDay * 7) {
+    if (
+      therapySession &&
+      Date.now() - therapySession.createdAt.getTime() < oneDay * 7
+    ) {
       return !!(await therapySession.deleteOne());
     }
 

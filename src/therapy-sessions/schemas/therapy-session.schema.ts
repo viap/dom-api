@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { Price, priceSchema } from 'src/common/schemas/price.schema';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
-import { UserDocument } from 'src/users/schemas/user.schema';
+import { Price, priceSchema } from '@/common/schemas/price.schema';
+import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
+import { UserDocument } from '@/users/schemas/user.schema';
 
 @Schema({ timestamps: true })
 export class TherapySession {
@@ -32,7 +32,8 @@ export class TherapySession {
   descr: string;
 }
 
-export type TherapySessionDocument = TherapySession & Document & { createdAt: Date; updatedAt: Date };
+export type TherapySessionDocument = TherapySession &
+  Document & { createdAt: Date; updatedAt: Date };
 export const therapySessionSchema =
   SchemaFactory.createForClass(TherapySession);
 

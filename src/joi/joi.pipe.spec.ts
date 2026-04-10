@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import * as Joi from 'joi';
-import { SanitizableObject } from 'src/common/utils/mongo-sanitizer';
+import { SanitizableObject } from '@/common/utils/mongo-sanitizer';
 import { JoiValidationPipe } from './joi.pipe';
 
 describe('JoiValidationPipe with NoSQL Injection Prevention', () => {

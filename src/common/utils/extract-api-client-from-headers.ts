@@ -1,5 +1,5 @@
 import { IncomingHttpHeaders } from 'http';
-import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
+import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
 
 export default function extractApiClientFromHeaders(
   headers: IncomingHttpHeaders,

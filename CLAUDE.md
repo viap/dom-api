@@ -60,7 +60,7 @@ All entities use Mongoose schemas with two types:
 **Infrastructure:**
 - `auth/`: JWT authentication, Telegram auth, API client validation
 - `api-clients/`: API client management for external integrations
-- `events/`: WebSocket gateway for real-time communication
+- `ws/`: WebSocket gateway for real-time communication
 - `roles/`: Role-based access control with decorators and guards
 
 ### Validation Pattern
