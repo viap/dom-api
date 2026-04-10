@@ -1,4 +1,4 @@
-import { Role } from 'src/roles/enums/roles.enum';
+import { Role } from '@/roles/enums/roles.enum';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 
 export class UpdateNotificationDto {

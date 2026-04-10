@@ -6,7 +6,7 @@ import {
   schemaNotification,
 } from './schemas/notification.schema';
 import { NotificationsController } from './notifications.controller';
-import { UsersModule } from 'src/users/users.module';
+import { UsersModule } from '@/users/users.module';
 
 @Module({
   imports: [

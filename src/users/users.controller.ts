@@ -11,11 +11,11 @@ import {
   UseInterceptors,
   UsePipes,
 } from '@nestjs/common';
-import { currentUserAlias } from 'src/common/const/current-user-alias';
-import { GetUser } from 'src/common/user-context/user-context.decorator';
-import { JoiValidationPipe } from 'src/joi/joi.pipe';
-import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/enums/roles.enum';
+import { currentUserAlias } from '@/common/const/current-user-alias';
+import { GetUser } from '@/common/user-context/user-context.decorator';
+import { JoiValidationPipe } from '@/joi/joi.pipe';
+import { Roles } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 import { UserContextInterceptor } from '../common/user-context/user-context.interceptor';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';

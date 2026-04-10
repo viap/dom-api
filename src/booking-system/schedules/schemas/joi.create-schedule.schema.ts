@@ -1,6 +1,6 @@
-import { timeZoneRegEx } from 'src/common/const/time-zone-pattern';
+import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
-import { DEFAULT_TIMEZONE } from 'src/common/const/timezone';
+import { DEFAULT_TIMEZONE } from '@/common/const/timezone';
 
 const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 

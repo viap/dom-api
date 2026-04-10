@@ -1,12 +1,12 @@
 import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { currentUserAlias } from 'src/common/const/current-user-alias';
-import { includesOther } from 'src/common/utils/includes-other';
-import { PsychologistsService } from 'src/psychologists/psychologists.service';
-import { PsychologistDocument } from 'src/psychologists/schemas/psychologist.schema';
-import { ROLES_KEY } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/enums/roles.enum';
+import { currentUserAlias } from '@/common/const/current-user-alias';
+import { includesOther } from '@/common/utils/includes-other';
+import { PsychologistsService } from '@/psychologists/psychologists.service';
+import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
+import { ROLES_KEY } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';
 

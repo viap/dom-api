@@ -1,4 +1,4 @@
-import { Price } from 'src/common/schemas/price.schema';
+import { Price } from '@/common/schemas/price.schema';
 
 export class CreateTherapySessionDto {
   dateTime?: number;

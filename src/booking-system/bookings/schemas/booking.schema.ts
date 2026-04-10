@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { DEFAULT_TIMEZONE } from 'src/common/const/timezone';
+import { DEFAULT_TIMEZONE } from '@/common/const/timezone';
 import { RoomDocument } from '../../rooms/schemas/room.schema';
 import { UserDocument } from '../../../users/schemas/user.schema';
 import { BookingStatus } from '../enums/booking-status.enum';

@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { UserDocument } from 'src/users/schemas/user.schema';
+import { UserDocument } from '@/users/schemas/user.schema';
 import { Currencies } from '../enums/currencies.enum';
 import { Client, clientSchema } from './clients.schema';
 import { Education, educationSchema } from './education.schema';

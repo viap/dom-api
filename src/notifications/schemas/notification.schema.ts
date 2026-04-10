@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { Role } from 'src/roles/enums/roles.enum';
-import { UserDocument } from 'src/users/schemas/user.schema';
+import { Role } from '@/roles/enums/roles.enum';
+import { UserDocument } from '@/users/schemas/user.schema';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 import { NotificationTypes } from '../enums/notification-types.enum';
 

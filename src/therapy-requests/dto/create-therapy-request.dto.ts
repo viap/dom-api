@@ -1,4 +1,4 @@
-import { Contact } from 'src/common/schemas/contact.schema';
+import { Contact } from '@/common/schemas/contact.schema';
 
 export class CreateTherapyRequestDto {
   readonly name: string;

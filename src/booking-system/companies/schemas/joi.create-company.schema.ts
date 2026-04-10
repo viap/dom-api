@@ -1,4 +1,4 @@
-import { timeZoneRegEx } from 'src/common/const/time-zone-pattern';
+import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
 
 export const createCompanySchema = Joi.object({

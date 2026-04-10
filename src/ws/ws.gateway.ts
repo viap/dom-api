@@ -10,12 +10,12 @@ import {
 import { Observable, from } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Server, Socket } from 'socket.io';
-import { ApiClientDto } from 'src/api-clients/dto/api-client.dto';
-import { AuthService } from 'src/auth/auth.service';
-import extractApiClientFromHeaders from 'src/common/utils/extract-api-client-from-headers';
-import extractTokenFromHeaders from 'src/common/utils/extract-token-from-headers';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { NotificationDocument } from 'src/notifications/schemas/notification.schema';
+import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
+import { AuthService } from '@/auth/auth.service';
+import extractApiClientFromHeaders from '@/common/utils/extract-api-client-from-headers';
+import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { NotificationDocument } from '@/notifications/schemas/notification.schema';
 
 const socketToUser: { [key: string]: string } = {};
 const socketToApiClient: { [key: string]: ApiClientDto } = {};

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { PsychologistsModule } from 'src/psychologists/psychologists.module';
-import { UsersModule } from 'src/users/users.module';
+import { PsychologistsModule } from '@/psychologists/psychologists.module';
+import { UsersModule } from '@/users/users.module';
 import {
   TherapySession,
   therapySessionSchema,

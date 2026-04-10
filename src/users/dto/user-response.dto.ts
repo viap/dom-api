@@ -1,5 +1,5 @@
-import { Contact } from 'src/common/schemas/contact.schema';
-import { Role } from 'src/roles/enums/roles.enum';
+import { Contact } from '@/common/schemas/contact.schema';
+import { Role } from '@/roles/enums/roles.enum';
 
 export class UserResponseDto {
   _id: string;

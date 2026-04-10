@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/enums/roles.enum';
+import { Roles } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationsService } from './notifications.service';
 

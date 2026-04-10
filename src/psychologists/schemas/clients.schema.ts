@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose from 'mongoose';
-import { TherapyRequestDocument } from 'src/therapy-requests/schemas/therapy-request.schema';
-import { UserDocument } from 'src/users/schemas/user.schema';
+import { TherapyRequestDocument } from '@/therapy-requests/schemas/therapy-request.schema';
+import { UserDocument } from '@/users/schemas/user.schema';
 
 @Schema()
 export class Client {

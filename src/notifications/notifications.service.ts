@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
-import { valueToObjectId } from 'src/common/utils/value-to-object-id';
-import { UsersService } from 'src/users/users.service';
+import { valueToObjectId } from '@/common/utils/value-to-object-id';
+import { UsersService } from '@/users/users.service';
 import { NOTIFICATION_DAYS_LIFETIME } from './consts';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';

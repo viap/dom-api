@@ -7,7 +7,7 @@ import {
   Post,
   UsePipes,
 } from '@nestjs/common';
-import { JoiValidationPipe } from 'src/joi/joi.pipe';
+import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { GetUserContext } from '../common/user-context/user-context.decorator';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthService } from './auth.service';

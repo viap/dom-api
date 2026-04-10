@@ -11,10 +11,10 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
-import { currentUserAlias } from 'src/common/const/current-user-alias';
-import { JoiValidationPipe } from 'src/joi/joi.pipe';
-import { Roles } from 'src/roles/decorators/role.docorator';
-import { Role } from 'src/roles/enums/roles.enum';
+import { currentUserAlias } from '@/common/const/current-user-alias';
+import { JoiValidationPipe } from '@/joi/joi.pipe';
+import { Roles } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 import { EnhancedRequest } from '../common/types/enhanced-request.interface';
 import { IsMyTherapySessions } from './decorators/is-my-therapy-session.decorator';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';

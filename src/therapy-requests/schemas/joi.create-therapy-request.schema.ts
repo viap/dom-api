@@ -1,7 +1,7 @@
 import * as Joi from 'joi';
 import { CreateTherapyRequestDto } from '../dto/create-therapy-request.dto';
-import { joiContactSchema } from 'src/common/schemas/joi.contacts.schema';
-import { Contact } from 'src/common/schemas/contact.schema';
+import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
+import { Contact } from '@/common/schemas/contact.schema';
 
 export const joiCreateTherapyRequestSchema =
   Joi.object<CreateTherapyRequestDto>({

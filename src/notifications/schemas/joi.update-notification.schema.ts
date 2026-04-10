@@ -1,5 +1,5 @@
 import * as Joi from 'joi';
-import { Role } from 'src/roles/enums/roles.enum';
+import { Role } from '@/roles/enums/roles.enum';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 

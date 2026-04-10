@@ -2,13 +2,13 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
-import { TelegramUserDto } from 'src/auth/dto/telegram.dto';
+import { TelegramUserDto } from '@/auth/dto/telegram.dto';
 import {
   sanitizeObject,
   validateObjectId,
   validateRoles,
-} from 'src/common/utils/mongo-sanitizer';
-import { Role } from 'src/roles/enums/roles.enum';
+} from '@/common/utils/mongo-sanitizer';
+import { Role } from '@/roles/enums/roles.enum';
 import { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
