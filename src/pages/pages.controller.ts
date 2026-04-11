@@ -51,6 +51,12 @@ export class PagesController {
     return this.pagesService.findAllGlobal(query);
   }
 
+  @Get('admin/:id')
+  @Roles(Role.Admin, Role.Editor)
+  findAdminOne(@Param('id') id: string) {
+    return this.pagesService.findAdminOne(id);
+  }
+
   @Get('domain/:domainSlug')
   @Public()
   findAllByDomainSlug(

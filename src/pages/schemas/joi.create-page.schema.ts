@@ -1,5 +1,6 @@
 import * as Joi from 'joi';
 import { PageStatus } from '../enums/page-status.enum';
+import { pageBlocksSchema } from './joi.page-block.schema';
 
 export const createPageSchema = Joi.object({
   domainId: Joi.string().hex().length(24).optional(),
@@ -16,4 +17,5 @@ export const createPageSchema = Joi.object({
     .default(PageStatus.Draft)
     .optional(),
   seo: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
+  blocks: pageBlocksSchema.optional(),
 });
