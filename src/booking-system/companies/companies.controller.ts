@@ -41,7 +41,7 @@ export class CompaniesController {
    *   "settings": {
    *     "defaultBookingDuration": 60,
    *     "advanceBookingDays": 30,
-   *     "timeZone": "America/Los_Angeles"
+   *     "timeZone": "UTC"
    *   }
    * }
    */

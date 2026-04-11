@@ -113,6 +113,23 @@ export class DomainsService {
     return domain as DomainDocument;
   }
 
+  async getActiveBySlug(slug: string): Promise<DomainDocument> {
+    const trimmedSlug = slug?.trim();
+    if (!trimmedSlug || !/^[a-z0-9-]+$/.test(trimmedSlug)) {
+      throw new NotFoundException('Invalid domain slug format');
+    }
+
+    const domain = await this.domainModel
+      .findOne({ slug: trimmedSlug, isActive: true })
+      .lean()
+      .exec();
+    if (!domain) {
+      throw new NotFoundException('Active domain not found');
+    }
+
+    return domain as DomainDocument;
+  }
+
   private async ensureUniqueness(code: string, slug: string): Promise<void> {
     const [existingByCode, existingBySlug] = await Promise.all([
       this.domainModel.findOne({ code }),
