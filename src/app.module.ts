@@ -17,6 +17,7 @@ import { DomainsModule } from './domains/domains.module';
 import { EventsModule } from './events/events.module';
 import { LocationsModule } from './locations/locations.module';
 import { MediaModule } from './media/media.module';
+import { MenusModule } from './menus/menus.module';
 import { PagesModule } from './pages/pages.module';
 import { PartnersModule } from './partners/partners.module';
 import { PeopleModule } from './people/people.module';
@@ -61,6 +62,7 @@ import { cwd } from 'process';
     BookingSystemModule,
     DomainsModule,
     MediaModule,
+    MenusModule,
     PagesModule,
     LocationsModule,
     PeopleModule,
