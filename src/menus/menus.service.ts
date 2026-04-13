@@ -8,12 +8,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'crypto';
 import { Model } from 'mongoose';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
-import { Domain, DomainDocument } from '@/domains/schemas/domain.schema';
-import { Page, PageDocument } from '@/pages/schemas/page.schema';
-import { PageStatus } from '@/pages/enums/page-status.enum';
+import { DomainsService } from '@/domains/domains.service';
+import { PagesService } from '@/pages/pages.service';
 import { CreateMenuDto, MenuItemDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenuItemType } from './enums/menu-item-type.enum';
@@ -33,8 +36,8 @@ type ResolvedMenu = Omit<MenuDocument, 'items'> & {
 export class MenusService {
   constructor(
     @InjectModel(Menu.name) private menuModel: Model<MenuDocument>,
-    @InjectModel(Domain.name) private domainModel: Model<DomainDocument>,
-    @InjectModel(Page.name) private pageModel: Model<PageDocument>,
+    private domainsService: DomainsService,
+    private pagesService: PagesService,
   ) {}
 
   async create(createMenuDto: CreateMenuDto): Promise<ResolvedMenu> {
@@ -54,8 +57,8 @@ export class MenusService {
     queryParams: MenuAdminQueryParams = {},
   ): Promise<ResolvedMenu[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     const query: Record<string, unknown> = {};
     if (typeof safeParams.key === 'string') {
@@ -80,7 +83,9 @@ export class MenusService {
       .lean()
       .exec();
 
-    const resolved = await Promise.all(menus.map((menu) => this.toAdminMenu(menu)));
+    const resolved = await Promise.all(
+      menus.map((menu) => this.toAdminMenu(menu)),
+    );
     return resolved;
   }
 
@@ -114,7 +119,7 @@ export class MenusService {
     domainSlug: string,
     key: string,
   ): Promise<ResolvedMenu> {
-    const domain = await this.findActiveDomainBySlug(domainSlug);
+    const domain = await this.domainsService.getActiveBySlug(domainSlug);
     const menu = await this.menuModel
       .findOne({ key, isActive: true, domainId: domain._id })
       .lean()
@@ -126,7 +131,10 @@ export class MenusService {
     return this.toPublicMenu(menu);
   }
 
-  async update(id: string, updateMenuDto: UpdateMenuDto): Promise<ResolvedMenu> {
+  async update(
+    id: string,
+    updateMenuDto: UpdateMenuDto,
+  ): Promise<ResolvedMenu> {
     const validId = validateObjectId(id);
     if (!validId) {
       throw new NotFoundException('Invalid menu ID format');
@@ -154,25 +162,38 @@ export class MenusService {
         typeof updateMenuDto.isActive === 'boolean'
           ? updateMenuDto.isActive
           : existing.isActive,
-      items: updateMenuDto.items || (existing.items as unknown as MenuItemDto[]),
+      items:
+        updateMenuDto.items || (existing.items as unknown as MenuItemDto[]),
     });
     await this.ensureUniqueKey(key, domainId, validId);
 
-    const updateData = {
-      ...updateMenuDto,
-    } as Record<string, unknown>;
+    const updateData: Record<string, unknown> = {};
+    if (updateMenuDto.key !== undefined) {
+      updateData.key = updateMenuDto.key;
+    }
+    if (updateMenuDto.title !== undefined) {
+      updateData.title = updateMenuDto.title;
+    }
+    if (updateMenuDto.isActive !== undefined) {
+      updateData.isActive = updateMenuDto.isActive;
+    }
     if (updateMenuDto.items) {
       updateData.items = this.normalizeItems(updateMenuDto.items);
     }
-    if (hasDomainIdField && !domainId) {
+    if (hasDomainIdField && domainId) {
+      updateData.domainId = domainId;
+    } else if (hasDomainIdField) {
       updateData.$unset = { domainId: 1 };
-      delete updateData.domainId;
     }
 
     const menu = await this.menuModel
       .findByIdAndUpdate(validId, updateData, { new: true })
       .lean()
       .exec();
+
+    if (!menu) {
+      throw new NotFoundException('Menu not found');
+    }
 
     return this.toAdminMenu(menu as MenuDocument);
   }
@@ -199,7 +220,9 @@ export class MenusService {
     items?: MenuItemDto[];
   }): Promise<void> {
     if (menu.domainId) {
-      const domain = await this.findDomainById(menu.domainId).catch(() => null);
+      const domain = await this.domainsService
+        .findOne(menu.domainId)
+        .catch(() => null);
       if (!domain) {
         throw new BadRequestException(
           `Referenced domain not found: ${menu.domainId}`,
@@ -210,12 +233,11 @@ export class MenusService {
     await this.validateItems(menu.items || []);
   }
 
-  private async validateItems(
-    items: MenuItemDto[],
-    depth = 0,
-  ): Promise<void> {
+  private async validateItems(items: MenuItemDto[], depth = 0): Promise<void> {
     if (depth > 1) {
-      throw new BadRequestException('Menu items support only one level of nesting');
+      throw new BadRequestException(
+        'Menu items support only one level of nesting',
+      );
     }
 
     for (const item of items) {
@@ -239,7 +261,9 @@ export class MenusService {
       }
 
       if (item.type === MenuItemType.Domain && item.targetId) {
-        const exists = await this.findDomainById(item.targetId).catch(() => null);
+        const exists = await this.domainsService
+          .findOne(item.targetId)
+          .catch(() => null);
         if (!exists) {
           throw new BadRequestException(
             `Referenced domain not found: ${item.targetId}`,
@@ -248,7 +272,7 @@ export class MenusService {
       }
 
       if (item.type === MenuItemType.Page && item.targetId) {
-        const exists = await this.findPageById(item.targetId);
+        const exists = await this.pagesService.findReferenceById(item.targetId);
         if (!exists) {
           throw new BadRequestException(
             `Referenced page not found: ${item.targetId}`,
@@ -332,7 +356,9 @@ export class MenusService {
     items: MenuItemDto[],
     includeBroken: boolean,
   ): Promise<ResolvedMenuItem[]> {
-    const visibleItems = includeBroken ? items : items.filter((i) => i.isVisible !== false);
+    const visibleItems = includeBroken
+      ? items
+      : items.filter((i) => i.isVisible !== false);
     const resolved = await Promise.all(
       visibleItems
         .sort((a, b) => a.order - b.order)
@@ -351,7 +377,10 @@ export class MenusService {
       return null;
     }
 
-    const children = await this.resolveItems(item.children || [], includeBroken);
+    const children = await this.resolveItems(
+      item.children || [],
+      includeBroken,
+    );
     return {
       ...item,
       id: item.id || randomUUID(),
@@ -360,8 +389,8 @@ export class MenusService {
       ...(resolvedUrl
         ? { resolvedUrl }
         : includeBroken
-          ? { isBrokenTarget: true }
-          : {}),
+        ? { isBrokenTarget: true }
+        : {}),
       children,
     };
   }
@@ -375,133 +404,50 @@ export class MenusService {
     }
 
     if (!item.targetId) {
-      return includeBroken ? null : null;
+      return null;
     }
 
     if (item.type === MenuItemType.Domain) {
       const domain = includeBroken
-        ? await this.findDomainById(item.targetId).catch(() => null)
-        : await this.findActiveDomainById(item.targetId).catch(() => null);
+        ? await this.domainsService.findOne(item.targetId).catch(() => null)
+        : await this.domainsService
+            .getActiveById(item.targetId)
+            .catch(() => null);
       if (!domain) {
         return null;
       }
 
-      return `/${domain.slug}`;
+      return `/${encodeURIComponent(domain.slug)}`;
     }
 
     if (item.type === MenuItemType.Page) {
       const page = includeBroken
-        ? await this.findPageById(item.targetId)
-        : await this.findPublishedPageById(item.targetId);
+        ? await this.pagesService.findReferenceById(item.targetId)
+        : await this.pagesService.findPublishedReferenceById(item.targetId);
       if (!page) {
         return null;
       }
 
       if (page.domainId) {
         const domain = includeBroken
-          ? await this.findDomainById(page.domainId.toString()).catch(() => null)
-          : await this.findActiveDomainById(page.domainId.toString()).catch(
-              () => null,
-            );
+          ? await this.domainsService
+              .findOne(page.domainId.toString())
+              .catch(() => null)
+          : await this.domainsService
+              .getActiveById(page.domainId.toString())
+              .catch(() => null);
         if (!domain) {
           return null;
         }
 
-        return `/pages/domain/${domain.slug}/${page.slug}`;
+        return `/pages/domain/${encodeURIComponent(
+          domain.slug,
+        )}/${encodeURIComponent(page.slug)}`;
       }
 
-      return `/pages/global/${page.slug}`;
+      return `/pages/global/${encodeURIComponent(page.slug)}`;
     }
 
     return null;
-  }
-
-  private async findDomainById(id: string): Promise<DomainDocument> {
-    const validId = validateObjectId(id);
-    if (!validId) {
-      throw new NotFoundException('Invalid domain ID format');
-    }
-
-    const domain = await this.domainModel.findById(validId).lean().exec();
-    if (!domain) {
-      throw new NotFoundException('Domain not found');
-    }
-
-    return domain as DomainDocument;
-  }
-
-  private async findActiveDomainById(id: string): Promise<DomainDocument> {
-    const validId = validateObjectId(id);
-    if (!validId) {
-      throw new NotFoundException('Invalid domain ID format');
-    }
-
-    const domain = await this.domainModel
-      .findOne({ _id: validId, isActive: true })
-      .lean()
-      .exec();
-    if (!domain) {
-      throw new NotFoundException('Active domain not found');
-    }
-
-    return domain as DomainDocument;
-  }
-
-  private async findActiveDomainBySlug(slug: string): Promise<DomainDocument> {
-    const trimmedSlug = slug?.trim();
-    if (!trimmedSlug || !/^[a-z0-9-]+$/.test(trimmedSlug)) {
-      throw new NotFoundException('Invalid domain slug format');
-    }
-
-    const domain = await this.domainModel
-      .findOne({ slug: trimmedSlug, isActive: true })
-      .lean()
-      .exec();
-    if (!domain) {
-      throw new NotFoundException('Active domain not found');
-    }
-
-    return domain as DomainDocument;
-  }
-
-  private async findPageById(id: string): Promise<PageDocument | null> {
-    const validId = validateObjectId(id);
-    if (!validId) {
-      return null;
-    }
-
-    const page = await this.pageModel.findById(validId).lean().exec();
-    return (page as PageDocument) || null;
-  }
-
-  private async findPublishedPageById(id: string): Promise<PageDocument | null> {
-    const validId = validateObjectId(id);
-    if (!validId) {
-      return null;
-    }
-
-    const page = await this.pageModel
-      .findOne({ _id: validId, status: PageStatus.Published })
-      .lean()
-      .exec();
-    return (page as PageDocument) || null;
-  }
-
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
   }
 }

@@ -50,3 +50,4 @@ tsconfig.tsbuildinfo
 *.tmp
 *.temp
 .cache
+/uploads

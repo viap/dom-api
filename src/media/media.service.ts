@@ -1,44 +1,131 @@
 import {
-  ConflictException,
+  BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { imageSize } from 'image-size';
+import { access, mkdir, unlink, writeFile } from 'fs/promises';
 import { Model } from 'mongoose';
+import { randomUUID } from 'crypto';
+import { basename, extname, join, resolve, sep } from 'path';
+import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
 import { CreateMediaDto } from './dto/create-media.dto';
 import { UpdateMediaDto } from './dto/update-media.dto';
-import { MediaQueryParams } from './types/query-params.interface';
+import { UploadMediaDto } from './dto/upload-media.dto';
+import { MediaKind } from './enums/media-kind.enum';
 import { Media, MediaDocument } from './schemas/media.schema';
+import { MediaAdminQueryParams } from './types/admin-query-params.interface';
+import { MediaQueryParams } from './types/query-params.interface';
+import { UploadedMediaFile } from './types/uploaded-media-file.interface';
+
+type SupportedImageFormat = 'jpeg' | 'png' | 'webp' | 'gif';
+
+const IMAGE_FORMAT_TO_MIME: Record<SupportedImageFormat, string> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+};
+
+const IMAGE_FORMAT_TO_EXTENSION: Record<SupportedImageFormat, string> = {
+  jpeg: '.jpg',
+  png: '.png',
+  webp: '.webp',
+  gif: '.gif',
+};
+
+const EXTENSION_TO_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
 
 @Injectable()
 export class MediaService {
+  private readonly uploadsRoot = join(process.cwd(), 'uploads', 'media');
+  private readonly allowedMimeTypes = new Set(Object.values(IMAGE_FORMAT_TO_MIME));
+
   constructor(
     @InjectModel(Media.name) private mediaModel: Model<MediaDocument>,
   ) {}
 
   async create(createMediaDto: CreateMediaDto): Promise<MediaDocument> {
-    const existingMedia = await this.mediaModel.findOne({
-      storageKey: createMediaDto.storageKey,
-    });
-    if (existingMedia) {
-      throw new ConflictException('Media with this storage key already exists');
+    if (!this.isExternalUrl(createMediaDto.url)) {
+      throw new BadRequestException(
+        'External media URL must use http or https',
+      );
     }
 
-    const media = new this.mediaModel(createMediaDto);
+    const media = new this.mediaModel({
+      ...createMediaDto,
+      title: this.normalizeOptionalText(createMediaDto.title),
+      alt: this.normalizeOptionalText(createMediaDto.alt),
+    });
+
     return media.save();
   }
 
   async findAll(queryParams: MediaQueryParams = {}): Promise<MediaDocument[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     return this.mediaModel
       .find({ isPublished: true })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async findAllAdmin(
+    queryParams: MediaAdminQueryParams = {},
+  ): Promise<MediaDocument[]> {
+    const safeParams = safeFindParams(queryParams);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = {};
+
+    if (typeof safeParams.kind === 'string') {
+      query.kind = safeParams.kind;
+    }
+
+    if (typeof safeParams.search === 'string' && safeParams.search.trim()) {
+      query.title = {
+        $regex: this.escapeRegExp(safeParams.search.trim()),
+        $options: 'i',
+      };
+    }
+
+    const createdAt: Record<string, Date> = {};
+    if (typeof safeParams.createdFrom === 'string') {
+      createdAt.$gte = this.parseIsoDate(safeParams.createdFrom, 'createdFrom');
+    }
+    if (typeof safeParams.createdTo === 'string') {
+      createdAt.$lte = this.parseIsoDate(safeParams.createdTo, 'createdTo');
+    }
+    if (createdAt.$gte && createdAt.$lte && createdAt.$gte > createdAt.$lte) {
+      throw new BadRequestException('createdFrom must be before createdTo');
+    }
+    if (Object.keys(createdAt).length > 0) {
+      query.createdAt = createdAt;
+    }
+
+    return this.mediaModel
+      .find(query)
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
@@ -63,6 +150,72 @@ export class MediaService {
     return media as MediaDocument;
   }
 
+  async getContent(id: string): Promise<{ path: string; mimeType: string }> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      throw new NotFoundException('Invalid media ID format');
+    }
+
+    const media = await this.mediaModel
+      .findOne({ _id: validId, isPublished: true })
+      .lean()
+      .exec();
+    if (!media || !this.isUploadedMedia(media)) {
+      throw new NotFoundException('Media content not found');
+    }
+
+    const path = this.resolveUploadedFilePath(media.storageKey);
+    await access(path).catch(() => {
+      throw new NotFoundException('Media content not found');
+    });
+
+    return {
+      path,
+      mimeType: media.mimeType || 'application/octet-stream',
+    };
+  }
+
+  async upload(
+    file: UploadedMediaFile,
+    uploadMediaDto: UploadMediaDto = {},
+  ): Promise<MediaDocument> {
+    const format = this.detectImageFormat(file);
+    const mimeType = IMAGE_FORMAT_TO_MIME[format];
+    const extension = IMAGE_FORMAT_TO_EXTENSION[format];
+    const dimensions = imageSize(file.buffer as unknown as Uint8Array);
+
+    const now = new Date();
+    const year = now.getUTCFullYear().toString();
+    const month = (now.getUTCMonth() + 1).toString().padStart(2, '0');
+    const filename = `${Date.now()}-${randomUUID()}${extension}`;
+    const storageKey = `${year}/${month}/${filename}`;
+    const targetDir = join(this.uploadsRoot, year, month);
+    const targetPath = join(targetDir, filename);
+    const media = new this.mediaModel({
+      kind: MediaKind.Image,
+      storageKey,
+      title: this.normalizeTitle(uploadMediaDto.title, file.originalname),
+      mimeType,
+      sizeBytes: file.size,
+      alt: this.normalizeOptionalText(uploadMediaDto.alt),
+      width: dimensions.width,
+      height: dimensions.height,
+      isPublished: true,
+    });
+
+    media.url = this.buildContentUrl(media._id.toString());
+
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(targetPath, file.buffer as unknown as Uint8Array);
+
+    try {
+      return await media.save();
+    } catch (error) {
+      await unlink(targetPath).catch(() => undefined);
+      throw error;
+    }
+  }
+
   async update(
     id: string,
     updateMediaDto: UpdateMediaDto,
@@ -72,20 +225,18 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    if (updateMediaDto.storageKey) {
-      const existingMedia = await this.mediaModel.findOne({
-        storageKey: updateMediaDto.storageKey,
-        _id: { $ne: validId },
-      });
-      if (existingMedia) {
-        throw new ConflictException(
-          'Media with this storage key already exists',
-        );
-      }
-    }
+    const updateData = {
+      ...updateMediaDto,
+      ...(typeof updateMediaDto.title === 'string'
+        ? { title: this.normalizeOptionalText(updateMediaDto.title) }
+        : {}),
+      ...(typeof updateMediaDto.alt === 'string'
+        ? { alt: this.normalizeOptionalText(updateMediaDto.alt) }
+        : {}),
+    };
 
     const media = await this.mediaModel
-      .findByIdAndUpdate(validId, updateMediaDto, { new: true })
+      .findByIdAndUpdate(validId, updateData, { new: true })
       .lean()
       .exec();
     if (!media) {
@@ -101,11 +252,25 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    const result = await this.mediaModel.findByIdAndDelete(validId).exec();
-    if (!result) {
+    const media = await this.mediaModel.findById(validId).lean().exec();
+    if (!media) {
       throw new NotFoundException('Media not found');
     }
 
+    if (this.isUploadedMedia(media)) {
+      const path = this.resolveUploadedFilePath(media.storageKey);
+
+      // Delete the file first so the public asset cannot outlive the record.
+      try {
+        await unlink(path);
+      } catch {
+        throw new InternalServerErrorException(
+          'Failed to delete media file from storage',
+        );
+      }
+    }
+
+    await this.mediaModel.findByIdAndDelete(validId).exec();
     return true;
   }
 
@@ -119,21 +284,164 @@ export class MediaService {
     return count > 0;
   }
 
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
+  async existingIds(ids: string[]): Promise<Set<string>> {
+    return resolveExistingIds(this.mediaModel, ids);
   }
 
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
+  async existsPublished(id: string): Promise<boolean> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return false;
     }
 
-    return 0;
+    const count = await this.mediaModel.countDocuments({
+      _id: validId,
+      isPublished: true,
+    });
+    return count > 0;
+  }
+
+  async existingPublishedIds(ids: string[]): Promise<Set<string>> {
+    const validIds = ids
+      .map((id) => validateObjectId(id))
+      .filter((id): id is string => Boolean(id));
+
+    if (!validIds.length) {
+      return new Set<string>();
+    }
+
+    const media = await this.mediaModel
+      .find({ _id: { $in: validIds }, isPublished: true })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+
+    return new Set(media.map((item) => item._id.toString()));
+  }
+
+  private detectImageFormat(file: UploadedMediaFile): SupportedImageFormat {
+    const format = this.readImageFormatFromBuffer(file.buffer);
+    if (!format) {
+      throw new BadRequestException('Unsupported media type');
+    }
+
+    const detectedMimeType = IMAGE_FORMAT_TO_MIME[format];
+    if (file.mimetype && file.mimetype !== detectedMimeType) {
+      throw new BadRequestException('Uploaded file does not match MIME type');
+    }
+
+    const originalExtension = extname(file.originalname).toLowerCase();
+    if (originalExtension) {
+      const originalMimeType = EXTENSION_TO_MIME[originalExtension];
+      if (originalMimeType && originalMimeType !== detectedMimeType) {
+        throw new BadRequestException(
+          'Uploaded file does not match file extension',
+        );
+      }
+    }
+
+    if (!this.allowedMimeTypes.has(detectedMimeType)) {
+      throw new BadRequestException('Unsupported media type');
+    }
+
+    return format;
+  }
+
+  private normalizeTitle(
+    input: string | undefined,
+    originalname: string,
+  ): string {
+    const normalizedInput = this.normalizeOptionalText(input);
+    if (normalizedInput) {
+      return normalizedInput;
+    }
+
+    const sourceName = basename(originalname, extname(originalname))
+      .replace(/[_-]+/g, ' ')
+      .trim();
+
+    return sourceName || 'Untitled media';
+  }
+
+  private normalizeOptionalText(value: string | undefined): string {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private buildContentUrl(id: string): string {
+    return `/media/${id}/content`;
+  }
+
+  private isExternalUrl(url: string): boolean {
+    return /^https?:\/\//i.test(url);
+  }
+
+  private isUploadedMedia(media: Pick<Media, 'storageKey' | 'url'>): media is Pick<
+    Media,
+    'storageKey' | 'url'
+  > & { storageKey: string } {
+    return Boolean(media.storageKey) && !this.isExternalUrl(media.url);
+  }
+
+  private resolveUploadedFilePath(storageKey: string): string {
+    const root = resolve(this.uploadsRoot);
+    const path = resolve(root, storageKey);
+    if (path !== root && !path.startsWith(`${root}${sep}`)) {
+      throw new BadRequestException('Invalid media storage key');
+    }
+
+    return path;
+  }
+
+  private parseIsoDate(value: string, field: string): Date {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`${field} must be a valid ISO date`);
+    }
+
+    return date;
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private readImageFormatFromBuffer(
+    buffer: Buffer,
+  ): SupportedImageFormat | null {
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+      return 'jpeg';
+    }
+
+    if (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47 &&
+      buffer[4] === 0x0d &&
+      buffer[5] === 0x0a &&
+      buffer[6] === 0x1a &&
+      buffer[7] === 0x0a
+    ) {
+      return 'png';
+    }
+
+    if (
+      buffer.length >= 6 &&
+      (buffer.subarray(0, 6).toString('ascii') === 'GIF87a' ||
+        buffer.subarray(0, 6).toString('ascii') === 'GIF89a')
+    ) {
+      return 'gif';
+    }
+
+    if (
+      buffer.length >= 12 &&
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return 'webp';
+    }
+
+    return null;
   }
 }

@@ -126,4 +126,13 @@ describe('JoiValidationPipe with NoSQL Injection Prevention', () => {
       expect(message).toContain('Validation failed:');
     }
   });
+
+  it('should reject unknown fields', () => {
+    const invalidInput: SanitizableObject = {
+      name: 'John Doe',
+      role: 'admin',
+    };
+
+    expect(() => pipe.transform(invalidInput)).toThrow(BadRequestException);
+  });
 });

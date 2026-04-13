@@ -6,6 +6,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -35,8 +40,8 @@ export class PeopleService {
     queryParams: PersonQueryParams = {},
   ): Promise<PersonDocument[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
     const query: Record<string, unknown> = { isPublished: true };
 
     if (safeParams.fullName && typeof safeParams.fullName === 'string') {
@@ -119,6 +124,33 @@ export class PeopleService {
     return count > 0;
   }
 
+  async existingIds(ids: string[]): Promise<Set<string>> {
+    return resolveExistingIds(this.personModel, ids);
+  }
+
+  async findPublishedSummariesByIds(
+    ids: string[],
+  ): Promise<Array<{ _id: string; fullName: string }>> {
+    const validIds = ids
+      .map((id) => validateObjectId(id))
+      .filter((id): id is string => Boolean(id));
+
+    if (!validIds.length) {
+      return [];
+    }
+
+    const people = await this.personModel
+      .find({ _id: { $in: validIds }, isPublished: true })
+      .select({ _id: 1, fullName: 1 })
+      .lean()
+      .exec();
+
+    return people.map((person) => ({
+      _id: person._id.toString(),
+      fullName: person.fullName,
+    }));
+  }
+
   private async validateRefs(userId?: string, photoId?: string): Promise<void> {
     if (userId) {
       const user = await this.usersService.getById(userId);
@@ -128,28 +160,10 @@ export class PeopleService {
     }
 
     if (photoId) {
-      const mediaExists = await this.mediaService.exists(photoId);
+      const mediaExists = await this.mediaService.existsPublished(photoId);
       if (!mediaExists) {
-        throw new BadRequestException('Referenced media not found');
+        throw new BadRequestException('Referenced published media not found');
       }
     }
-  }
-
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
   }
 }

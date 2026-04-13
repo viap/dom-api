@@ -43,7 +43,10 @@ export class MenusController {
   @Public()
   findPublicByDomainAndKey(
     @Param(new JoiValidationPipe(menuDomainKeyParamsSchema))
-    params: { domainSlug: string; key: string },
+    params: {
+      domainSlug: string;
+      key: string;
+    },
   ) {
     return this.menusService.findPublicByDomainAndKey(
       params.domainSlug,
@@ -61,7 +64,9 @@ export class MenusController {
   @Public()
   findPublicGlobalByKey(
     @Param(new JoiValidationPipe(menuKeyParamsSchema))
-    params: { key: string },
+    params: {
+      key: string;
+    },
   ) {
     return this.menusService.findPublicGlobalByKey(params.key);
   }

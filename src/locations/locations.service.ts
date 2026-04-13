@@ -2,6 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -27,8 +31,8 @@ export class LocationsService {
     queryParams: LocationQueryParams = {},
   ): Promise<LocationDocument[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     const query: Record<string, unknown> = {};
     if (safeParams.title && typeof safeParams.title === 'string') {
@@ -103,23 +107,5 @@ export class LocationsService {
 
     const count = await this.locationModel.countDocuments({ _id: validId });
     return count > 0;
-  }
-
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
   }
 }

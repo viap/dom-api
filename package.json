@@ -32,10 +32,12 @@
     "@nestjs/websockets": "^10.2.6",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
+    "image-size": "^2.0.2",
     "joi": "^17.9.2",
     "mongoose": "^7.3.4",
     "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sanitize-html": "^2.17.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

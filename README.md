@@ -183,6 +183,16 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - `GET /therapy-sessions/me` - Get my therapy sessions
 - `POST /therapy-requests` - Create therapy request
 
+### Media
+
+- `POST /media/upload` uploads a local image and creates a Media record for it.
+- `POST /media` creates an external media record only. The `url` must be an absolute `http` or `https` URL.
+- `GET /media/:id/content` is the only public delivery path for uploaded Media files.
+- Uploaded media visibility is controlled by `isPublished`. Unpublished uploaded assets are not reachable by raw filesystem URL or by the content endpoint.
+- For uploaded files, `storageKey`, `url`, `mimeType`, `sizeBytes`, `width`, and `height` are system-managed fields. Admin updates are limited to `title`, `alt`, and `isPublished`.
+- Frontend and admin clients must render uploaded assets from the returned `url` field and must not construct Media URLs from `storageKey`.
+- `/uploads/media/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
+
 ### Real-time WebSocket Events
 
 - `auth-by-token` - Authenticate WebSocket connection

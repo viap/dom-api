@@ -46,7 +46,10 @@ export class PagesController {
   @Roles(Role.Admin, Role.Editor)
   findAllGlobal(
     @Query(new JoiValidationPipe(pageGlobalQuerySchema))
-    query: { limit?: string; offset?: string },
+    query: {
+      limit?: string;
+      offset?: string;
+    },
   ) {
     return this.pagesService.findAllGlobal(query);
   }
@@ -72,7 +75,9 @@ export class PagesController {
   @Public()
   findOneGlobalBySlug(
     @Param(new JoiValidationPipe(pageGlobalPageParamsSchema))
-    params: { pageSlug: string },
+    params: {
+      pageSlug: string;
+    },
   ) {
     return this.pagesService.findOneGlobalBySlug(params.pageSlug);
   }
@@ -81,7 +86,10 @@ export class PagesController {
   @Public()
   findOneByDomainSlugAndPageSlug(
     @Param(new JoiValidationPipe(pageDomainPageParamsSchema))
-    params: { domainSlug: string; pageSlug: string },
+    params: {
+      domainSlug: string;
+      pageSlug: string;
+    },
   ) {
     return this.pagesService.findOneByDomainSlugAndPageSlug(
       params.domainSlug,

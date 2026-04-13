@@ -2,7 +2,8 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { MenuItem, menuItemSchema } from './menu-item.schema';
 
-export type MenuDocument = Menu & Document & { createdAt: Date; updatedAt: Date };
+export type MenuDocument = Menu &
+  Document & { createdAt: Date; updatedAt: Date };
 
 @Schema({ timestamps: true })
 export class Menu {

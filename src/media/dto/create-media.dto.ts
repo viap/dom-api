@@ -2,7 +2,6 @@ import { MediaKind } from '../enums/media-kind.enum';
 
 export interface CreateMediaDto {
   kind: MediaKind;
-  storageKey: string;
   url: string;
   title?: string;
   mimeType?: string;

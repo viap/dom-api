@@ -27,8 +27,12 @@ export class MenuItem {
   @Prop({ required: true, default: false })
   openInNewTab: boolean;
 
-  @Prop({ type: Array, default: [] })
+  @Prop({ default: [] })
   children: MenuItem[];
 }
 
 export const menuItemSchema = SchemaFactory.createForClass(MenuItem);
+menuItemSchema.remove('children');
+menuItemSchema.add({
+  children: { type: [menuItemSchema], default: [] },
+});

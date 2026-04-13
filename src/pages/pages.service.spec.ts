@@ -67,10 +67,16 @@ describe('PagesService', () => {
   const mockPeopleService = {
     exists: jest.fn(),
     findOne: jest.fn(),
+    existingIds: jest.fn(),
+    findPublishedSummariesByIds: jest.fn(),
   };
-  const mockPartnersService = { exists: jest.fn() };
-  const mockEventsService = { exists: jest.fn() };
-  const mockMediaService = { exists: jest.fn() };
+  const mockPartnersService = { exists: jest.fn(), existingIds: jest.fn() };
+  const mockEventsService = { exists: jest.fn(), existingIds: jest.fn() };
+  const mockMediaService = {
+    exists: jest.fn(),
+    existingIds: jest.fn(),
+    existingPublishedIds: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -102,9 +108,31 @@ describe('PagesService', () => {
       _id: id,
       fullName: `Person ${id.slice(-4)}`,
     }));
+    mockPeopleService.existingIds.mockImplementation(
+      async (ids: string[]) => new Set(ids),
+    );
+    mockPeopleService.findPublishedSummariesByIds.mockImplementation(
+      async (ids: string[]) =>
+        ids.map((id) => ({
+          _id: id,
+          fullName: `Person ${id.slice(-4)}`,
+        })),
+    );
     mockPartnersService.exists.mockResolvedValue(true);
+    mockPartnersService.existingIds.mockImplementation(
+      async (ids: string[]) => new Set(ids),
+    );
     mockEventsService.exists.mockResolvedValue(true);
+    mockEventsService.existingIds.mockImplementation(
+      async (ids: string[]) => new Set(ids),
+    );
     mockMediaService.exists.mockResolvedValue(true);
+    mockMediaService.existingIds.mockImplementation(
+      async (ids: string[]) => new Set(ids),
+    );
+    mockMediaService.existingPublishedIds.mockImplementation(
+      async (ids: string[]) => new Set(ids),
+    );
   });
 
   it('should be defined', () => {
@@ -196,6 +224,112 @@ describe('PagesService', () => {
     );
   });
 
+  it('should reject unpublished media references in page blocks', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+    mockMediaService.existingPublishedIds.mockResolvedValue(new Set());
+
+    await expect(
+      service.create({
+        title: 'About Us',
+        slug: 'about-us',
+        blocks: [
+          {
+            id: 'hero',
+            type: PageBlockType.RichText,
+            media: { mediaId: '507f1f77bcf86cd799439221' },
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject external buttons without url at the service layer', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.create({
+        title: 'About Us',
+        slug: 'about-us',
+        blocks: [
+          {
+            id: 'hero',
+            type: PageBlockType.Hero,
+            buttons: [
+              {
+                label: 'Visit',
+                type: BlockButtonType.External,
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject page buttons that also include url at the service layer', async () => {
+    mockPageModel.countDocuments.mockResolvedValue(1);
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.create({
+        title: 'About Us',
+        slug: 'about-us',
+        blocks: [
+          {
+            id: 'hero',
+            type: PageBlockType.Hero,
+            buttons: [
+              {
+                label: 'About',
+                type: BlockButtonType.Page,
+                targetId: mockPage._id,
+                url: 'https://example.com/about',
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject cta blocks without buttons at the service layer', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.create({
+        title: 'About Us',
+        slug: 'about-us',
+        blocks: [
+          {
+            id: 'apply',
+            type: PageBlockType.Cta,
+            buttons: [],
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject entity collections without items at the service layer', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.create({
+        title: 'About Us',
+        slug: 'about-us',
+        blocks: [
+          {
+            id: 'team',
+            type: PageBlockType.EntityCollection,
+            entityType: EntityCollectionEntityType.People,
+            layout: EntityCollectionLayout.Grid,
+            items: [],
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('should reject duplicate block ids', async () => {
     mockPageModel.findOne.mockResolvedValueOnce(null);
 
@@ -204,8 +338,12 @@ describe('PagesService', () => {
         title: 'About Us',
         slug: 'about-us',
         blocks: [
-          { id: 'dup', type: PageBlockType.Cta, buttons: [] },
           { id: 'dup', type: PageBlockType.Hero },
+          {
+            id: 'dup',
+            type: PageBlockType.ApplicationForm,
+            applicationType: ApplicationFormType.General,
+          },
         ],
       }),
     ).rejects.toThrow(BadRequestException);
@@ -234,7 +372,7 @@ describe('PagesService', () => {
 
   it('should reject wrong entityCollection refs', async () => {
     mockPageModel.findOne.mockResolvedValueOnce(null);
-    mockEventsService.exists.mockResolvedValue(false);
+    mockEventsService.existingIds.mockResolvedValue(new Set<string>());
 
     await expect(
       service.create({
@@ -251,6 +389,28 @@ describe('PagesService', () => {
         ],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should return published pages for a valid public domain list query', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([mockPage]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(
+      service.findAll({
+        domainId: mockPage.domainId,
+        limit: '10',
+        offset: '0',
+      }),
+    ).resolves.toEqual([mockPage]);
   });
 
   it('should throw NotFoundException for invalid public item ids', async () => {
@@ -297,9 +457,9 @@ describe('PagesService', () => {
       }),
     });
 
-    await expect(service.findOneGlobalBySlug('privacy-policy')).resolves.toEqual(
-      mockGlobalPage,
-    );
+    await expect(
+      service.findOneGlobalBySlug('privacy-policy'),
+    ).resolves.toEqual(mockGlobalPage);
   });
 
   it('should reject unknown global page slugs', async () => {
@@ -328,6 +488,35 @@ describe('PagesService', () => {
     });
 
     await expect(service.findAllGlobal()).resolves.toEqual([mockGlobalPage]);
+  });
+
+  it('should return raw draft pages for admin global listing', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([
+                {
+                  ...mockGlobalPage,
+                  status: PageStatus.Draft,
+                  blocks: [
+                    { id: 'hidden', type: PageBlockType.Cta, isVisible: false },
+                  ],
+                },
+              ]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(service.findAllGlobal()).resolves.toEqual([
+      expect.objectContaining({
+        status: PageStatus.Draft,
+        blocks: [{ id: 'hidden', type: PageBlockType.Cta, isVisible: false }],
+      }),
+    ]);
   });
 
   it('should reject duplicate slug among global pages', async () => {
@@ -386,12 +575,12 @@ describe('PagesService', () => {
         }),
       }),
     });
-    mockPeopleService.findOne
-      .mockResolvedValueOnce({
+    mockPeopleService.findPublishedSummariesByIds.mockResolvedValueOnce([
+      {
         _id: '507f1f77bcf86cd799439221',
         fullName: 'Alice',
-      })
-      .mockRejectedValueOnce(new NotFoundException('Person not found'));
+      },
+    ]);
 
     await expect(service.findOne(mockPage._id)).resolves.toEqual(
       expect.objectContaining({
@@ -426,13 +615,13 @@ describe('PagesService', () => {
         }),
       }),
     });
-    mockPeopleService.findOne.mockRejectedValueOnce(
-      new NotFoundException('Person not found'),
-    );
+    mockPeopleService.findPublishedSummariesByIds.mockResolvedValueOnce([]);
 
     await expect(service.findOne(mockPage._id)).resolves.toEqual(
       expect.objectContaining({
-        blocks: [expect.not.objectContaining({ relatedPeople: expect.anything() })],
+        blocks: [
+          expect.not.objectContaining({ relatedPeople: expect.anything() }),
+        ],
       }),
     );
   });
@@ -490,6 +679,35 @@ describe('PagesService', () => {
     );
   });
 
+  it('should unset domainId when patch includes domainId null', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          domainId: mockPage.domainId,
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockGlobalPage,
+        }),
+      }),
+    });
+
+    await service.update(mockPage._id, { domainId: null });
+
+    expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockPage._id,
+      expect.objectContaining({
+        $unset: { domainId: 1 },
+      }),
+      { new: true },
+    );
+  });
+
   it('should replace full blocks array when patch includes blocks', async () => {
     mockPageModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnValue({
@@ -528,5 +746,23 @@ describe('PagesService', () => {
       }),
       { new: true },
     );
+  });
+
+  it('should throw when update result is unexpectedly null', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockPage),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, { title: 'Updated' }),
+    ).rejects.toThrow(NotFoundException);
   });
 });

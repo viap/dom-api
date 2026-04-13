@@ -10,16 +10,16 @@ export const createMediaSchema = Joi.object({
       'any.required': 'Media kind is required',
     }),
 
-  storageKey: Joi.string().trim().min(1).max(200).required().messages({
-    'string.empty': 'Storage key is required',
-    'string.max': 'Storage key cannot exceed 200 characters',
-  }),
-
-  url: Joi.string().trim().uri().max(500).required().messages({
-    'string.uri': 'Invalid URL format',
-    'string.empty': 'URL is required',
-    'string.max': 'URL cannot exceed 500 characters',
-  }),
+  url: Joi.string()
+    .trim()
+    .uri({ scheme: [/https?/] })
+    .max(500)
+    .required()
+    .messages({
+      'string.uri': 'Invalid URL format',
+      'string.empty': 'URL is required',
+      'string.max': 'URL cannot exceed 500 characters',
+    }),
 
   title: Joi.string().trim().max(150).allow('').optional().messages({
     'string.max': 'Title cannot exceed 150 characters',
@@ -52,4 +52,4 @@ export const createMediaSchema = Joi.object({
   }),
 
   isPublished: Joi.boolean().default(false).optional(),
-});
+}).required();

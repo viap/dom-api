@@ -10,6 +10,11 @@ const objectIdSchema = Joi.string().hex().length(24);
 const stringSchema = Joi.string().trim().max(5000);
 const spacingSchema = Joi.string().valid('none', 'sm', 'md', 'lg', 'xl');
 const variantSchema = Joi.string().valid('section', 'block', 'element');
+const attributeTokenSchema = Joi.string()
+  .trim()
+  .min(1)
+  .max(120)
+  .pattern(/^[a-zA-Z0-9_-]+$/);
 
 const blockButtonSchema = Joi.object({
   label: Joi.string().trim().min(1).max(150).required(),
@@ -19,38 +24,51 @@ const blockButtonSchema = Joi.object({
   targetId: Joi.string().trim().max(120).optional(),
   url: Joi.string().trim().uri().optional(),
   openInNewTab: Joi.boolean().default(false).optional(),
-  style: Joi.string()
-    .valid('primary', 'secondary', 'ghost', 'link')
-    .optional(),
+  style: Joi.string().valid('primary', 'secondary', 'ghost', 'link').optional(),
 })
   .custom((value, helpers) => {
     if (value.type === BlockButtonType.External) {
       if (!value.url) {
-        return helpers.error('any.invalid', {
+        return helpers.error('any.custom', {
           message: 'External buttons require url',
         });
       }
       if (value.targetId) {
-        return helpers.error('any.invalid', {
+        return helpers.error('any.custom', {
           message: 'External buttons must not include targetId',
         });
       }
     } else {
       if (!value.targetId) {
-        return helpers.error('any.invalid', {
+        return helpers.error('any.custom', {
           message: 'Internal buttons require targetId',
         });
       }
       if (value.url) {
-        return helpers.error('any.invalid', {
+        return helpers.error('any.custom', {
           message: 'Internal buttons must not include url',
+        });
+      }
+      if (
+        (value.type === BlockButtonType.Page ||
+          value.type === BlockButtonType.Domain) &&
+        !objectIdSchema.validate(value.targetId).error
+      ) {
+        return value;
+      }
+      if (
+        value.type === BlockButtonType.Page ||
+        value.type === BlockButtonType.Domain
+      ) {
+        return helpers.error('any.custom', {
+          message: `${value.type} buttons require a valid ObjectId targetId`,
         });
       }
     }
 
     return value;
   })
-  .messages({ 'any.invalid': '{{#message}}' });
+  .messages({ 'any.custom': '{{#message}}' });
 
 const mediaRefSchema = Joi.object({
   mediaId: objectIdSchema.required(),
@@ -77,8 +95,8 @@ const pageBlockBaseSchema = {
   subtitle: Joi.string().trim().min(1).max(300).optional(),
   description: stringSchema.optional(),
   isVisible: Joi.boolean().default(true).optional(),
-  anchorId: Joi.string().trim().min(1).max(120).optional(),
-  theme: Joi.string().trim().min(1).max(120).optional(),
+  anchorId: attributeTokenSchema.optional(),
+  theme: attributeTokenSchema.optional(),
   paddingTop: spacingSchema.optional(),
   paddingBottom: spacingSchema.optional(),
 };
@@ -103,7 +121,7 @@ const entityCollectionBlockSchema = Joi.object({
   layout: Joi.string()
     .valid(...Object.values(EntityCollectionLayout))
     .required(),
-  items: Joi.array().items(objectIdSchema).min(1).required(),
+  items: Joi.array().items(objectIdSchema).min(1).max(50).required(),
   cardVariant: Joi.string().trim().max(120).optional(),
 });
 
@@ -167,4 +185,4 @@ export const pageBlockSchema = Joi.alternatives()
   )
   .required();
 
-export const pageBlocksSchema = Joi.array().items(pageBlockSchema);
+export const pageBlocksSchema = Joi.array().items(pageBlockSchema).max(20);

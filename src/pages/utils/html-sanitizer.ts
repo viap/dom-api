@@ -1,9 +1,33 @@
+import sanitizeHtml from 'sanitize-html';
+
 export function sanitizeRichTextHtml(html: string): string {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '')
-    .replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, '')
-    .trim();
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'p',
+      'br',
+      'strong',
+      'em',
+      'u',
+      'blockquote',
+      'ul',
+      'ol',
+      'li',
+      'a',
+      'h2',
+      'h3',
+      'h4',
+      'img',
+    ],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt', 'title'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: {
+      img: ['http', 'https'],
+    },
+    disallowedTagsMode: 'discard',
+    allowProtocolRelative: false,
+    enforceHtmlBoundary: true,
+  }).trim();
 }

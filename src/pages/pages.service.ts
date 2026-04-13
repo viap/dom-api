@@ -8,6 +8,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -22,10 +27,38 @@ import { BlockButtonType } from './enums/block-button-type.enum';
 import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
 import { PageBlockType } from './enums/page-block-type.enum';
 import { PageStatus } from './enums/page-status.enum';
+import { RelatedPeopleDisplay } from './enums/related-people-display.enum';
 import { PageQueryParams } from './types/query-params.interface';
 import { Page, PageDocument } from './schemas/page.schema';
-import { PageBlock } from './types/page-block.interface';
+import {
+  CtaBlock,
+  EntityCollectionBlock,
+  GalleryBlock,
+  HeroBlock,
+  PageBlock,
+  RichTextBlock,
+} from './types/page-block.interface';
 import { sanitizeRichTextHtml } from './utils/html-sanitizer';
+
+type PageReference = {
+  _id: mongoose.Types.ObjectId | string;
+  slug: string;
+  domainId?: mongoose.Types.ObjectId | string;
+  status?: PageStatus;
+};
+
+type PublicPageSource = {
+  blocks?: Array<PageBlock | Record<string, unknown>>;
+} & Record<string, unknown>;
+
+type ValidationRefs = {
+  peopleIds: Set<string>;
+  partnerIds: Set<string>;
+  eventIds: Set<string>;
+  mediaIds: Set<string>;
+  pageIds: Set<string>;
+  domainIds: Set<string>;
+};
 
 @Injectable()
 export class PagesService {
@@ -64,8 +97,8 @@ export class PagesService {
 
     await this.domainsService.getActiveById(domainId);
 
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     const pages = await this.pageModel
       .find({
@@ -87,8 +120,8 @@ export class PagesService {
   ): Promise<PageDocument[]> {
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     const pages = await this.pageModel
       .find({
@@ -158,13 +191,15 @@ export class PagesService {
     return this.toPublicPage(page);
   }
 
-  async findAllGlobal(queryParams: {
-    limit?: string;
-    offset?: string;
-  } = {}): Promise<PageDocument[]> {
+  async findAllGlobal(
+    queryParams: {
+      limit?: string;
+      offset?: string;
+    } = {},
+  ): Promise<PageDocument[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     return this.pageModel
       .find({
@@ -191,7 +226,10 @@ export class PagesService {
     return page as PageDocument;
   }
 
-  async update(id: string, updatePageDto: UpdatePageDto): Promise<PageDocument> {
+  async update(
+    id: string,
+    updatePageDto: UpdatePageDto,
+  ): Promise<PageDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
       throw new NotFoundException('Invalid page ID format');
@@ -220,12 +258,23 @@ export class PagesService {
         ? await this.prepareBlocksForWrite(updatePageDto.blocks)
         : undefined;
 
-    const updateData = {
-      ...updatePageDto,
-    } as Record<string, unknown>;
-    if (hasDomainIdField && !domainId) {
+    const updateData: Record<string, unknown> = {};
+    if (updatePageDto.slug !== undefined) {
+      updateData.slug = updatePageDto.slug;
+    }
+    if (updatePageDto.title !== undefined) {
+      updateData.title = updatePageDto.title;
+    }
+    if (updatePageDto.status !== undefined) {
+      updateData.status = updatePageDto.status;
+    }
+    if (updatePageDto.seo !== undefined) {
+      updateData.seo = updatePageDto.seo;
+    }
+    if (hasDomainIdField && domainId) {
+      updateData.domainId = domainId;
+    } else if (hasDomainIdField) {
       updateData.$unset = { domainId: 1 };
-      delete updateData.domainId;
     }
     if (normalizedBlocks !== undefined) {
       updateData.blocks = normalizedBlocks;
@@ -235,6 +284,10 @@ export class PagesService {
       .findByIdAndUpdate(validId, updateData, { new: true })
       .lean()
       .exec();
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
 
     return page as PageDocument;
   }
@@ -285,51 +338,36 @@ export class PagesService {
     }
   }
 
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
-  }
-
-  private async prepareBlocksForWrite(blocks: PageBlock[]): Promise<PageBlock[]> {
+  private async prepareBlocksForWrite(
+    blocks: PageBlock[],
+  ): Promise<PageBlock[]> {
     await this.validateBlocks(blocks);
 
     return blocks.map((block) => {
-      const normalized = {
-        ...block,
-      } as Record<string, unknown>;
-
-      if (block.type === PageBlockType.RichText) {
-        normalized.description =
-          typeof block.description === 'string'
-            ? sanitizeRichTextHtml(block.description)
-            : block.description;
-        if (block.relatedPeople && !block.relatedPeople.display) {
-          normalized.relatedPeople = {
-            ...block.relatedPeople,
-            display: 'inline',
-          };
-        }
+      if (block.type !== PageBlockType.RichText) {
+        return block;
       }
 
-      return normalized as unknown as PageBlock;
+      return {
+        ...block,
+        description:
+          typeof block.description === 'string'
+            ? sanitizeRichTextHtml(block.description)
+            : block.description,
+        relatedPeople: block.relatedPeople
+          ? {
+              ...block.relatedPeople,
+              display:
+                block.relatedPeople.display || RelatedPeopleDisplay.Inline,
+            }
+          : undefined,
+      };
     });
   }
 
   private async validateBlocks(blocks: PageBlock[]): Promise<void> {
     const seenIds = new Set<string>();
+    const refs = this.createValidationRefs();
 
     for (const block of blocks) {
       if (seenIds.has(block.id)) {
@@ -341,19 +379,19 @@ export class PagesService {
 
       switch (block.type) {
         case PageBlockType.RichText:
-          await this.validateRichTextBlock(block);
+          this.validateRichTextBlock(block, refs);
           break;
         case PageBlockType.EntityCollection:
-          await this.validateEntityCollectionBlock(block);
+          this.validateEntityCollectionBlock(block, refs);
           break;
         case PageBlockType.Hero:
-          await this.validateHeroBlock(block);
+          this.validateHeroBlock(block, refs);
           break;
         case PageBlockType.Cta:
-          await this.validateButtons(block.buttons);
+          this.validateCtaBlock(block, refs);
           break;
         case PageBlockType.Gallery:
-          await this.validateGalleryBlock(block);
+          this.validateGalleryBlock(block, refs);
           break;
         case PageBlockType.ApplicationForm:
           this.validateApplicationFormType(block.applicationType);
@@ -362,18 +400,19 @@ export class PagesService {
           throw new BadRequestException('Unsupported page block type');
       }
     }
+
+    await this.validateCollectedRefs(refs);
   }
 
-  private async validateRichTextBlock(block: PageBlock): Promise<void> {
-    if (block.type !== PageBlockType.RichText) {
-      return;
-    }
-
+  private validateRichTextBlock(
+    block: RichTextBlock,
+    refs: ValidationRefs,
+  ): void {
     if (block.media) {
-      await this.ensureMediaExists(block.media.mediaId);
+      refs.mediaIds.add(block.media.mediaId);
     }
 
-    await this.validateButtons(block.buttons);
+    this.collectButtonRefs(block.buttons, refs);
 
     if (block.relatedPeople) {
       if (!block.relatedPeople.title) {
@@ -384,133 +423,188 @@ export class PagesService {
           'relatedPeople.peopleIds must contain at least one person',
         );
       }
-      for (const personId of block.relatedPeople.peopleIds) {
-        await this.ensurePersonExists(personId);
-      }
+      this.collectIds(refs.peopleIds, block.relatedPeople.peopleIds);
     }
   }
 
-  private async validateEntityCollectionBlock(block: PageBlock): Promise<void> {
-    if (block.type !== PageBlockType.EntityCollection) {
-      return;
-    }
+  private validateEntityCollectionBlock(
+    block: EntityCollectionBlock,
+    refs: ValidationRefs,
+  ): void {
+    this.ensureBlockHasItems(
+      block.items,
+      'entityCollection.items must contain at least one item',
+    );
 
-    for (const itemId of block.items) {
-      switch (block.entityType) {
-        case EntityCollectionEntityType.People:
-          await this.ensurePersonExists(itemId);
-          break;
-        case EntityCollectionEntityType.Partners:
-          await this.ensurePartnerExists(itemId);
-          break;
-        case EntityCollectionEntityType.Events:
-          await this.ensureEventExists(itemId);
-          break;
-        default:
-          throw new BadRequestException(
-            `Unsupported entity collection type: ${block.entityType}`,
-          );
-      }
+    switch (block.entityType) {
+      case EntityCollectionEntityType.People:
+        this.collectIds(refs.peopleIds, block.items);
+        break;
+      case EntityCollectionEntityType.Partners:
+        this.collectIds(refs.partnerIds, block.items);
+        break;
+      case EntityCollectionEntityType.Events:
+        this.collectIds(refs.eventIds, block.items);
+        break;
+      default:
+        throw new BadRequestException(
+          `Unsupported entity collection type: ${block.entityType}`,
+        );
     }
   }
 
-  private async validateHeroBlock(block: PageBlock): Promise<void> {
-    if (block.type !== PageBlockType.Hero) {
-      return;
-    }
-
+  private validateHeroBlock(block: HeroBlock, refs: ValidationRefs): void {
     if (block.backgroundMedia) {
-      await this.ensureMediaExists(block.backgroundMedia.mediaId);
+      refs.mediaIds.add(block.backgroundMedia.mediaId);
     }
 
-    await this.validateButtons(block.buttons);
+    this.collectButtonRefs(block.buttons, refs);
     for (const item of block.items || []) {
       if (item.button) {
-        await this.validateButtons([item.button]);
+        this.collectButtonRefs([item.button], refs);
       }
     }
   }
 
-  private async validateGalleryBlock(block: PageBlock): Promise<void> {
-    if (block.type !== PageBlockType.Gallery) {
-      return;
-    }
+  private validateCtaBlock(block: CtaBlock, refs: ValidationRefs): void {
+    this.ensureBlockHasItems(
+      block.buttons,
+      'cta.buttons must contain at least one button',
+    );
+    this.collectButtonRefs(block.buttons, refs);
+  }
+
+  private validateGalleryBlock(
+    block: GalleryBlock,
+    refs: ValidationRefs,
+  ): void {
+    this.ensureBlockHasItems(
+      block.items,
+      'gallery.items must contain at least one item',
+    );
 
     for (const item of block.items) {
-      await this.ensureMediaExists(item.mediaId);
+      refs.mediaIds.add(item.mediaId);
     }
   }
 
   private validateApplicationFormType(value: string): void {
-    if (!Object.values(ApplicationFormType).includes(value as ApplicationFormType)) {
+    if (
+      !Object.values(ApplicationFormType).includes(value as ApplicationFormType)
+    ) {
       throw new BadRequestException(
         `Unsupported application form type: ${value}`,
       );
     }
   }
 
-  private async validateButtons(buttons?: {
-    type: BlockButtonType;
-    targetId?: string;
-  }[]): Promise<void> {
+  private collectButtonRefs(
+    buttons: Array<{
+      type: BlockButtonType;
+      targetId?: string;
+      url?: string;
+    }> = [],
+    refs: ValidationRefs,
+  ): void {
     for (const button of buttons || []) {
       switch (button.type) {
         case BlockButtonType.External:
+          if (!button.url) {
+            throw new BadRequestException('External button url is required');
+          }
+          if (button.targetId) {
+            throw new BadRequestException(
+              'External buttons must not include targetId',
+            );
+          }
           break;
         case BlockButtonType.Page:
-          if (!button.targetId || !(await this.exists(button.targetId))) {
-            throw new BadRequestException('Referenced page button target not found');
+          if (!button.targetId) {
+            throw new BadRequestException('Page button target is required');
           }
+          if (button.url) {
+            throw new BadRequestException('Page buttons must not include url');
+          }
+          refs.pageIds.add(button.targetId);
           break;
         case BlockButtonType.Domain:
           if (!button.targetId) {
             throw new BadRequestException('Domain button target is required');
           }
-          await this.domainsService.getActiveById(button.targetId);
+          if (button.url) {
+            throw new BadRequestException(
+              'Domain buttons must not include url',
+            );
+          }
+          refs.domainIds.add(button.targetId);
           break;
         case BlockButtonType.Application:
           if (!button.targetId) {
-            throw new BadRequestException('Application button target is required');
+            throw new BadRequestException(
+              'Application button target is required',
+            );
+          }
+          if (button.url) {
+            throw new BadRequestException(
+              'Application buttons must not include url',
+            );
           }
           this.validateApplicationFormType(button.targetId);
           break;
         default:
-          throw new BadRequestException(`Unsupported button type: ${button.type}`);
+          throw new BadRequestException(
+            `Unsupported button type: ${button.type}`,
+          );
       }
     }
   }
 
-  private async ensurePersonExists(id: string): Promise<void> {
-    const exists = await this.peopleService.exists(id);
-    if (!exists) {
-      throw new BadRequestException(`Referenced person not found: ${id}`);
+  private ensureBlockHasItems(
+    items: unknown[] | undefined,
+    message: string,
+  ): asserts items is unknown[] {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException(message);
     }
   }
 
-  private async ensurePartnerExists(id: string): Promise<void> {
-    const exists = await this.partnersService.exists(id);
-    if (!exists) {
-      throw new BadRequestException(`Referenced partner not found: ${id}`);
-    }
+  async existingIds(ids: string[]): Promise<Set<string>> {
+    return resolveExistingIds(this.pageModel, ids);
   }
 
-  private async ensureEventExists(id: string): Promise<void> {
-    const exists = await this.eventsService.exists(id);
-    if (!exists) {
-      throw new BadRequestException(`Referenced event not found: ${id}`);
+  async findReferenceById(id: string): Promise<PageReference | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
     }
+
+    const page = await this.pageModel
+      .findById(validId)
+      .select({ _id: 1, slug: 1, domainId: 1, status: 1 })
+      .lean()
+      .exec();
+
+    return page ? this.toPageReference(page) : null;
   }
 
-  private async ensureMediaExists(id: string): Promise<void> {
-    const exists = await this.mediaService.exists(id);
-    if (!exists) {
-      throw new BadRequestException(`Referenced media not found: ${id}`);
+  async findPublishedReferenceById(id: string): Promise<PageReference | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
     }
+
+    const page = await this.pageModel
+      .findOne({ _id: validId, status: PageStatus.Published })
+      .select({ _id: 1, slug: 1, domainId: 1, status: 1 })
+      .lean()
+      .exec();
+
+    return page ? this.toPageReference(page) : null;
   }
 
-  private async toPublicPage(page: Record<string, unknown>): Promise<PageDocument> {
+  private async toPublicPage(page: PublicPageSource): Promise<PageDocument> {
     const blocks = Array.isArray(page.blocks) ? page.blocks : [];
-    const publicBlocks = [];
+    const publicBlocks: Array<PageBlock | Record<string, unknown>> = [];
 
     for (const block of blocks) {
       if (!block || typeof block !== 'object') {
@@ -535,7 +629,7 @@ export class PagesService {
 
     return {
       ...(page as unknown as PageDocument),
-      blocks: publicBlocks as unknown as mongoose.Types.Array<PageBlock>,
+      blocks: publicBlocks as mongoose.Types.Array<PageBlock>,
     } as unknown as PageDocument;
   }
 
@@ -557,23 +651,23 @@ export class PagesService {
         )
       : [];
 
-    const people: Array<{ _id: string; fullName: string }> = [];
-    const visiblePeopleIds: string[] = [];
-
-    for (const personId of peopleIds) {
-      try {
-        const person = await this.peopleService.findOne(personId);
-        people.push({
-          _id: person._id.toString(),
-          fullName: person.fullName,
-        });
-        visiblePeopleIds.push(person._id.toString());
-      } catch (error) {
-        if (!(error instanceof NotFoundException)) {
-          throw error;
-        }
-      }
-    }
+    const summaries = await this.peopleService.findPublishedSummariesByIds(
+      peopleIds,
+    );
+    const peopleById = new Map(
+      summaries.map((person) => [person._id.toString(), person]),
+    );
+    const people = peopleIds
+      .map((personId) => peopleById.get(personId))
+      .filter(
+        (
+          person,
+        ): person is {
+          _id: string;
+          fullName: string;
+        } => Boolean(person),
+      );
+    const visiblePeopleIds = people.map((person) => person._id);
 
     if (!people.length) {
       const { relatedPeople: _relatedPeople, ...rest } = block;
@@ -587,6 +681,82 @@ export class PagesService {
         peopleIds: visiblePeopleIds,
         people,
       },
+    };
+  }
+
+  private createValidationRefs(): ValidationRefs {
+    return {
+      peopleIds: new Set<string>(),
+      partnerIds: new Set<string>(),
+      eventIds: new Set<string>(),
+      mediaIds: new Set<string>(),
+      pageIds: new Set<string>(),
+      domainIds: new Set<string>(),
+    };
+  }
+
+  private collectIds(target: Set<string>, ids: string[]): void {
+    for (const id of ids) {
+      target.add(id);
+    }
+  }
+
+  private async validateCollectedRefs(refs: ValidationRefs): Promise<void> {
+    await Promise.all([
+      this.ensureExistingIds(
+        refs.peopleIds,
+        (ids) => this.peopleService.existingIds(ids),
+        'Referenced person not found: ',
+      ),
+      this.ensureExistingIds(
+        refs.partnerIds,
+        (ids) => this.partnersService.existingIds(ids),
+        'Referenced partner not found: ',
+      ),
+      this.ensureExistingIds(
+        refs.eventIds,
+        (ids) => this.eventsService.existingIds(ids),
+        'Referenced event not found: ',
+      ),
+      this.ensureExistingIds(
+        refs.mediaIds,
+        (ids) => this.mediaService.existingPublishedIds(ids),
+        'Referenced published media not found: ',
+      ),
+      this.ensureExistingIds(
+        refs.pageIds,
+        (ids) => this.existingIds(ids),
+        'Referenced page button target not found: ',
+      ),
+      Promise.all(
+        [...refs.domainIds].map((id) => this.domainsService.getActiveById(id)),
+      ),
+    ]);
+  }
+
+  private async ensureExistingIds(
+    ids: Set<string>,
+    resolver: (ids: string[]) => Promise<Set<string>>,
+    messagePrefix: string,
+  ): Promise<void> {
+    if (!ids.size) {
+      return;
+    }
+
+    const values = [...ids];
+    const existingIds = await resolver(values);
+    const missingId = values.find((id) => !existingIds.has(id));
+    if (missingId) {
+      throw new BadRequestException(`${messagePrefix}${missingId}`);
+    }
+  }
+
+  private toPageReference(page: Record<string, unknown>): PageReference {
+    return {
+      _id: page._id as mongoose.Types.ObjectId | string,
+      slug: page.slug as string,
+      domainId: page.domainId as mongoose.Types.ObjectId | string | undefined,
+      status: page.status as PageStatus | undefined,
     };
   }
 }

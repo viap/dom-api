@@ -6,6 +6,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -33,8 +38,8 @@ export class PartnersService {
     queryParams: PartnerQueryParams = {},
   ): Promise<PartnerDocument[]> {
     const safeParams = safeFindParams(queryParams);
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
     const query: Record<string, unknown> = { isPublished: true };
 
     if (safeParams.title && typeof safeParams.title === 'string') {
@@ -117,32 +122,18 @@ export class PartnersService {
     return count > 0;
   }
 
+  async existingIds(ids: string[]): Promise<Set<string>> {
+    return resolveExistingIds(this.partnerModel, ids);
+  }
+
   private async validateLogo(logoId?: string): Promise<void> {
     if (!logoId) {
       return;
     }
 
-    const mediaExists = await this.mediaService.exists(logoId);
+    const mediaExists = await this.mediaService.existsPublished(logoId);
     if (!mediaExists) {
-      throw new BadRequestException('Referenced media not found');
+      throw new BadRequestException('Referenced published media not found');
     }
-  }
-
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
   }
 }

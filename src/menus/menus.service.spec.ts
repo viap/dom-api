@@ -5,9 +5,8 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Domain } from '@/domains/schemas/domain.schema';
-import { PageStatus } from '@/pages/enums/page-status.enum';
-import { Page } from '@/pages/schemas/page.schema';
+import { DomainsService } from '@/domains/domains.service';
+import { PagesService } from '@/pages/pages.service';
 import { MenuItemType } from './enums/menu-item-type.enum';
 import { Menu } from './schemas/menu.schema';
 import { MenusService } from './menus.service';
@@ -17,21 +16,21 @@ describe('MenusService', () => {
 
   const mockDomain = {
     _id: '507f1f77bcf86cd799439012',
-    slug: 'academy',
+    slug: 'academy / training',
     isActive: true,
   };
 
   const mockPage = {
     _id: '507f1f77bcf86cd799439111',
     domainId: mockDomain._id,
-    slug: 'about-academy',
-    status: PageStatus.Published,
+    slug: 'about academy',
+    status: 'published',
   };
 
   const mockGlobalPage = {
     _id: '507f1f77bcf86cd799439211',
-    slug: 'privacy-policy',
-    status: PageStatus.Published,
+    slug: 'privacy policy',
+    status: 'published',
   };
 
   const mockMenu = {
@@ -81,14 +80,15 @@ describe('MenusService', () => {
     },
   );
 
-  const mockDomainModel = {
-    findById: jest.fn(),
+  const mockDomainsService = {
     findOne: jest.fn(),
+    getActiveById: jest.fn(),
+    getActiveBySlug: jest.fn(),
   };
 
-  const mockPageModel = {
-    findById: jest.fn(),
-    findOne: jest.fn(),
+  const mockPagesService = {
+    findReferenceById: jest.fn(),
+    findPublishedReferenceById: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -96,44 +96,32 @@ describe('MenusService', () => {
       providers: [
         MenusService,
         { provide: getModelToken(Menu.name), useValue: mockMenuModel },
-        { provide: getModelToken(Domain.name), useValue: mockDomainModel },
-        { provide: getModelToken(Page.name), useValue: mockPageModel },
+        { provide: DomainsService, useValue: mockDomainsService },
+        { provide: PagesService, useValue: mockPagesService },
       ],
     }).compile();
 
     service = module.get<MenusService>(MenusService);
     jest.clearAllMocks();
 
-    mockDomainModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(mockDomain),
-      }),
-    });
-    mockDomainModel.findOne.mockImplementation((query: Record<string, unknown>) => ({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(
-          query.slug || query.isActive ? mockDomain : null,
-        ),
-      }),
-    }));
-    mockPageModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(mockPage),
-      }),
-    });
-    mockPageModel.findOne.mockImplementation((query: Record<string, unknown>) => ({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(
-          query.slug === mockGlobalPage.slug ||
-            query._id === mockPage._id ||
-            query._id === mockGlobalPage._id
-            ? query._id === mockGlobalPage._id || query.slug === mockGlobalPage.slug
-              ? mockGlobalPage
-              : mockPage
-            : null,
-        ),
-      }),
-    }));
+    mockDomainsService.findOne.mockResolvedValue(mockDomain);
+    mockDomainsService.getActiveById.mockResolvedValue(mockDomain);
+    mockDomainsService.getActiveBySlug.mockResolvedValue(mockDomain);
+    mockPagesService.findReferenceById.mockImplementation(async (id: string) =>
+      id === mockPage._id || id === mockGlobalPage._id
+        ? id === mockGlobalPage._id
+          ? mockGlobalPage
+          : mockPage
+        : null,
+    );
+    mockPagesService.findPublishedReferenceById.mockImplementation(
+      async (id: string) =>
+        id === mockPage._id || id === mockGlobalPage._id
+          ? id === mockGlobalPage._id
+            ? mockGlobalPage
+            : mockPage
+          : null,
+    );
   });
 
   it('should create a global menu', async () => {
@@ -150,11 +138,7 @@ describe('MenusService', () => {
 
   it('should reject invalid domainId', async () => {
     mockMenuModel.findOne.mockResolvedValue(null);
-    mockDomainModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      }),
-    });
+    mockDomainsService.findOne.mockRejectedValue(new NotFoundException());
 
     await expect(
       service.create({
@@ -253,18 +237,14 @@ describe('MenusService', () => {
         }),
       }),
     });
-    mockPageModel.findOne.mockImplementation((query: Record<string, unknown>) => ({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(
-          query._id === mockGlobalPage._id ? mockGlobalPage : null,
-        ),
-      }),
-    }));
+    mockPagesService.findPublishedReferenceById.mockImplementation(
+      async (id: string) => (id === mockGlobalPage._id ? mockGlobalPage : null),
+    );
 
     const result = await service.findPublicGlobalByKey('main');
     expect(result.items).toHaveLength(2);
-    expect(result.items[0].resolvedUrl).toBe('/academy');
-    expect(result.items[1].resolvedUrl).toBe('/pages/global/privacy-policy');
+    expect(result.items[0].resolvedUrl).toBe('/academy%20%2F%20training');
+    expect(result.items[1].resolvedUrl).toBe('/pages/global/privacy%20policy');
   });
 
   it('should show broken targets in admin responses', async () => {
@@ -287,11 +267,7 @@ describe('MenusService', () => {
         }),
       }),
     });
-    mockPageModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      }),
-    });
+    mockPagesService.findReferenceById.mockResolvedValue(null);
 
     const result = await service.findOne(mockMenu._id);
     expect(result.items[0].isBrokenTarget).toBe(true);
@@ -307,5 +283,13 @@ describe('MenusService', () => {
     await expect(
       service.findPublicByDomainAndKey('academy', 'main'),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should remove an existing menu', async () => {
+    mockMenuModel.findByIdAndDelete.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ _id: mockMenu._id }),
+    });
+
+    await expect(service.remove(mockMenu._id)).resolves.toBe(true);
   });
 });

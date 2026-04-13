@@ -10,8 +10,8 @@ export class Media {
   @Prop({ required: true, enum: Object.values(MediaKind) })
   kind: MediaKind;
 
-  @Prop({ required: true, trim: true, unique: true })
-  storageKey: string;
+  @Prop({ trim: true })
+  storageKey?: string;
 
   @Prop({ required: true, trim: true })
   url: string;
@@ -42,5 +42,5 @@ export class Media {
 }
 
 export const mediaSchema = SchemaFactory.createForClass(Media);
-mediaSchema.index({ storageKey: 1 }, { unique: true });
+mediaSchema.index({ storageKey: 1 }, { unique: true, sparse: true });
 mediaSchema.index({ isPublished: 1, createdAt: -1 });

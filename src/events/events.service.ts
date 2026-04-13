@@ -7,6 +7,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  parsePaginationLimit,
+  parsePaginationOffset,
+} from '@/common/utils/pagination';
+import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -54,8 +59,8 @@ export class EventsService {
 
     await this.domainsService.getActiveById(domainId);
 
-    const limit = this.parseLimit(safeParams.limit);
-    const offset = this.parseOffset(safeParams.offset);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
 
     return this.eventModel
       .find({
@@ -152,6 +157,10 @@ export class EventsService {
     return count > 0;
   }
 
+  async existingIds(ids: string[]): Promise<Set<string>> {
+    return resolveExistingIds(this.eventModel, ids);
+  }
+
   private async validateDomainAndRefs(data: {
     domainId: string;
     locationId?: string;
@@ -207,23 +216,5 @@ export class EventsService {
         'Event with this slug already exists in the domain',
       );
     }
-  }
-
-  private parseLimit(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) {
-      return parsed;
-    }
-
-    return 20;
-  }
-
-  private parseOffset(value: unknown): number {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed >= 0) {
-      return parsed;
-    }
-
-    return 0;
   }
 }

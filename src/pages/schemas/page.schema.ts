@@ -12,7 +12,8 @@ import {
 } from './page-block.schema';
 import { PageBlockType } from '../enums/page-block-type.enum';
 
-export type PageDocument = Page & Document & { createdAt: Date; updatedAt: Date };
+export type PageDocument = Page &
+  Document & { createdAt: Date; updatedAt: Date };
 
 @Schema({ timestamps: true })
 export class Page {

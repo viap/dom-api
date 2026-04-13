@@ -28,31 +28,42 @@ describe('PagesController', () => {
   });
 
   it('should mark reads as public', () => {
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findAll)).toBe(true);
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findOneGlobalBySlug)).toBe(true);
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findAllByDomainSlug)).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findAll),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        PagesController.prototype.findOneGlobalBySlug,
+      ),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        PagesController.prototype.findAllByDomainSlug,
+      ),
+    ).toBe(true);
     expect(
       Reflect.getMetadata(
         IS_PUBLIC_KEY,
         PagesController.prototype.findOneByDomainSlugAndPageSlug,
       ),
     ).toBe(true);
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findOne)).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findOne),
+    ).toBe(true);
   });
 
   it('should restrict writes to admin and editor', () => {
-    expect(Reflect.getMetadata(ROLES_KEY, PagesController.prototype.create)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, PagesController.prototype.update)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, PagesController.prototype.remove)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, PagesController.prototype.create),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, PagesController.prototype.update),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, PagesController.prototype.remove),
+    ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PagesController.prototype.findAllGlobal),
     ).toEqual([Role.Admin, Role.Editor]);

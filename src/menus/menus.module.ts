@@ -1,18 +1,16 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Domain, domainSchema } from '@/domains/schemas/domain.schema';
-import { Page, pageSchema } from '@/pages/schemas/page.schema';
+import { DomainsModule } from '@/domains/domains.module';
+import { PagesModule } from '@/pages/pages.module';
 import { Menu, menuSchema } from './schemas/menu.schema';
 import { MenusController } from './menus.controller';
 import { MenusService } from './menus.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Menu.name, schema: menuSchema },
-      { name: Domain.name, schema: domainSchema },
-      { name: Page.name, schema: pageSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Menu.name, schema: menuSchema }]),
+    DomainsModule,
+    PagesModule,
   ],
   controllers: [MenusController],
   providers: [MenusService],

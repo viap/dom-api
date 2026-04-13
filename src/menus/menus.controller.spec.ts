@@ -22,7 +22,10 @@ describe('MenusController', () => {
 
   it('should mark public reads as public', () => {
     expect(
-      Reflect.getMetadata(IS_PUBLIC_KEY, MenusController.prototype.findPublicGlobalByKey),
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        MenusController.prototype.findPublicGlobalByKey,
+      ),
     ).toBe(true);
     expect(
       Reflect.getMetadata(
@@ -33,25 +36,20 @@ describe('MenusController', () => {
   });
 
   it('should restrict admin routes to admin and editor', () => {
-    expect(Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findAll)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findOne)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, MenusController.prototype.create)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, MenusController.prototype.update)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
-    expect(Reflect.getMetadata(ROLES_KEY, MenusController.prototype.remove)).toEqual([
-      Role.Admin,
-      Role.Editor,
-    ]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findAll),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findOne),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.create),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.update),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.remove),
+    ).toEqual([Role.Admin, Role.Editor]);
   });
 });

@@ -24,7 +24,14 @@ export class JoiValidationPipe implements PipeTransform {
     const sanitizedValue = sanitizeObject(value) as T;
 
     // Then validate with Joi schema
-    const { error } = this.schema.validate(sanitizedValue);
+    const { error, value: validatedValue } = this.schema.validate(
+      sanitizedValue,
+      {
+        abortEarly: false,
+        allowUnknown: false,
+        stripUnknown: false,
+      },
+    );
     if (error) {
       const messageDetails = Array.isArray(error.details)
         ? error.details.map((detail) => {
@@ -36,6 +43,6 @@ export class JoiValidationPipe implements PipeTransform {
       );
     }
 
-    return sanitizedValue;
+    return validatedValue as T;
   }
 }
