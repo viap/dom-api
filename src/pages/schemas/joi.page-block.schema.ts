@@ -182,7 +182,6 @@ export const pageBlockSchema = Joi.alternatives()
     ctaBlockSchema,
     galleryBlockSchema,
     applicationFormBlockSchema,
-  )
-  .required();
+  );
 
 export const pageBlocksSchema = Joi.array().items(pageBlockSchema).max(20);

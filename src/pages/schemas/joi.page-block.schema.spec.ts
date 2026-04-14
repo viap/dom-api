@@ -1,6 +1,17 @@
 import { createPageSchema } from './joi.create-page.schema';
+import { updatePageSchema } from './joi.update-page.schema';
 
 describe('createPageSchema', () => {
+  it('should allow empty blocks on create', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
   it('should reject more than 20 blocks', () => {
     const { error } = createPageSchema.validate({
       title: 'About',
@@ -70,5 +81,13 @@ describe('createPageSchema', () => {
     });
 
     expect(error).toBeDefined();
+  });
+
+  it('should allow empty blocks on update', () => {
+    const { error } = updatePageSchema.validate({
+      blocks: [],
+    });
+
+    expect(error).toBeUndefined();
   });
 });

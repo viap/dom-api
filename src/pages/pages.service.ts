@@ -321,20 +321,14 @@ export class PagesService {
     slug: string,
     excludeId?: string,
   ): Promise<void> {
-    const query: Record<string, unknown> = domainId
-      ? { domainId, slug }
-      : { slug, domainId: { $exists: false } };
+    const query: Record<string, unknown> = { slug };
     if (excludeId) {
       query._id = { $ne: excludeId };
     }
 
     const existing = await this.pageModel.findOne(query);
     if (existing) {
-      throw new ConflictException(
-        domainId
-          ? 'Page with this slug already exists in the domain'
-          : 'Global page with this slug already exists',
-      );
+      throw new ConflictException('Page with this slug already exists');
     }
   }
 

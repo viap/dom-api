@@ -185,12 +185,14 @@ The API implements comprehensive protection against NoSQL injection attacks:
 
 ### Media
 
+- Public `GET /media` supports `limit`, `offset`, `kind`, and `search`, but still returns published media only.
 - `POST /media/upload` uploads a local image and creates a Media record for it.
 - `POST /media` creates an external media record only. The `url` must be an absolute `http` or `https` URL.
 - `GET /media/:id/content` is the only public delivery path for uploaded Media files.
 - Uploaded media visibility is controlled by `isPublished`. Unpublished uploaded assets are not reachable by raw filesystem URL or by the content endpoint.
 - For uploaded files, `storageKey`, `url`, `mimeType`, `sizeBytes`, `width`, and `height` are system-managed fields. Admin updates are limited to `title`, `alt`, and `isPublished`.
 - Frontend and admin clients must render uploaded assets from the returned `url` field and must not construct Media URLs from `storageKey`.
+- Frontend apps may proxy uploaded media delivery through their own origin, but the stored `url` field remains the canonical asset reference.
 - `/uploads/media/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
 
 ### Real-time WebSocket Events

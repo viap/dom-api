@@ -61,12 +61,5 @@ blocksPath.discriminator(
   applicationFormBlockSchema,
 );
 
-pageSchema.index({ domainId: 1, slug: 1 }, { unique: true });
+pageSchema.index({ slug: 1 }, { unique: true });
 pageSchema.index({ domainId: 1, status: 1, updatedAt: -1 });
-pageSchema.index(
-  { slug: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { domainId: { $exists: false } },
-  },
-);

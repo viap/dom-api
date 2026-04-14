@@ -155,8 +155,12 @@ describe('PagesService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  it('should allow the same slug in different domains', async () => {
-    mockPageModel.findOne.mockResolvedValueOnce(null);
+  it('should reject duplicate slug across different domains', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce({
+      ...mockPage,
+      _id: '507f1f77bcf86cd799439199',
+      domainId: '507f1f77bcf86cd799439188',
+    });
 
     await expect(
       service.create({
@@ -164,7 +168,7 @@ describe('PagesService', () => {
         title: 'About Us',
         slug: 'about-us',
       }),
-    ).resolves.toEqual(mockPage);
+    ).rejects.toThrow(ConflictException);
   });
 
   it('should create a global page without domainId', async () => {
@@ -648,6 +652,23 @@ describe('PagesService', () => {
     await expect(
       service.findOneByDomainSlugAndPageSlug('academy', 'missing-page'),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should reject update when slug already exists on another page', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockPage),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue({
+      ...mockGlobalPage,
+      slug: 'privacy-policy',
+    });
+
+    await expect(
+      service.update(mockPage._id, { slug: 'privacy-policy' }),
+    ).rejects.toThrow(ConflictException);
+    expect(mockPageModel.findByIdAndUpdate).not.toHaveBeenCalled();
   });
 
   it('should keep blocks unchanged when patch omits blocks', async () => {
