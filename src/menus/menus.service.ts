@@ -440,12 +440,12 @@ export class MenusService {
           return null;
         }
 
-        return `/pages/domain/${encodeURIComponent(
-          domain.slug,
-        )}/${encodeURIComponent(page.slug)}`;
+        return `/${encodeURIComponent(domain.slug)}/${encodeURIComponent(
+          page.slug,
+        )}`;
       }
 
-      return `/pages/global/${encodeURIComponent(page.slug)}`;
+      return `/${encodeURIComponent(page.slug)}`;
     }
 
     return null;

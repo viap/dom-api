@@ -21,6 +21,7 @@ export const createPageSchema = Joi.object({
     .valid(...Object.values(PageStatus))
     .default(PageStatus.Draft)
     .optional(),
+  isHomepage: Joi.boolean().default(false).optional(),
   seo: seoSchema.optional(),
   blocks: pageBlocksSchema.optional(),
 });

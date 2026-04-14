@@ -33,6 +33,9 @@ export class Page {
   })
   status: PageStatus;
 
+  @Prop({ required: true, default: false })
+  isHomepage: boolean;
+
   @Prop({ type: mongoose.Schema.Types.Mixed })
   seo?: Record<string, string>;
 
@@ -63,3 +66,23 @@ blocksPath.discriminator(
 
 pageSchema.index({ slug: 1 }, { unique: true });
 pageSchema.index({ domainId: 1, status: 1, updatedAt: -1 });
+pageSchema.index(
+  { domainId: 1, isHomepage: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isHomepage: true,
+      domainId: { $exists: true },
+    },
+  },
+);
+pageSchema.index(
+  { isHomepage: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isHomepage: true,
+      domainId: { $exists: false },
+    },
+  },
+);

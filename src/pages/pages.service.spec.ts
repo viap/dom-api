@@ -28,6 +28,7 @@ describe('PagesService', () => {
     slug: 'about-us',
     title: 'About Us',
     status: PageStatus.Published,
+    isHomepage: false,
     seo: { title: 'About Us' },
     blocks: [],
     schemaVersion: 1,
@@ -39,6 +40,7 @@ describe('PagesService', () => {
     slug: 'privacy-policy',
     title: 'Privacy Policy',
     status: PageStatus.Published,
+    isHomepage: false,
     seo: { title: 'Privacy Policy' },
     blocks: [],
     schemaVersion: 1,
@@ -181,6 +183,61 @@ describe('PagesService', () => {
       }),
     ).resolves.toEqual(mockPage);
     expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+  });
+
+  it('should allow setting homepage for a published domain page', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+
+    await expect(
+      service.create({
+        domainId: mockPage.domainId,
+        title: 'Home',
+        slug: 'home',
+        status: PageStatus.Published,
+        isHomepage: true,
+      }),
+    ).resolves.toEqual(mockPage);
+  });
+
+  it('should reject setting homepage for a draft page', async () => {
+    await expect(
+      service.create({
+        title: 'Home',
+        slug: 'home',
+        isHomepage: true,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject duplicate domain homepage', async () => {
+    mockPageModel.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...mockPage, isHomepage: true });
+
+    await expect(
+      service.create({
+        domainId: mockPage.domainId,
+        title: 'Home',
+        slug: 'home',
+        status: PageStatus.Published,
+        isHomepage: true,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate global homepage', async () => {
+    mockPageModel.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...mockGlobalPage, isHomepage: true });
+
+    await expect(
+      service.create({
+        title: 'Home',
+        slug: 'home',
+        status: PageStatus.Published,
+        isHomepage: true,
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('should create a page with valid blocks', async () => {
@@ -478,6 +535,33 @@ describe('PagesService', () => {
     );
   });
 
+  it('should return published global homepage', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockGlobalPage,
+          isHomepage: true,
+        }),
+      }),
+    });
+
+    await expect(service.findGlobalHomepage()).resolves.toEqual(
+      expect.objectContaining({ isHomepage: true }),
+    );
+  });
+
+  it('should reject missing global homepage', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      }),
+    });
+
+    await expect(service.findGlobalHomepage()).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
   it('should list only global pages for admin global listing', async () => {
     mockPageModel.find.mockReturnValue({
       sort: jest.fn().mockReturnValue({
@@ -654,6 +738,33 @@ describe('PagesService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('should return published domain homepage', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          isHomepage: true,
+        }),
+      }),
+    });
+
+    await expect(service.findDomainHomepage('academy')).resolves.toEqual(
+      expect.objectContaining({ isHomepage: true }),
+    );
+  });
+
+  it('should reject missing domain homepage', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      }),
+    });
+
+    await expect(service.findDomainHomepage('academy')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
   it('should reject update when slug already exists on another page', async () => {
     mockPageModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnValue({
@@ -669,6 +780,45 @@ describe('PagesService', () => {
       service.update(mockPage._id, { slug: 'privacy-policy' }),
     ).rejects.toThrow(ConflictException);
     expect(mockPageModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('should reject update when homepage already exists in the same domain', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          isHomepage: false,
+        }),
+      }),
+    });
+    mockPageModel.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...mockPage,
+        _id: '507f1f77bcf86cd799439119',
+        isHomepage: true,
+      });
+
+    await expect(
+      service.update(mockPage._id, { isHomepage: true }),
+    ).rejects.toThrow(ConflictException);
+    expect(mockPageModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('should reject draft status when page remains homepage', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          status: PageStatus.Published,
+          isHomepage: true,
+        }),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, { status: PageStatus.Draft }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('should keep blocks unchanged when patch omits blocks', async () => {

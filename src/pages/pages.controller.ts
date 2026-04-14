@@ -71,6 +71,12 @@ export class PagesController {
     return this.pagesService.findAllByDomainSlug(params.domainSlug, query);
   }
 
+  @Get('global/home')
+  @Public()
+  findGlobalHomepage() {
+    return this.pagesService.findGlobalHomepage();
+  }
+
   @Get('global/:pageSlug')
   @Public()
   findOneGlobalBySlug(
@@ -80,6 +86,15 @@ export class PagesController {
     },
   ) {
     return this.pagesService.findOneGlobalBySlug(params.pageSlug);
+  }
+
+  @Get('domain/:domainSlug/home')
+  @Public()
+  findDomainHomepage(
+    @Param(new JoiValidationPipe(pageDomainParamsSchema))
+    params: { domainSlug: string },
+  ) {
+    return this.pagesService.findDomainHomepage(params.domainSlug);
   }
 
   @Get('domain/:domainSlug/:pageSlug')

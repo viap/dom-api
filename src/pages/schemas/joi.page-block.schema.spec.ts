@@ -83,11 +83,30 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should allow isHomepage boolean on create', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Home',
+      slug: 'home',
+      status: 'published',
+      isHomepage: true,
+    });
+
+    expect(error).toBeUndefined();
+  });
+
   it('should allow empty blocks on update', () => {
     const { error } = updatePageSchema.validate({
       blocks: [],
     });
 
     expect(error).toBeUndefined();
+  });
+
+  it('should reject invalid isHomepage type on update', () => {
+    const { error } = updatePageSchema.validate({
+      isHomepage: 'yes',
+    });
+
+    expect(error).toBeDefined();
   });
 });

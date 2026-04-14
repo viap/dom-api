@@ -15,7 +15,9 @@ describe('PagesController', () => {
       findAdminOne: jest.fn(),
       findAllByDomainSlug: jest.fn(),
       findOne: jest.fn(),
+      findGlobalHomepage: jest.fn(),
       findOneGlobalBySlug: jest.fn(),
+      findDomainHomepage: jest.fn(),
       findOneByDomainSlugAndPageSlug: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -34,6 +36,12 @@ describe('PagesController', () => {
     expect(
       Reflect.getMetadata(
         IS_PUBLIC_KEY,
+        PagesController.prototype.findGlobalHomepage,
+      ),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
         PagesController.prototype.findOneGlobalBySlug,
       ),
     ).toBe(true);
@@ -41,6 +49,12 @@ describe('PagesController', () => {
       Reflect.getMetadata(
         IS_PUBLIC_KEY,
         PagesController.prototype.findAllByDomainSlug,
+      ),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        PagesController.prototype.findDomainHomepage,
       ),
     ).toBe(true);
     expect(

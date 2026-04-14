@@ -20,6 +20,7 @@ export const updatePageSchema = Joi.object({
   status: Joi.string()
     .valid(...Object.values(PageStatus))
     .optional(),
+  isHomepage: Joi.boolean().optional(),
   seo: seoSchema.optional(),
   blocks: pageBlocksSchema.optional(),
 });

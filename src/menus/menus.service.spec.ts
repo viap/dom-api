@@ -244,7 +244,7 @@ describe('MenusService', () => {
     const result = await service.findPublicGlobalByKey('main');
     expect(result.items).toHaveLength(2);
     expect(result.items[0].resolvedUrl).toBe('/academy%20%2F%20training');
-    expect(result.items[1].resolvedUrl).toBe('/pages/global/privacy%20policy');
+    expect(result.items[1].resolvedUrl).toBe('/privacy%20policy');
   });
 
   it('should show broken targets in admin responses', async () => {

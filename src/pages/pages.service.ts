@@ -75,7 +75,15 @@ export class PagesService {
     if (createPageDto.domainId) {
       await this.domainsService.getActiveById(createPageDto.domainId);
     }
-    await this.ensureUniqueSlug(createPageDto.domainId, createPageDto.slug);
+    const status = createPageDto.status || PageStatus.Draft;
+    const isHomepage = createPageDto.isHomepage === true;
+
+    this.ensurePublishedHomepage(status, isHomepage);
+    await this.ensureUniqueSlug(createPageDto.slug);
+    if (isHomepage) {
+      await this.ensureUniqueHomepage(createPageDto.domainId);
+    }
+
     const normalizedBlocks = await this.prepareBlocksForWrite(
       createPageDto.blocks || [],
     );
@@ -191,6 +199,40 @@ export class PagesService {
     return this.toPublicPage(page);
   }
 
+  async findGlobalHomepage(): Promise<PageDocument> {
+    const page = await this.pageModel
+      .findOne({
+        status: PageStatus.Published,
+        isHomepage: true,
+        domainId: { $exists: false },
+      })
+      .lean()
+      .exec();
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.toPublicPage(page);
+  }
+
+  async findDomainHomepage(domainSlug: string): Promise<PageDocument> {
+    const domain = await this.domainsService.getActiveBySlug(domainSlug);
+
+    const page = await this.pageModel
+      .findOne({
+        domainId: domain._id,
+        status: PageStatus.Published,
+        isHomepage: true,
+      })
+      .lean()
+      .exec();
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.toPublicPage(page);
+  }
+
   async findAllGlobal(
     queryParams: {
       limit?: string;
@@ -248,11 +290,24 @@ export class PagesService {
       ? updatePageDto.domainId || undefined
       : existingPage.domainId?.toString();
     const slug = updatePageDto.slug || existingPage.slug;
+    const status = updatePageDto.status || existingPage.status;
+    const hasIsHomepageField = Object.prototype.hasOwnProperty.call(
+      updatePageDto,
+      'isHomepage',
+    );
+    const isHomepage = hasIsHomepageField
+      ? updatePageDto.isHomepage === true
+      : existingPage.isHomepage === true;
+
+    this.ensurePublishedHomepage(status, isHomepage);
 
     if (domainId) {
       await this.domainsService.getActiveById(domainId);
     }
-    await this.ensureUniqueSlug(domainId, slug, validId);
+    await this.ensureUniqueSlug(slug, validId);
+    if (isHomepage) {
+      await this.ensureUniqueHomepage(domainId, validId);
+    }
     const normalizedBlocks =
       updatePageDto.blocks !== undefined
         ? await this.prepareBlocksForWrite(updatePageDto.blocks)
@@ -267,6 +322,9 @@ export class PagesService {
     }
     if (updatePageDto.status !== undefined) {
       updateData.status = updatePageDto.status;
+    }
+    if (hasIsHomepageField) {
+      updateData.isHomepage = isHomepage;
     }
     if (updatePageDto.seo !== undefined) {
       updateData.seo = updatePageDto.seo;
@@ -317,7 +375,6 @@ export class PagesService {
   }
 
   private async ensureUniqueSlug(
-    domainId: string | undefined,
     slug: string,
     excludeId?: string,
   ): Promise<void> {
@@ -329,6 +386,38 @@ export class PagesService {
     const existing = await this.pageModel.findOne(query);
     if (existing) {
       throw new ConflictException('Page with this slug already exists');
+    }
+  }
+
+  private ensurePublishedHomepage(
+    status: PageStatus,
+    isHomepage: boolean,
+  ): void {
+    if (isHomepage && status !== PageStatus.Published) {
+      throw new BadRequestException(
+        'Only published pages can be designated as homepage',
+      );
+    }
+  }
+
+  private async ensureUniqueHomepage(
+    domainId: string | undefined,
+    excludeId?: string,
+  ): Promise<void> {
+    const query: Record<string, unknown> = domainId
+      ? { domainId, isHomepage: true }
+      : { isHomepage: true, domainId: { $exists: false } };
+    if (excludeId) {
+      query._id = { $ne: excludeId };
+    }
+
+    const existing = await this.pageModel.findOne(query);
+    if (existing) {
+      throw new ConflictException(
+        domainId
+          ? 'Homepage already exists for this domain'
+          : 'Global homepage already exists',
+      );
     }
   }
 

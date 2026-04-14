@@ -6,6 +6,7 @@ export interface UpdatePageDto {
   slug?: string;
   title?: string;
   status?: PageStatus;
+  isHomepage?: boolean;
   seo?: Record<string, string>;
   blocks?: PageBlock[];
 }
