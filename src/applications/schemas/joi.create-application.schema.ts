@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { ApplicationFormType } from '../enums/application-form-type.enum';
 
@@ -14,14 +15,14 @@ const payloadSchema = Joi.when('formType', {
     {
       is: ApplicationFormType.ProgramEnrollment,
       then: Joi.object({
-        programId: Joi.string().hex().length(24).required(),
+        programId: joiObjectId.required(),
         message: Joi.string().trim().max(1000).allow('').optional(),
       }).required(),
     },
     {
       is: ApplicationFormType.EventRegistration,
       then: Joi.object({
-        eventId: Joi.string().hex().length(24).required(),
+        eventId: joiObjectId.required(),
         message: Joi.string().trim().max(1000).allow('').optional(),
       }).required(),
     },
@@ -50,7 +51,7 @@ const payloadSchema = Joi.when('formType', {
 });
 
 export const createApplicationSchema = Joi.object({
-  domainId: Joi.string().hex().length(24).required(),
+  domainId: joiObjectId.required(),
 
   formType: Joi.string()
     .valid(...Object.values(ApplicationFormType))
@@ -58,7 +59,7 @@ export const createApplicationSchema = Joi.object({
 
   source: Joi.object({
     entityType: Joi.string().valid('program', 'event', 'partner').optional(),
-    entityId: Joi.string().hex().length(24).optional(),
+    entityId: joiObjectId.optional(),
     utm: Joi.object()
       .pattern(Joi.string().max(50), Joi.string().max(200))
       .optional(),

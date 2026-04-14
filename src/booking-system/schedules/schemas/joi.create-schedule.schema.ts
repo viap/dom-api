@@ -1,5 +1,6 @@
 import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { DEFAULT_TIMEZONE } from '@/common/const/timezone';
 
 const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -20,15 +21,13 @@ export const createScheduleSchema = Joi.object({
     'any.required': 'Type is required',
   }),
 
-  room: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  room: joiObjectId
     .optional()
     .messages({
       'string.pattern.base': 'Invalid room ID format',
     }),
 
-  company: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  company: joiObjectId
     .optional()
     .messages({
       'string.pattern.base': 'Invalid company ID format',

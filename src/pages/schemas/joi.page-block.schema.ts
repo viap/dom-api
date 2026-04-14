@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
@@ -6,7 +7,6 @@ import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 
-const objectIdSchema = Joi.string().hex().length(24);
 const stringSchema = Joi.string().trim().max(5000);
 const spacingSchema = Joi.string().valid('none', 'sm', 'md', 'lg', 'xl');
 const variantSchema = Joi.string().valid('section', 'block', 'element');
@@ -52,7 +52,7 @@ const blockButtonSchema = Joi.object({
       if (
         (value.type === BlockButtonType.Page ||
           value.type === BlockButtonType.Domain) &&
-        !objectIdSchema.validate(value.targetId).error
+        !joiObjectId.validate(value.targetId).error
       ) {
         return value;
       }
@@ -71,14 +71,14 @@ const blockButtonSchema = Joi.object({
   .messages({ 'any.custom': '{{#message}}' });
 
 const mediaRefSchema = Joi.object({
-  mediaId: objectIdSchema.required(),
+  mediaId: joiObjectId.required(),
   alt: Joi.string().trim().max(300).optional(),
   caption: Joi.string().trim().max(500).optional(),
 });
 
 const relatedPeopleGroupSchema = Joi.object({
   title: Joi.string().trim().min(1).max(150).required(),
-  peopleIds: Joi.array().items(objectIdSchema).min(1).required(),
+  peopleIds: Joi.array().items(joiObjectId).min(1).required(),
   display: Joi.string()
     .valid(...Object.values(RelatedPeopleDisplay))
     .default(RelatedPeopleDisplay.Inline)
@@ -121,7 +121,7 @@ const entityCollectionBlockSchema = Joi.object({
   layout: Joi.string()
     .valid(...Object.values(EntityCollectionLayout))
     .required(),
-  items: Joi.array().items(objectIdSchema).min(1).max(50).required(),
+  items: Joi.array().items(joiObjectId).min(1).max(50).required(),
   cardVariant: Joi.string().trim().max(120).optional(),
 });
 
@@ -155,7 +155,7 @@ const galleryBlockSchema = Joi.object({
   items: Joi.array()
     .items(
       Joi.object({
-        mediaId: objectIdSchema.required(),
+        mediaId: joiObjectId.required(),
         title: Joi.string().trim().min(1).max(150).optional(),
         subtitle: Joi.string().trim().min(1).max(300).optional(),
       }),

@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { MenuItemType } from '../enums/menu-item-type.enum';
 
 const slugSchema = Joi.string()
@@ -15,7 +16,7 @@ const buildItemSchema = (allowChildren: boolean): Joi.ObjectSchema => {
     type: Joi.string()
       .valid(...Object.values(MenuItemType))
       .required(),
-    targetId: Joi.string().hex().length(24).optional(),
+    targetId: joiObjectId.optional(),
     url: Joi.string().uri().optional(),
     order: Joi.number().integer().min(0).required(),
     children: allowChildren
@@ -60,7 +61,7 @@ const buildItemSchema = (allowChildren: boolean): Joi.ObjectSchema => {
 export const createMenuSchema = Joi.object({
   key: slugSchema.required(),
   title: Joi.string().trim().min(1).max(150).required(),
-  domainId: Joi.string().hex().length(24).optional(),
+  domainId: joiObjectId.optional(),
   isActive: Joi.boolean().default(true).optional(),
   items: Joi.array().items(buildItemSchema(true)).default([]),
 });

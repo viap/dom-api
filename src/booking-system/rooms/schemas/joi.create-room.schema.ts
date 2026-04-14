@@ -1,5 +1,6 @@
 import * as Joi from 'joi';
 import { Role } from '../../../roles/enums/roles.enum';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 export const createRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(100).required().messages({
@@ -12,8 +13,7 @@ export const createRoomSchema = Joi.object({
     'string.max': 'Description cannot exceed 500 characters',
   }),
 
-  company: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  company: joiObjectId
     .required()
     .messages({
       'string.pattern.base': 'Invalid company ID format',

@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 import { ProgramFormat } from '../enums/program-format.enum';
 import { ProgramKind } from '../enums/program-kind.enum';
@@ -11,12 +12,8 @@ const joiProgramModuleSchema = Joi.object({
   durationHours: Joi.number().min(0).optional(),
 });
 
-const objectIdArraySchema = Joi.array()
-  .items(Joi.string().hex().length(24))
-  .default([]);
-
 export const createProgramSchema = Joi.object({
-  domainId: Joi.string().hex().length(24).required(),
+  domainId: joiObjectId.required(),
 
   kind: Joi.string()
     .valid(...Object.values(ProgramKind))
@@ -48,7 +45,7 @@ export const createProgramSchema = Joi.object({
   price: joiPriceSchema.optional(),
 
   modules: Joi.array().items(joiProgramModuleSchema).default([]),
-  speakerIds: objectIdArraySchema,
-  organizerIds: objectIdArraySchema,
-  partnerIds: objectIdArraySchema,
+  speakerIds: Joi.array().items(joiObjectId).default([]),
+  organizerIds: Joi.array().items(joiObjectId).default([]),
+  partnerIds: Joi.array().items(joiObjectId).default([]),
 });

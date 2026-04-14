@@ -1,9 +1,10 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 
 export const createPersonSchema = Joi.object({
-  userId: Joi.string().hex().length(24).optional(),
+  userId: joiObjectId.optional(),
 
   fullName: Joi.string().trim().min(1).max(150).required().messages({
     'string.empty': 'Full name is required',
@@ -16,7 +17,7 @@ export const createPersonSchema = Joi.object({
     'string.max': 'Bio cannot exceed 2000 characters',
   }),
 
-  photoId: Joi.string().hex().length(24).optional(),
+  photoId: joiObjectId.optional(),
 
   contacts: Joi.array().items(joiContactSchema).default([]),
 

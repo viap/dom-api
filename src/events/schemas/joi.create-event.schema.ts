@@ -1,14 +1,11 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 
-const objectIdArraySchema = Joi.array()
-  .items(Joi.string().hex().length(24))
-  .default([]);
-
 export const createEventSchema = Joi.object({
-  domainId: Joi.string().hex().length(24).required(),
+  domainId: joiObjectId.required(),
 
   type: Joi.string()
     .valid(...Object.values(EventType))
@@ -32,11 +29,11 @@ export const createEventSchema = Joi.object({
   startAt: Joi.number().integer().required(),
   endAt: Joi.number().integer().required(),
 
-  locationId: Joi.string().hex().length(24).optional(),
+  locationId: joiObjectId.optional(),
 
-  speakerIds: objectIdArraySchema,
-  organizerIds: objectIdArraySchema,
-  partnerIds: objectIdArraySchema,
+  speakerIds: Joi.array().items(joiObjectId).default([]),
+  organizerIds: Joi.array().items(joiObjectId).default([]),
+  partnerIds: Joi.array().items(joiObjectId).default([]),
 
   registration: Joi.object({
     isOpen: Joi.boolean().default(false).optional(),

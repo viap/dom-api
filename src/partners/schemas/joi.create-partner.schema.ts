@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { PartnerType } from '../enums/partner-type.enum';
 
 export const createPartnerSchema = Joi.object({
@@ -19,7 +20,7 @@ export const createPartnerSchema = Joi.object({
     'string.max': 'Description cannot exceed 2000 characters',
   }),
 
-  logoId: Joi.string().hex().length(24).optional(),
+  logoId: joiObjectId.optional(),
 
   website: Joi.string().trim().uri().max(300).optional().messages({
     'string.uri': 'Invalid website URL format',

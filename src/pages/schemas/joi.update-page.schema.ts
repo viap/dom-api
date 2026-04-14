@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { PageStatus } from '../enums/page-status.enum';
 import { pageBlocksSchema } from './joi.page-block.schema';
 
@@ -8,7 +9,7 @@ const seoSchema = Joi.object()
 
 export const updatePageSchema = Joi.object({
   domainId: Joi.alternatives()
-    .try(Joi.string().hex().length(24), Joi.valid(null))
+    .try(joiObjectId, Joi.valid(null))
     .optional(),
   slug: Joi.string()
     .trim()

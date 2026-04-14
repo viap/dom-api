@@ -1,5 +1,6 @@
 import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -18,16 +19,14 @@ export const updateScheduleSchema = Joi.object({
     'any.only': 'Type must be either "working_hours" or "unavailable"',
   }),
 
-  room: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  room: joiObjectId
     .allow(null)
     .optional()
     .messages({
       'string.pattern.base': 'Invalid room ID format',
     }),
 
-  company: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  company: joiObjectId
     .allow(null)
     .optional()
     .messages({

@@ -81,9 +81,21 @@ export class MediaService {
     const safeParams = safeFindParams(queryParams);
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = { isPublished: true };
+
+    if (typeof safeParams.kind === 'string') {
+      query.kind = safeParams.kind;
+    }
+
+    if (typeof safeParams.search === 'string' && safeParams.search.trim()) {
+      query.title = {
+        $regex: this.escapeRegExp(safeParams.search.trim()),
+        $options: 'i',
+      };
+    }
 
     return this.mediaModel
-      .find({ isPublished: true })
+      .find(query)
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)

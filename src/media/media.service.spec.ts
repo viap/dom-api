@@ -121,6 +121,26 @@ describe('MediaService', () => {
     expect(mockMediaModel.find).toHaveBeenCalledWith({ isPublished: true });
   });
 
+  it('should filter public media reads by kind and title search', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAll({
+      limit: '10',
+      offset: '0',
+      kind: MediaKind.Image,
+      search: 'hero',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+      kind: MediaKind.Image,
+      title: {
+        $regex: 'hero',
+        $options: 'i',
+      },
+    });
+  });
+
   it('should create external media records only', async () => {
     const result = await service.create({
       kind: MediaKind.Image,
