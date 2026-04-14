@@ -55,7 +55,9 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 @Injectable()
 export class MediaService {
   private readonly uploadsRoot = join(process.cwd(), 'uploads', 'media');
-  private readonly allowedMimeTypes = new Set(Object.values(IMAGE_FORMAT_TO_MIME));
+  private readonly allowedMimeTypes = new Set(
+    Object.values(IMAGE_FORMAT_TO_MIME),
+  );
 
   constructor(
     @InjectModel(Media.name) private mediaModel: Model<MediaDocument>,
@@ -387,10 +389,9 @@ export class MediaService {
     return /^https?:\/\//i.test(url);
   }
 
-  private isUploadedMedia(media: Pick<Media, 'storageKey' | 'url'>): media is Pick<
-    Media,
-    'storageKey' | 'url'
-  > & { storageKey: string } {
+  private isUploadedMedia(
+    media: Pick<Media, 'storageKey' | 'url'>,
+  ): media is Pick<Media, 'storageKey' | 'url'> & { storageKey: string } {
     return Boolean(media.storageKey) && !this.isExternalUrl(media.url);
   }
 

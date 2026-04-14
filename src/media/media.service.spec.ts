@@ -338,7 +338,10 @@ describe('MediaService', () => {
       lean: jest.fn().mockReturnThis(),
       exec: jest
         .fn()
-        .mockResolvedValue([{ _id: uploadedMediaId }, { _id: externalMedia._id }]),
+        .mockResolvedValue([
+          { _id: uploadedMediaId },
+          { _id: externalMedia._id },
+        ]),
     });
 
     await expect(

@@ -13,11 +13,9 @@ export const updateBookingSchema = Joi.object({
     'string.max': 'Description cannot exceed 1000 characters',
   }),
 
-  room: joiObjectId
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid room ID format',
-    }),
+  room: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid room ID format',
+  }),
 
   startDateTime: Joi.date().iso().optional().messages({
     'date.base': 'Start date time must be a valid date',

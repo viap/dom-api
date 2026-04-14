@@ -19,19 +19,13 @@ export const updateScheduleSchema = Joi.object({
     'any.only': 'Type must be either "working_hours" or "unavailable"',
   }),
 
-  room: joiObjectId
-    .allow(null)
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid room ID format',
-    }),
+  room: joiObjectId.allow(null).optional().messages({
+    'string.pattern.base': 'Invalid room ID format',
+  }),
 
-  company: joiObjectId
-    .allow(null)
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid company ID format',
-    }),
+  company: joiObjectId.allow(null).optional().messages({
+    'string.pattern.base': 'Invalid company ID format',
+  }),
 
   startDate: Joi.date().iso().optional().messages({
     'date.base': 'Start date must be a valid date',

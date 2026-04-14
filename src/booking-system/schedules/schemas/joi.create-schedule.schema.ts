@@ -21,17 +21,13 @@ export const createScheduleSchema = Joi.object({
     'any.required': 'Type is required',
   }),
 
-  room: joiObjectId
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid room ID format',
-    }),
+  room: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid room ID format',
+  }),
 
-  company: joiObjectId
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid company ID format',
-    }),
+  company: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid company ID format',
+  }),
 
   startDate: Joi.date().iso().required().messages({
     'date.base': 'Start date must be a valid date',

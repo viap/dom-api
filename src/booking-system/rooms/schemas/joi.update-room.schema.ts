@@ -13,11 +13,9 @@ export const updateRoomSchema = Joi.object({
     'string.max': 'Description cannot exceed 500 characters',
   }),
 
-  company: joiObjectId
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid company ID format',
-    }),
+  company: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid company ID format',
+  }),
 
   capacity: Joi.number().integer().min(1).max(1000).optional().messages({
     'number.base': 'Capacity must be a number',

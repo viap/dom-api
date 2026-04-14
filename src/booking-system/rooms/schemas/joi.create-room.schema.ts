@@ -13,12 +13,10 @@ export const createRoomSchema = Joi.object({
     'string.max': 'Description cannot exceed 500 characters',
   }),
 
-  company: joiObjectId
-    .required()
-    .messages({
-      'string.pattern.base': 'Invalid company ID format',
-      'any.required': 'Company ID is required',
-    }),
+  company: joiObjectId.required().messages({
+    'string.pattern.base': 'Invalid company ID format',
+    'any.required': 'Company ID is required',
+  }),
 
   capacity: Joi.number().integer().min(1).max(1000).required().messages({
     'number.base': 'Capacity must be a number',

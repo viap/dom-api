@@ -32,7 +32,9 @@ describe('PeopleService', () => {
 
     service = module.get<PeopleService>(PeopleService);
     jest.clearAllMocks();
-    mockUsersService.getById.mockResolvedValue({ _id: '507f1f77bcf86cd799439031' });
+    mockUsersService.getById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439031',
+    });
     mockMediaService.existsPublished.mockResolvedValue(true);
   });
 

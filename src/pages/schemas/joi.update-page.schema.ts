@@ -8,9 +8,7 @@ const seoSchema = Joi.object()
   .max(20);
 
 export const updatePageSchema = Joi.object({
-  domainId: Joi.alternatives()
-    .try(joiObjectId, Joi.valid(null))
-    .optional(),
+  domainId: Joi.alternatives().try(joiObjectId, Joi.valid(null)).optional(),
   slug: Joi.string()
     .trim()
     .lowercase()

@@ -14,18 +14,14 @@ export const createBookingSchema = Joi.object({
     'string.max': 'Description cannot exceed 1000 characters',
   }),
 
-  room: joiObjectId
-    .required()
-    .messages({
-      'string.pattern.base': 'Invalid room ID format',
-      'any.required': 'Room ID is required',
-    }),
+  room: joiObjectId.required().messages({
+    'string.pattern.base': 'Invalid room ID format',
+    'any.required': 'Room ID is required',
+  }),
 
-  bookedBy: joiObjectId
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid user ID format',
-    }),
+  bookedBy: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid user ID format',
+  }),
 
   startDateTime: Joi.date().iso().required().messages({
     'date.base': 'Start date time must be a valid date',
