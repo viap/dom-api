@@ -1,19 +1,19 @@
 import {
   BadRequestException,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { imageSize } from 'image-size';
-import { access, mkdir, unlink, writeFile } from 'fs/promises';
+import { copyFile, mkdir, unlink, writeFile } from 'fs/promises';
+import sharp from 'sharp';
 import { MediaKind } from './enums/media-kind.enum';
 import { MediaService } from './media.service';
 import { Media } from './schemas/media.schema';
 import { UploadedMediaFile } from './types/uploaded-media-file.interface';
 
 jest.mock('fs/promises', () => ({
-  access: jest.fn(),
+  copyFile: jest.fn(),
   mkdir: jest.fn(),
   unlink: jest.fn(),
   writeFile: jest.fn(),
@@ -22,6 +22,14 @@ jest.mock('fs/promises', () => ({
 jest.mock('image-size', () => ({
   imageSize: jest.fn(),
 }));
+
+jest.mock('sharp', () =>
+  jest.fn(() => ({
+    resize: jest.fn().mockReturnThis(),
+    toFormat: jest.fn().mockReturnThis(),
+    toFile: jest.fn().mockResolvedValue(undefined),
+  })),
+);
 
 describe('MediaService', () => {
   let service: MediaService;
@@ -101,7 +109,7 @@ describe('MediaService', () => {
 
     service = module.get<MediaService>(MediaService);
     jest.clearAllMocks();
-    (access as jest.Mock).mockResolvedValue(undefined);
+    (copyFile as jest.Mock).mockResolvedValue(undefined);
     (mkdir as jest.Mock).mockResolvedValue(undefined);
     (writeFile as jest.Mock).mockResolvedValue(undefined);
     (unlink as jest.Mock).mockResolvedValue(undefined);
@@ -176,7 +184,8 @@ describe('MediaService', () => {
     } as UploadedMediaFile);
 
     expect(mkdir).toHaveBeenCalled();
-    expect(writeFile).toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(sharp).toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
         kind: MediaKind.Image,
@@ -191,6 +200,28 @@ describe('MediaService', () => {
     );
     expect(result.storageKey).toMatch(/^\d{4}\/\d{2}\/.+\.png$/);
     expect(result.url).toBe(`/media/${uploadedMediaId}/content`);
+  });
+
+  it('should copy gif original as thumbnail instead of resizing', async () => {
+    const gifBuffer = Buffer.from([
+      0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x02, 0x03,
+    ]);
+    (imageSize as jest.Mock).mockReturnValue({
+      width: 640,
+      height: 480,
+      type: 'gif',
+    });
+
+    const result = await service.upload({
+      originalname: 'animated.gif',
+      mimetype: 'image/gif',
+      size: 1000,
+      buffer: gifBuffer,
+    } as UploadedMediaFile);
+
+    expect(copyFile).toHaveBeenCalledTimes(1);
+    expect(sharp).not.toHaveBeenCalled();
+    expect(result.mimeType).toBe('image/gif');
   });
 
   it('should reject files whose MIME type does not match the bytes', async () => {
@@ -215,6 +246,21 @@ describe('MediaService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('should map image size parse failures to bad request', async () => {
+    (imageSize as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('invalid');
+    });
+
+    await expect(
+      service.upload({
+        originalname: 'broken.png',
+        mimetype: 'image/png',
+        size: 1200,
+        buffer: validPngBuffer,
+      } as UploadedMediaFile),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('should clean up the uploaded file if media save fails', async () => {
     mockMediaModel.mockImplementationOnce((payload) => ({
       _id: payload._id ?? uploadedMediaId,
@@ -231,7 +277,7 @@ describe('MediaService', () => {
       } as UploadedMediaFile),
     ).rejects.toThrow('db failed');
 
-    expect(unlink).toHaveBeenCalled();
+    expect(unlink).toHaveBeenCalledTimes(2);
   });
 
   it('should return content metadata for published uploaded media', async () => {
@@ -243,7 +289,6 @@ describe('MediaService', () => {
 
     const result = await service.getContent(uploadedMediaId);
 
-    expect(access).toHaveBeenCalled();
     expect(result.mimeType).toBe('image/png');
     expect(result.path).toContain(uploadedMedia.storageKey);
   });
@@ -256,6 +301,47 @@ describe('MediaService', () => {
     });
 
     await expect(service.getContent(externalMedia._id)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('should return thumbnail metadata for published uploaded media', async () => {
+    mockMediaModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+
+    const result = await service.getThumbnail(uploadedMediaId);
+
+    expect(result.mimeType).toBe('image/png');
+    expect(result.path).toContain(uploadedMedia.storageKey);
+  });
+
+  it('should derive thumbnail mime type from thumbnail file extension', async () => {
+    mockMediaModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...uploadedMedia,
+          storageKey: '2026/04/hero.webp',
+          mimeType: 'image/png',
+        }),
+      }),
+    });
+
+    const result = await service.getThumbnail(uploadedMediaId);
+
+    expect(result.mimeType).toBe('image/webp');
+  });
+
+  it('should reject thumbnail access for external media', async () => {
+    mockMediaModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(externalMedia),
+      }),
+    });
+
+    await expect(service.getThumbnail(externalMedia._id)).rejects.toThrow(
       NotFoundException,
     );
   });
@@ -290,36 +376,63 @@ describe('MediaService', () => {
     expect(result.isPublished).toBe(false);
   });
 
-  it('should delete uploaded files before removing the record', async () => {
-    mockMediaModel.findById.mockReturnValue({
+  it('should delete uploaded files after removing the record', async () => {
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(uploadedMedia),
       }),
     });
-    mockMediaModel.findByIdAndDelete.mockReturnValue({
-      exec: jest.fn().mockResolvedValue(uploadedMedia),
-    });
 
     await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
 
-    expect(unlink).toHaveBeenCalled();
+    expect(unlink).toHaveBeenCalledTimes(2);
     expect(mockMediaModel.findByIdAndDelete).toHaveBeenCalledWith(
       uploadedMediaId,
     );
   });
 
-  it('should keep the DB record when file deletion fails', async () => {
-    mockMediaModel.findById.mockReturnValue({
+  it('should tolerate missing thumbnail files during delete', async () => {
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(uploadedMedia),
       }),
     });
-    (unlink as jest.Mock).mockRejectedValueOnce(new Error('disk failed'));
+    (unlink as jest.Mock).mockRejectedValueOnce({ code: 'ENOENT' });
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+    expect(unlink).toHaveBeenCalledTimes(2);
+  });
+
+  it('should warn and continue when non-ENOENT cleanup fails', async () => {
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    (unlink as jest.Mock).mockRejectedValueOnce({
+      code: 'EACCES',
+      message: 'denied',
+    });
+    const warnSpy = jest.spyOn(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).logger,
+      'warn',
+    );
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('should throw not found if media is missing in delete', async () => {
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      }),
+    });
 
     await expect(service.remove(uploadedMediaId)).rejects.toThrow(
-      InternalServerErrorException,
+      NotFoundException,
     );
-    expect(mockMediaModel.findByIdAndDelete).not.toHaveBeenCalled();
   });
 
   it('should only count published media in existsPublished', async () => {

@@ -161,6 +161,7 @@ const galleryBlockSchema = Joi.object({
       }),
     )
     .min(1)
+    .max(50)
     .required(),
 });
 
@@ -174,14 +175,13 @@ const applicationFormBlockSchema = Joi.object({
   buttonLabel: Joi.string().trim().min(1).max(150).optional(),
 });
 
-export const pageBlockSchema = Joi.alternatives()
-  .try(
-    richTextBlockSchema,
-    entityCollectionBlockSchema,
-    heroBlockSchema,
-    ctaBlockSchema,
-    galleryBlockSchema,
-    applicationFormBlockSchema,
-  );
+export const pageBlockSchema = Joi.alternatives().try(
+  richTextBlockSchema,
+  entityCollectionBlockSchema,
+  heroBlockSchema,
+  ctaBlockSchema,
+  galleryBlockSchema,
+  applicationFormBlockSchema,
+);
 
 export const pageBlocksSchema = Joi.array().items(pageBlockSchema).max(20);

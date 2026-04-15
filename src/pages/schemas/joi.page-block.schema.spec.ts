@@ -66,6 +66,48 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should allow up to 50 gallery items', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Gallery',
+      slug: 'gallery',
+      blocks: [
+        {
+          id: 'gallery-1',
+          type: 'gallery',
+          items: Array.from({ length: 50 }, (_, index) => ({
+            mediaId:
+              index % 2
+                ? '507f1f77bcf86cd799439221'
+                : '507f1f77bcf86cd799439222',
+          })),
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject more than 50 gallery items', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Gallery',
+      slug: 'gallery',
+      blocks: [
+        {
+          id: 'gallery-1',
+          type: 'gallery',
+          items: Array.from({ length: 51 }, (_, index) => ({
+            mediaId:
+              index % 2
+                ? '507f1f77bcf86cd799439221'
+                : '507f1f77bcf86cd799439222',
+          })),
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('should reject invalid anchor and theme values', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

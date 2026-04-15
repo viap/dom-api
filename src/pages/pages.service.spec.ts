@@ -186,7 +186,9 @@ describe('PagesService', () => {
   });
 
   it('should allow setting homepage for a published domain page', async () => {
-    mockPageModel.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    mockPageModel.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
 
     await expect(
       service.create({
@@ -791,13 +793,11 @@ describe('PagesService', () => {
         }),
       }),
     });
-    mockPageModel.findOne
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        ...mockPage,
-        _id: '507f1f77bcf86cd799439119',
-        isHomepage: true,
-      });
+    mockPageModel.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      ...mockPage,
+      _id: '507f1f77bcf86cd799439119',
+      isHomepage: true,
+    });
 
     await expect(
       service.update(mockPage._id, { isHomepage: true }),

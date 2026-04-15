@@ -6,6 +6,8 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -90,8 +92,46 @@ export class MediaController {
   @Public()
   async getContent(@Param('id') id: string, @Res() res: Response) {
     const content = await this.mediaService.getContent(id);
-    res.type(content.mimeType);
-    return res.sendFile(content.path);
+    return new Promise<void>((resolve, reject) => {
+      res.type(content.mimeType);
+      res.sendFile(content.path, (error) => {
+        if (!error) {
+          resolve();
+          return;
+        }
+
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          reject(new NotFoundException('Media content not found'));
+          return;
+        }
+
+        reject(new InternalServerErrorException('Failed to stream media content'));
+      });
+    });
+  }
+
+  @Get(':id([0-9a-fA-F]{24})/thumbnail')
+  @Public()
+  async getThumbnail(@Param('id') id: string, @Res() res: Response) {
+    const thumbnail = await this.mediaService.getThumbnail(id);
+    return new Promise<void>((resolve, reject) => {
+      res.type(thumbnail.mimeType);
+      res.sendFile(thumbnail.path, (error) => {
+        if (!error) {
+          resolve();
+          return;
+        }
+
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          reject(new NotFoundException('Media thumbnail not found'));
+          return;
+        }
+
+        reject(
+          new InternalServerErrorException('Failed to stream media thumbnail'),
+        );
+      });
+    });
   }
 
   @Get(':id([0-9a-fA-F]{24})')

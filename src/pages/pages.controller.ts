@@ -92,7 +92,9 @@ export class PagesController {
   @Public()
   findDomainHomepage(
     @Param(new JoiValidationPipe(pageDomainParamsSchema))
-    params: { domainSlug: string },
+    params: {
+      domainSlug: string;
+    },
   ) {
     return this.pagesService.findDomainHomepage(params.domainSlug);
   }
@@ -112,7 +114,7 @@ export class PagesController {
     );
   }
 
-  @Get(':id')
+  @Get(':id([0-9a-fA-F]{24})')
   @Public()
   findOne(@Param('id') id: string) {
     return this.pagesService.findOne(id);
@@ -128,7 +130,7 @@ export class PagesController {
     return this.pagesService.create(createPageDto);
   }
 
-  @Patch(':id')
+  @Patch(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   update(
     @Param('id') id: string,
@@ -138,7 +140,7 @@ export class PagesController {
     return this.pagesService.update(id, updatePageDto);
   }
 
-  @Delete(':id')
+  @Delete(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {

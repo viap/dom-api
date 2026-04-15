@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { IS_PUBLIC_KEY } from '@/auth/decorators/public.decorator';
 import { ROLES_KEY } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
@@ -84,5 +85,17 @@ describe('PagesController', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, PagesController.prototype.findAdminOne),
     ).toEqual([Role.Admin, Role.Editor]);
+  });
+
+  it('should constrain id routes to object id regex', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.findOne)).toBe(
+      ':id([0-9a-fA-F]{24})',
+    );
+    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.update)).toBe(
+      ':id([0-9a-fA-F]{24})',
+    );
+    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.remove)).toBe(
+      ':id([0-9a-fA-F]{24})',
+    );
   });
 });

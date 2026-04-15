@@ -1,15 +1,16 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { imageSize } from 'image-size';
-import { access, mkdir, unlink, writeFile } from 'fs/promises';
+import { copyFile, mkdir, unlink, writeFile } from 'fs/promises';
 import { Model } from 'mongoose';
 import { randomUUID } from 'crypto';
 import { basename, extname, join, resolve, sep } from 'path';
+import sharp from 'sharp';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -54,7 +55,13 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
   private readonly uploadsRoot = join(process.cwd(), 'uploads', 'media');
+  private readonly uploadsThumbnailsRoot = join(
+    process.cwd(),
+    'uploads',
+    'thumbnails',
+  );
   private readonly allowedMimeTypes = new Set(
     Object.values(IMAGE_FORMAT_TO_MIME),
   );
@@ -165,27 +172,30 @@ export class MediaService {
   }
 
   async getContent(id: string): Promise<{ path: string; mimeType: string }> {
-    const validId = validateObjectId(id);
-    if (!validId) {
-      throw new NotFoundException('Invalid media ID format');
-    }
-
-    const media = await this.mediaModel
-      .findOne({ _id: validId, isPublished: true })
-      .lean()
-      .exec();
-    if (!media || !this.isUploadedMedia(media)) {
-      throw new NotFoundException('Media content not found');
-    }
+    const media = await this.findPublishedUploadedMediaOrThrow(
+      id,
+      'Media content not found',
+    );
 
     const path = this.resolveUploadedFilePath(media.storageKey);
-    await access(path).catch(() => {
-      throw new NotFoundException('Media content not found');
-    });
 
     return {
       path,
       mimeType: media.mimeType || 'application/octet-stream',
+    };
+  }
+
+  async getThumbnail(id: string): Promise<{ path: string; mimeType: string }> {
+    const media = await this.findPublishedUploadedMediaOrThrow(
+      id,
+      'Media thumbnail not found',
+    );
+
+    const path = this.resolveThumbnailFilePath(media.storageKey);
+
+    return {
+      path,
+      mimeType: this.resolveMimeTypeFromPath(path),
     };
   }
 
@@ -196,7 +206,12 @@ export class MediaService {
     const format = this.detectImageFormat(file);
     const mimeType = IMAGE_FORMAT_TO_MIME[format];
     const extension = IMAGE_FORMAT_TO_EXTENSION[format];
-    const dimensions = imageSize(file.buffer as unknown as Uint8Array);
+    let dimensions: ReturnType<typeof imageSize>;
+    try {
+      dimensions = imageSize(file.buffer as unknown as Uint8Array);
+    } catch {
+      throw new BadRequestException('Unsupported media type');
+    }
 
     const now = new Date();
     const year = now.getUTCFullYear().toString();
@@ -205,6 +220,8 @@ export class MediaService {
     const storageKey = `${year}/${month}/${filename}`;
     const targetDir = join(this.uploadsRoot, year, month);
     const targetPath = join(targetDir, filename);
+    const thumbnailTargetDir = join(this.uploadsThumbnailsRoot, year, month);
+    const thumbnailTargetPath = join(thumbnailTargetDir, filename);
     const media = new this.mediaModel({
       kind: MediaKind.Image,
       storageKey,
@@ -219,13 +236,19 @@ export class MediaService {
 
     media.url = this.buildContentUrl(media._id.toString());
 
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(targetPath, file.buffer as unknown as Uint8Array);
-
     try {
+      await mkdir(targetDir, { recursive: true });
+      await mkdir(thumbnailTargetDir, { recursive: true });
+      await writeFile(targetPath, file.buffer as unknown as Uint8Array);
+      if (format === 'gif') {
+        await copyFile(targetPath, thumbnailTargetPath);
+      } else {
+        await this.buildThumbnailFromFile(targetPath, thumbnailTargetPath, format);
+      }
       return await media.save();
     } catch (error) {
       await unlink(targetPath).catch(() => undefined);
+      await unlink(thumbnailTargetPath).catch(() => undefined);
       throw error;
     }
   }
@@ -266,25 +289,19 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    const media = await this.mediaModel.findById(validId).lean().exec();
+    const media = await this.mediaModel.findByIdAndDelete(validId).lean().exec();
     if (!media) {
       throw new NotFoundException('Media not found');
     }
 
     if (this.isUploadedMedia(media)) {
       const path = this.resolveUploadedFilePath(media.storageKey);
-
-      // Delete the file first so the public asset cannot outlive the record.
-      try {
-        await unlink(path);
-      } catch {
-        throw new InternalServerErrorException(
-          'Failed to delete media file from storage',
-        );
-      }
+      const thumbnailPath = this.resolveThumbnailFilePath(media.storageKey);
+      const mediaId = media._id.toString();
+      await this.removeFileBestEffort(path, mediaId);
+      await this.removeFileBestEffort(thumbnailPath, mediaId);
     }
 
-    await this.mediaModel.findByIdAndDelete(validId).exec();
     return true;
   }
 
@@ -405,6 +422,16 @@ export class MediaService {
     return path;
   }
 
+  private resolveThumbnailFilePath(storageKey: string): string {
+    const root = resolve(this.uploadsThumbnailsRoot);
+    const path = resolve(root, storageKey);
+    if (path !== root && !path.startsWith(`${root}${sep}`)) {
+      throw new BadRequestException('Invalid media storage key');
+    }
+
+    return path;
+  }
+
   private parseIsoDate(value: string, field: string): Date {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
@@ -456,5 +483,55 @@ export class MediaService {
     }
 
     return null;
+  }
+
+  private async buildThumbnailFromFile(
+    sourcePath: string,
+    outputPath: string,
+    format: SupportedImageFormat,
+  ): Promise<void> {
+    await sharp(sourcePath)
+      .resize({ width: 320, fit: 'inside', withoutEnlargement: true })
+      .toFormat(format)
+      .toFile(outputPath);
+  }
+
+  private async findPublishedUploadedMediaOrThrow(
+    id: string,
+    notFoundMessage: string,
+  ): Promise<Pick<Media, 'storageKey' | 'mimeType'>> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      throw new NotFoundException('Invalid media ID format');
+    }
+
+    const media = await this.mediaModel
+      .findOne({ _id: validId, isPublished: true })
+      .lean()
+      .exec();
+    if (!media || !this.isUploadedMedia(media)) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    return media;
+  }
+
+  private resolveMimeTypeFromPath(path: string): string {
+    const extension = extname(path).toLowerCase();
+    return EXTENSION_TO_MIME[extension] || 'application/octet-stream';
+  }
+
+  private async removeFileBestEffort(path: string, mediaId: string) {
+    try {
+      await unlink(path);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === 'ENOENT') {
+        return;
+      }
+      this.logger.warn(
+        `Failed to cleanup media file (mediaId=${mediaId}, path=${path}): ${err?.message || 'unknown error'}`,
+      );
+    }
   }
 }
