@@ -147,7 +147,8 @@ export class PsychologistsService {
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const telegramUserName = newClient.contacts.find(
+      const contacts = newClient.contacts ?? [];
+      const telegramUserName = contacts.find(
         (contact) => contact.network === SocialNetworks.Telegram,
       )?.username;
 
@@ -165,7 +166,7 @@ export class PsychologistsService {
       } else {
         const user = await this.userService.create({
           name: newClient.name,
-          contacts: newClient.contacts,
+          contacts: contacts.length ? contacts : undefined,
         });
 
         psychologist.clients.push({
