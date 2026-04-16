@@ -1,15 +1,17 @@
 import { PartnerType } from '../enums/partner-type.enum';
+import { SocialNetworks } from '@/common/enums/social-networks.enum';
+import { Contact } from '@/common/schemas/contact.schema';
 
 export interface UpdatePartnerDto {
   title?: string;
   type?: PartnerType;
   description?: string;
   logoId?: string;
-  website?: string;
-  contactPerson?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
+  links?: Array<{
+    platform: SocialNetworks;
+    url?: string;
+    value?: string;
+  }>;
+  contacts?: Array<Contact>;
   isPublished?: boolean;
 }

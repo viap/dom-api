@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 
 @Schema({ _id: false })
-export class PersonSocialLink {
+export class PartnerLink {
   @Prop({ required: true, enum: Object.values(SocialNetworks) })
   platform: SocialNetworks;
 
@@ -13,5 +13,4 @@ export class PersonSocialLink {
   value?: string;
 }
 
-export const personSocialLinkSchema =
-  SchemaFactory.createForClass(PersonSocialLink);
+export const partnerLinkSchema = SchemaFactory.createForClass(PartnerLink);

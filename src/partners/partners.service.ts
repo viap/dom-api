@@ -52,6 +52,7 @@ export class PartnersService {
 
     return this.partnerModel
       .find(query)
+      .select({ contacts: 0 })
       .sort({ title: 1 })
       .skip(offset)
       .limit(limit)
@@ -67,8 +68,48 @@ export class PartnersService {
 
     const partner = await this.partnerModel
       .findOne({ _id: validId, isPublished: true })
+      .select({ contacts: 0 })
       .lean()
       .exec();
+    if (!partner) {
+      throw new NotFoundException('Partner not found');
+    }
+
+    return partner as PartnerDocument;
+  }
+
+  async findAllAdmin(
+    queryParams: PartnerQueryParams = {},
+  ): Promise<PartnerDocument[]> {
+    const safeParams = safeFindParams(queryParams);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = {};
+
+    if (safeParams.title && typeof safeParams.title === 'string') {
+      query.title = { $regex: new RegExp(safeParams.title, 'i') };
+    }
+
+    if (safeParams.type && typeof safeParams.type === 'string') {
+      query.type = safeParams.type;
+    }
+
+    return this.partnerModel
+      .find(query)
+      .sort({ title: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async findOneAdmin(id: string): Promise<PartnerDocument> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      throw new NotFoundException('Invalid partner ID format');
+    }
+
+    const partner = await this.partnerModel.findById(validId).lean().exec();
     if (!partner) {
       throw new NotFoundException('Partner not found');
     }

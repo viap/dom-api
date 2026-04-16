@@ -11,7 +11,8 @@ export interface UpdatePersonDto {
   contacts?: Array<Contact>;
   socialLinks?: Array<{
     platform: SocialNetworks;
-    url: string;
+    url?: string;
+    value?: string;
   }>;
   isPublished?: boolean;
 }

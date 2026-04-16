@@ -1,4 +1,6 @@
 import * as Joi from 'joi';
+import { SocialNetworks } from '@/common/enums/social-networks.enum';
+import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { PartnerType } from '../enums/partner-type.enum';
 
@@ -22,20 +24,24 @@ export const createPartnerSchema = Joi.object({
 
   logoId: joiObjectId.optional(),
 
-  website: Joi.string().trim().uri().max(300).optional().messages({
-    'string.uri': 'Invalid website URL format',
-    'string.max': 'Website cannot exceed 300 characters',
-  }),
+  links: Joi.array()
+    .items(
+      Joi.object({
+        platform: Joi.string()
+          .valid(...Object.values(SocialNetworks))
+          .required(),
+        url: Joi.string()
+          .trim()
+          .min(1)
+          .uri({ scheme: ['http', 'https'] })
+          .max(300)
+          .optional(),
+        value: Joi.string().trim().min(1).max(300).optional(),
+      }).or('url', 'value'),
+    )
+    .default([]),
 
-  contactPerson: Joi.object({
-    name: Joi.string().trim().max(120).optional(),
-    email: Joi.string().trim().email().max(120).optional(),
-    phone: Joi.string()
-      .trim()
-      .pattern(/^[\+]?[0-9\s\-\(\)]+$/)
-      .max(30)
-      .optional(),
-  }).optional(),
+  contacts: Joi.array().items(joiContactSchema).default([]),
 
   isPublished: Joi.boolean().default(false).optional(),
 });

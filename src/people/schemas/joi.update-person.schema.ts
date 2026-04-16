@@ -33,8 +33,14 @@ export const updatePersonSchema = Joi.object({
         platform: Joi.string()
           .valid(...Object.values(SocialNetworks))
           .required(),
-        url: Joi.string().trim().uri().max(300).required(),
-      }),
+        url: Joi.string()
+          .trim()
+          .min(1)
+          .uri({ scheme: ['http', 'https'] })
+          .max(300)
+          .optional(),
+        value: Joi.string().trim().min(1).max(300).optional(),
+      }).or('url', 'value'),
     )
     .optional(),
 

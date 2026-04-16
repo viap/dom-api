@@ -35,6 +35,21 @@ export class PartnersController {
     return this.partnersService.findAll(query);
   }
 
+  @Get('admin')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdmin(
+    @Query(new JoiValidationPipe(partnerQuerySchema))
+    query: PartnerQueryParams,
+  ) {
+    return this.partnersService.findAllAdmin(query);
+  }
+
+  @Get('admin/:id')
+  @Roles(Role.Admin, Role.Editor)
+  findOneAdmin(@Param('id') id: string) {
+    return this.partnersService.findOneAdmin(id);
+  }
+
   @Get(':id')
   @Public()
   findOne(@Param('id') id: string) {

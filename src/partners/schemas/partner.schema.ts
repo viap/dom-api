@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
+import { Contact, contactSchema } from '@/common/schemas/contact.schema';
 import { PartnerType } from '../enums/partner-type.enum';
+import { PartnerLink, partnerLinkSchema } from './partner-link.schema';
 
 export type PartnerDocument = Partner &
   Document & { createdAt: Date; updatedAt: Date };
@@ -19,18 +21,11 @@ export class Partner {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media' })
   logoId?: mongoose.Schema.Types.ObjectId;
 
-  @Prop({ trim: true })
-  website?: string;
+  @Prop({ required: true, schema: partnerLinkSchema, default: [] })
+  links: Array<PartnerLink>;
 
-  @Prop({
-    type: {
-      name: { type: String },
-      email: { type: String },
-      phone: { type: String },
-    },
-    _id: false,
-  })
-  contactPerson?: { name?: string; email?: string; phone?: string };
+  @Prop({ required: true, schema: contactSchema, default: [] })
+  contacts: Array<Contact>;
 
   @Prop({ required: true, default: false })
   isPublished: boolean;
