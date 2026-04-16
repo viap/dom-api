@@ -203,6 +203,33 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - `/uploads/media/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
 - `/uploads/thumbnails/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
 
+### Persistent Upload Storage (Deployment)
+
+- Production deployment requires GitHub Actions secret `REMOTE_UPLOADS_PATH` (absolute path on the server, example: `/var/lib/dom-api/uploads`).
+- Deployment must maintain the invariant: `${REMOTE_TARGET}/uploads -> ${REMOTE_UPLOADS_PATH}` (symlink).
+- Deployment scripts create `REMOTE_UPLOADS_PATH` (and `media`/`thumbnails` subdirectories) automatically when missing.
+- If `${REMOTE_TARGET}/uploads` exists as a real non-empty directory, deployment fails and requires manual cleanup/move before re-run (no migration/backfill in workflow).
+- No migration/backfill is performed by the deployment workflow.
+- Clients must still use media API endpoints (`/media/:id/content`, `/media/:id/thumbnail`) and must not use raw `/uploads/...` URLs.
+
+### Deployment Workflow Requirements
+
+- Required GitHub Actions secrets:
+  - `PORT`, `WEBSOCKET_PORT`, `CORS_ORIGINS`
+  - `JWT_SECRET`
+  - `BOT_CLIENT_NAME`, `BOT_CLIENT_PASSWORD`
+  - `WEB_CLIENT_NAME`, `WEB_CLIENT_PASSWORD`
+  - `MONGO_URL`, `MONGO_DBNAME`, `MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD`
+  - `REMOTE_HOST`, `REMOTE_USER`, `SSH_PRIVATE_KEY`, `REMOTE_TARGET`, `REMOTE_UPLOADS_PATH`
+- Deploy uses deterministic server dependency install: `npm ci --omit=dev`.
+- Deploy performs PM2 zero-downtime cutover (`reload` when process exists, `start` otherwise).
+- Health check uses retries (up to 12 attempts with 5-second intervals) against `GET /auth/ping`.
+- Rollback runs automatically when the deploy job fails for both `push` and `workflow_dispatch` triggers.
+- Deployment shell behavior is centralized in reusable scripts under `scripts/deploy/*`:
+  - `scripts/deploy/lib.sh`
+  - `scripts/deploy/post_sync_start.sh`
+  - `scripts/deploy/rollback.sh`
+
 ### Real-time WebSocket Events
 
 - `auth-by-token` - Authenticate WebSocket connection

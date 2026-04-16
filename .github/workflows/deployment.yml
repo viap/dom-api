@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - master
-    paths-ignore:
-      - '.github/workflows/*'
   workflow_dispatch:
+
+concurrency:
+  group: dom-api-prod-deploy
+  cancel-in-progress: false
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -51,9 +53,13 @@ jobs:
           fail_on_empty: true
           envkey_NODE_ENV: prod
           envkey_PORT: ${{secrets.PORT}}
+          envkey_WEBSOCKET_PORT: ${{secrets.WEBSOCKET_PORT}}
+          envkey_CORS_ORIGINS: ${{secrets.CORS_ORIGINS}}
           envkey_JWT_SECRET: ${{secrets.JWT_SECRET}}
           envkey_BOT_CLIENT_NAME: ${{secrets.BOT_CLIENT_NAME}}
           envkey_BOT_CLIENT_PASSWORD: ${{secrets.BOT_CLIENT_PASSWORD}}
+          envkey_WEB_CLIENT_NAME: ${{secrets.WEB_CLIENT_NAME}}
+          envkey_WEB_CLIENT_PASSWORD: ${{secrets.WEB_CLIENT_PASSWORD}}
           envkey_MONGO_URL: ${{secrets.MONGO_URL}}
           envkey_MONGO_DBNAME: ${{secrets.MONGO_DBNAME}}
           envkey_MONGO_INITDB_ROOT_USERNAME: ${{secrets.MONGO_INITDB_ROOT_USERNAME}}
@@ -62,29 +68,44 @@ jobs:
         run: npm ci
       - name: Build the project
         run: npm run build
-      - name: Remote | Stop project
-        uses: fifsky/ssh-action@master
-        with:
-          command: |
-            echo "Stopping existing PM2 processes..."
-            pm2 stop domApi || echo "domApi process not running or already stopped"
-            pm2 delete domApi || echo "domApi process not found or already deleted"
-            pm2 stop domBot || echo "domBot process not running or already stopped"
-            echo "PM2 cleanup completed"
-          host: ${{secrets.REMOTE_HOST}}
-          user: ${{secrets.REMOTE_USER}}
-          key: ${{secrets.SSH_PRIVATE_KEY}}
       - name: Deploy to server
-        uses: easingthemes/ssh-deploy@main
+        uses: easingthemes/ssh-deploy@v6.0.1
         with:
           SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
           ARGS: '-avzr --delete'
           REMOTE_HOST: ${{secrets.REMOTE_HOST}}
           REMOTE_USER: ${{secrets.REMOTE_USER}}
           TARGET: ${{secrets.REMOTE_TARGET}}
-          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/, /test/, /coverage/'
+          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/, /test/, /coverage/, /uploads/'
           SCRIPT_BEFORE: |
+            [ -n "${{secrets.REMOTE_TARGET}}" ] || { echo "REMOTE_TARGET secret is missing"; exit 1; }
+            [ -n "${{secrets.REMOTE_UPLOADS_PATH}}" ] || { echo "REMOTE_UPLOADS_PATH secret is missing"; exit 1; }
             mkdir -p ${{secrets.REMOTE_TARGET}}
+            if [ ! -d "${{secrets.REMOTE_UPLOADS_PATH}}" ]; then
+              echo "Creating REMOTE_UPLOADS_PATH directory..."
+              mkdir -p "${{secrets.REMOTE_UPLOADS_PATH}}"
+            fi
+            mkdir -p "${{secrets.REMOTE_UPLOADS_PATH}}/media" "${{secrets.REMOTE_UPLOADS_PATH}}/thumbnails"
+            UPLOADS_LINK="${{secrets.REMOTE_TARGET}}/uploads"
+            UPLOADS_TARGET="${{secrets.REMOTE_UPLOADS_PATH}}"
+            if [ -L "$UPLOADS_LINK" ]; then
+              CURRENT_TARGET="$(readlink -f "$UPLOADS_LINK")"
+              EXPECTED_TARGET="$(readlink -f "$UPLOADS_TARGET")"
+              [ "$CURRENT_TARGET" = "$EXPECTED_TARGET" ] || {
+                echo "Existing uploads symlink points to unexpected location: $CURRENT_TARGET";
+                exit 1;
+              }
+            elif [ -e "$UPLOADS_LINK" ]; then
+              if [ -d "$UPLOADS_LINK" ] && [ -z "$(ls -A "$UPLOADS_LINK")" ]; then
+                rmdir "$UPLOADS_LINK"
+                ln -s "$UPLOADS_TARGET" "$UPLOADS_LINK"
+              else
+                echo "Refusing to replace non-empty ${UPLOADS_LINK}. Move/clean it manually, then re-run deploy."
+                exit 1;
+              fi
+            else
+              ln -s "$UPLOADS_TARGET" "$UPLOADS_LINK"
+            fi
             echo "Creating backup of current deployment..."
             if [ -d "${{secrets.REMOTE_TARGET}}" ] && [ "$(ls -A ${{secrets.REMOTE_TARGET}})" ]; then
               BACKUP_DIR="${{secrets.REMOTE_TARGET}}_backup_$(date +%Y%m%d_%H%M%S)"
@@ -96,34 +117,25 @@ jobs:
               echo "No existing deployment found, skipping backup"
             fi
       - name: Remote | Init and start the project
-        uses: fifsky/ssh-action@master
+        uses: fifsky/ssh-action@v0.0.6
         with:
           command: |
-            cd ${{secrets.REMOTE_TARGET}}
-            echo "Creating logs directory..."
-            mkdir -p logs
-            echo "Installing dependencies..."
-            npm install --production
-            echo "Starting applications with PM2 ecosystem..."
-            pm2 start ecosystem.config.js
-            echo "Starting domBot application (if exists)..."
-            pm2 start domBot || echo "Warning: domBot configuration not found - skipping"
-            pm2 status
-            echo "Waiting for application to start..."
-            sleep 10
-            echo "Performing health check..."
-            # Check if the application is responding
-            if curl -f -s http://localhost:${{secrets.PORT}}/auth/ping | grep -q "pong" || curl -f -s http://localhost:3003/auth/ping | grep -q "pong"; then
-              echo "Health check passed - application is responding"
-            else
-              echo "Health check failed - application may not be running correctly"
-              echo "Checking application logs..."
-              pm2 logs domApi --lines 20 --nostream
-              echo "Checking process status..."
-              pm2 status
-              exit 1
-            fi
-            echo "Deployment completed successfully"
+            export PORT="${{secrets.PORT}}"
+            export WEBSOCKET_PORT="${{secrets.WEBSOCKET_PORT}}"
+            export CORS_ORIGINS="${{secrets.CORS_ORIGINS}}"
+            export JWT_SECRET="${{secrets.JWT_SECRET}}"
+            export BOT_CLIENT_NAME="${{secrets.BOT_CLIENT_NAME}}"
+            export BOT_CLIENT_PASSWORD="${{secrets.BOT_CLIENT_PASSWORD}}"
+            export WEB_CLIENT_NAME="${{secrets.WEB_CLIENT_NAME}}"
+            export WEB_CLIENT_PASSWORD="${{secrets.WEB_CLIENT_PASSWORD}}"
+            export MONGO_URL="${{secrets.MONGO_URL}}"
+            export MONGO_DBNAME="${{secrets.MONGO_DBNAME}}"
+            export MONGO_INITDB_ROOT_USERNAME="${{secrets.MONGO_INITDB_ROOT_USERNAME}}"
+            export MONGO_INITDB_ROOT_PASSWORD="${{secrets.MONGO_INITDB_ROOT_PASSWORD}}"
+            export REMOTE_TARGET="${{secrets.REMOTE_TARGET}}"
+            export REMOTE_UPLOADS_PATH="${{secrets.REMOTE_UPLOADS_PATH}}"
+            cd "${REMOTE_TARGET}"
+            bash scripts/deploy/post_sync_start.sh
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
@@ -145,7 +157,7 @@ jobs:
           echo "Commit: ${{ github.sha }}"
           echo "Failed at: $(date)"
           echo "Please check logs and consider rollback if necessary"
-          echo "Manual rollback can be triggered with: gh workflow run deployment.yml -f manual_rollback=true"
+          echo "Manual rollback can be triggered with: gh workflow run deployment.yml"
 
       - name: Create deployment summary
         if: always()
@@ -179,33 +191,17 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     environment: prod
-    if: failure() && github.event_name == 'workflow_dispatch'
+    if: ${{ always() && needs.deploy.result == 'failure' }}
     needs: deploy
     steps:
       - name: Rollback to previous deployment
-        uses: fifsky/ssh-action@master
+        uses: fifsky/ssh-action@v0.0.6
         with:
           command: |
-            echo "Rolling back to previous deployment..."
-            cd $(dirname ${{secrets.REMOTE_TARGET}})
-            LATEST_BACKUP=$(ls -dt ${{secrets.REMOTE_TARGET}}_backup_* 2>/dev/null | head -n 1)
-            if [ -n "$LATEST_BACKUP" ]; then
-              echo "Stopping current applications..."
-              pm2 stop domApi domBot || true
-              pm2 delete domApi || true
-              echo "Restoring from backup: $LATEST_BACKUP"
-              rm -rf ${{secrets.REMOTE_TARGET}}
-              cp -r $LATEST_BACKUP ${{secrets.REMOTE_TARGET}}
-              cd ${{secrets.REMOTE_TARGET}}
-              echo "Restarting applications..."
-              pm2 start ecosystem.config.js || pm2 start npm --name domApi -- start
-              pm2 start domBot || echo "domBot not available"
-              pm2 status
-              echo "Rollback completed successfully"
-            else
-              echo "No backup found for rollback"
-              exit 1
-            fi
+            export PORT="${{secrets.PORT}}"
+            export REMOTE_TARGET="${{secrets.REMOTE_TARGET}}"
+            export REMOTE_UPLOADS_PATH="${{secrets.REMOTE_UPLOADS_PATH}}"
+            bash "${REMOTE_TARGET}/scripts/deploy/rollback.sh"
           host: ${{secrets.REMOTE_HOST}}
           user: ${{secrets.REMOTE_USER}}
           key: ${{secrets.SSH_PRIVATE_KEY}}
