@@ -4,4 +4,5 @@ export enum SocialNetworks {
   Instagram = 'instagram',
   WatsApp = 'watsapp',
   Viber = 'viber',
+  Other = 'other',
 }

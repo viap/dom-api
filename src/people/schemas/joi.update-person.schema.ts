@@ -1,6 +1,7 @@
 import * as Joi from 'joi';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
+import { PersonRole } from '../enums/person-role.enum';
 
 export const updatePersonSchema = Joi.object({
   userId: Joi.string().hex().length(24).optional(),
@@ -10,7 +11,13 @@ export const updatePersonSchema = Joi.object({
     'string.max': 'Full name cannot exceed 150 characters',
   }),
 
-  roles: Joi.array().items(Joi.string().trim().min(1).max(50)).optional(),
+  roles: Joi.array()
+    .items(
+      Joi.string()
+        .trim()
+        .valid(...Object.values(PersonRole)),
+    )
+    .optional(),
 
   bio: Joi.string().trim().max(2000).allow('').optional().messages({
     'string.max': 'Bio cannot exceed 2000 characters',

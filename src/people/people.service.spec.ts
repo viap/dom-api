@@ -3,16 +3,31 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MediaService } from '@/media/media.service';
 import { UsersService } from '@/users/users.service';
+import { PersonRole } from './enums/person-role.enum';
 import { Person } from './schemas/person.schema';
 import { PeopleService } from './people.service';
 
 describe('PeopleService', () => {
   let service: PeopleService;
 
-  const mockPersonModel = jest.fn().mockImplementation((payload) => ({
-    ...payload,
-    save: jest.fn().mockResolvedValue(payload),
-  }));
+  const mockSave = jest.fn().mockImplementation(async (payload) => payload);
+  const mockQueryExec = jest.fn().mockResolvedValue([]);
+  const mockQueryChain = {
+    sort: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockReturnThis(),
+    exec: mockQueryExec,
+  };
+  const mockPersonModel = Object.assign(
+    jest.fn().mockImplementation((payload) => ({
+      ...payload,
+      save: jest.fn().mockImplementation(() => mockSave(payload)),
+    })),
+    {
+      find: jest.fn().mockReturnValue(mockQueryChain),
+    },
+  );
   const mockUsersService = {
     getById: jest.fn().mockResolvedValue({ _id: '507f1f77bcf86cd799439031' }),
   };
@@ -36,6 +51,7 @@ describe('PeopleService', () => {
       _id: '507f1f77bcf86cd799439031',
     });
     mockMediaService.existsPublished.mockResolvedValue(true);
+    mockQueryExec.mockResolvedValue([]);
   });
 
   it('should reject unpublished media references for public people data', async () => {
@@ -47,5 +63,15 @@ describe('PeopleService', () => {
         photoId: '507f1f77bcf86cd799439032',
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should apply role filter when provided in findAll query params', async () => {
+    await service.findAll({ role: PersonRole.Speaker });
+
+    expect(mockPersonModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+      roles: PersonRole.Speaker,
+    });
+    expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1 });
   });
 });

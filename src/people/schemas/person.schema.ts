@@ -6,6 +6,7 @@ import {
   PersonSocialLink,
   personSocialLinkSchema,
 } from './person-social-link.schema';
+import { PersonRole } from '../enums/person-role.enum';
 
 export type PersonDocument = Person &
   Document & { createdAt: Date; updatedAt: Date };
@@ -18,8 +19,8 @@ export class Person {
   @Prop({ required: true, trim: true })
   fullName: string;
 
-  @Prop({ type: [String], default: [] })
-  roles: string[];
+  @Prop({ type: [String], enum: Object.values(PersonRole), default: [] })
+  roles: PersonRole[];
 
   @Prop({ default: '' })
   bio: string;
