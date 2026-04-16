@@ -275,6 +275,12 @@ npm run test:cov
 - Implement service-controller separation
 - Add Joi validation schemas for all DTOs
 
+## 📚 Related Docs
+
+- [Docs index](./docs/README.md)
+- [Working context](./docs/working-context.md)
+- [Local development](./docs/specs/local-development.md)
+
 ## 📄 License
 
 This project is private and unlicensed.
