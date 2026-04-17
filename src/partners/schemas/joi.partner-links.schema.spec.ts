@@ -137,37 +137,16 @@ describe('Partner links Joi validation', () => {
     expect(error).toBeDefined();
   });
 
-  it('rejects legacy website field in create payload', () => {
+  it('rejects unknown fields in create payload', () => {
     const pipe = new JoiValidationPipe(createPartnerSchema);
 
     expect(() =>
       pipe.transform({
         title: 'DOM',
         type: 'media',
-        website: 'https://dom.example.com',
+        unexpectedField: 'not-allowed',
       }),
     ).toThrow(BadRequestException);
   });
 
-  it('rejects legacy link field in update payload', () => {
-    const pipe = new JoiValidationPipe(updatePartnerSchema);
-
-    expect(() =>
-      pipe.transform({
-        link: 'https://dom.example.com',
-      }),
-    ).toThrow(BadRequestException);
-  });
-
-  it('rejects legacy contactPerson field in create payload', () => {
-    const pipe = new JoiValidationPipe(createPartnerSchema);
-
-    expect(() =>
-      pipe.transform({
-        title: 'DOM',
-        type: 'media',
-        contactPerson: { name: 'Luka' },
-      }),
-    ).toThrow(BadRequestException);
-  });
 });

@@ -443,7 +443,7 @@ Columns:
 - Logo
 - Title
 - Type
-- Website
+- Links
 - Published
 - Updated At
 
@@ -475,14 +475,20 @@ Actions:
   UI: textarea
 - `logoId`
   UI: media picker
-- `website`
-  UI: text input
-- `contactPerson.name`
-  UI: text input
-- `contactPerson.email`
-  UI: text input
-- `contactPerson.phone`
-  UI: text input
+- `links[]`
+  UI: repeatable rows
+  Each row:
+  - `platform` select
+  - `url` text input (optional, http/https)
+  - `value` text input (optional)
+  Note: each row requires at least one of `url` or `value`
+- `contacts[]`
+  UI: repeatable rows
+  Each row:
+  - `network` select
+  - `username` text input
+  - `hidden` checkbox
+  - optional `id` hidden/advanced field if needed
 - `isPublished`
   UI: switch
 
@@ -490,6 +496,7 @@ Actions:
 
 - create/edit/delete: `admin`, `editor`
 - public reads in API return only published entities
+- partner `contacts[]` are visible only through admin partner read routes
 
 ---
 
