@@ -42,6 +42,7 @@ describe('MediaService', () => {
     url: `/media/${uploadedMediaId}/content`,
     title: 'Hero',
     alt: 'Hero image',
+    folder: 'events',
     mimeType: 'image/png',
     sizeBytes: 512044,
     width: 1200,
@@ -93,6 +94,7 @@ describe('MediaService', () => {
       findByIdAndUpdate: jest.fn(),
       findByIdAndDelete: jest.fn(),
       countDocuments: jest.fn(),
+      distinct: jest.fn(),
     },
   );
 
@@ -149,12 +151,28 @@ describe('MediaService', () => {
     });
   });
 
+  it('should filter public media reads by folder', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAll({
+      limit: '10',
+      offset: '0',
+      folder: 'events',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+      folder: 'events',
+    });
+  });
+
   it('should create external media records only', async () => {
     const result = await service.create({
       kind: MediaKind.Image,
       url: 'https://cdn.example.com/assets/hero.png',
       title: ' Hero ',
       alt: ' Landing image ',
+      folder: ' media-library ',
     });
 
     expect(result).toEqual(
@@ -162,6 +180,7 @@ describe('MediaService', () => {
         url: 'https://cdn.example.com/assets/hero.png',
         title: 'Hero',
         alt: 'Landing image',
+        folder: 'media-library',
       }),
     );
   });
@@ -176,12 +195,15 @@ describe('MediaService', () => {
   });
 
   it('should upload an image and derive media metadata', async () => {
-    const result = await service.upload({
-      originalname: 'foundation-course-cover.png',
-      mimetype: 'image/png',
-      size: 512044,
-      buffer: validPngBuffer,
-    } as UploadedMediaFile);
+    const result = await service.upload(
+      {
+        originalname: 'foundation-course-cover.png',
+        mimetype: 'image/png',
+        size: 512044,
+        buffer: validPngBuffer,
+      } as UploadedMediaFile,
+      { folder: 'courses' },
+    );
 
     expect(mkdir).toHaveBeenCalled();
     expect(writeFile).toHaveBeenCalledTimes(1);
@@ -194,6 +216,7 @@ describe('MediaService', () => {
         width: 1200,
         height: 800,
         alt: '',
+        folder: 'courses',
         isPublished: true,
         title: 'foundation course cover',
       }),
@@ -367,13 +390,55 @@ describe('MediaService', () => {
     expect(mockMediaModel.findByIdAndUpdate).toHaveBeenCalledWith(
       uploadedMediaId,
       {
-        title: 'Updated title',
-        alt: 'Updated alt',
-        isPublished: false,
+        $set: {
+          title: 'Updated title',
+          alt: 'Updated alt',
+          isPublished: false,
+        },
       },
       { new: true },
     );
     expect(result.isPublished).toBe(false);
+  });
+
+  it('should normalize and clear folder values on update', async () => {
+    mockMediaModel.findByIdAndUpdate
+      .mockReturnValueOnce({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...uploadedMedia,
+            folder: 'library',
+          }),
+        }),
+      })
+      .mockReturnValueOnce({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...uploadedMedia,
+            folder: undefined,
+          }),
+        }),
+      });
+
+    await service.update(uploadedMediaId, { folder: '  library  ' });
+    expect(mockMediaModel.findByIdAndUpdate).toHaveBeenNthCalledWith(
+      1,
+      uploadedMediaId,
+      {
+        $set: { folder: 'library' },
+      },
+      { new: true },
+    );
+
+    await service.update(uploadedMediaId, { folder: '   ' });
+    expect(mockMediaModel.findByIdAndUpdate).toHaveBeenNthCalledWith(
+      2,
+      uploadedMediaId,
+      {
+        $unset: { folder: '' },
+      },
+      { new: true },
+    );
   });
 
   it('should delete uploaded files after removing the record', async () => {
@@ -464,5 +529,36 @@ describe('MediaService', () => {
       _id: { $in: [uploadedMediaId, externalMedia._id] },
       isPublished: true,
     });
+  });
+
+  it('should filter admin media reads by folder', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAllAdmin({
+      folder: 'events',
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({
+      folder: 'events',
+    });
+  });
+
+  it('should return sorted non-empty admin folders', async () => {
+    mockMediaModel.distinct.mockResolvedValue([
+      'z-folder',
+      '',
+      'a-folder',
+      ' ',
+      'm-folder',
+    ]);
+
+    await expect(service.findAllAdminFolders()).resolves.toEqual([
+      'a-folder',
+      'm-folder',
+      'z-folder',
+    ]);
+    expect(mockMediaModel.distinct).toHaveBeenCalledWith('folder');
   });
 });

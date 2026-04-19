@@ -4,5 +4,6 @@ export interface MediaQueryParams {
   isPublished?: string;
   kind?: string;
   search?: string;
+  folder?: string;
   [key: string]: string | string[] | undefined;
 }

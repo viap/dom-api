@@ -39,6 +39,10 @@ export const createMediaSchema = Joi.object({
     'string.max': 'Alt text cannot exceed 300 characters',
   }),
 
+  folder: Joi.string().trim().max(200).allow('').optional().messages({
+    'string.max': 'Folder cannot exceed 200 characters',
+  }),
+
   width: Joi.number().integer().min(1).optional().messages({
     'number.base': 'Width must be a number',
     'number.integer': 'Width must be an integer',

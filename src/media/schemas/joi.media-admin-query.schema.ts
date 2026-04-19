@@ -8,6 +8,7 @@ export const mediaAdminQuerySchema = Joi.object({
     .valid(...Object.values(MediaKind))
     .optional(),
   search: Joi.string().trim().max(150).optional(),
+  folder: Joi.string().trim().max(200).optional(),
   createdFrom: Joi.string().isoDate().optional(),
   createdTo: Joi.string().isoDate().optional(),
 });

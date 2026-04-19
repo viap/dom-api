@@ -7,6 +7,7 @@ export interface CreateMediaDto {
   mimeType?: string;
   sizeBytes?: number;
   alt?: string;
+  folder?: string;
   width?: number;
   height?: number;
   isPublished?: boolean;

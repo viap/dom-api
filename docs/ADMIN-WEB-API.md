@@ -306,6 +306,7 @@ Domain-agnostic asset registry.
 
 - `GET /media` public
 - `GET /media/admin` admin/editor
+- `GET /media/admin/folders` admin/editor
 - `GET /media/:id` public
 - `GET /media/:id/content` public
 - `GET /media/:id/thumbnail` public
@@ -331,6 +332,7 @@ Public:
 - `offset`
 - `kind`
 - `search` partial match on `title`
+- `folder` exact match
 - `isPublished` exists in validation, but public reads are forced to published items
 
 Admin:
@@ -339,6 +341,7 @@ Admin:
 - `offset`
 - `kind`
 - `search` partial match on `title`
+- `folder` exact match
 - `createdFrom`
 - `createdTo`
 
@@ -346,7 +349,7 @@ Admin:
 
 - `POST /media/upload` accepts `multipart/form-data`
 - required field: `file`
-- optional fields: `title`, `alt`
+- optional fields: `title`, `alt`, `folder`
 - v1 supports image uploads only
 - uploaded originals are stored in `uploads/media/<year>/<month>/<filename>`
 - upload also generates one thumbnail (`maxWidth=320`, aspect ratio preserved, no upscale) in `uploads/thumbnails/<year>/<month>/<filename>`
@@ -355,7 +358,15 @@ Admin:
 - uploaded files are served only through API entry points: `GET /media/:id/content` and `GET /media/:id/thumbnail`
 - uploaded media records default to `isPublished: true`
 - `POST /media` remains supported for external media registration only
+- folders are flat string labels (`folder`) and are case-sensitive
 - frontend and admin clients must render uploaded assets from the returned `url` field and must not build URLs from `storageKey`
+
+### Folders endpoint behavior
+
+- `GET /media/admin/folders` returns unique non-empty folder names used by media records
+- response shape is `string[]`
+- values are sorted alphabetically ascending
+- root/unassigned records (no `folder`) are not included
 
 ### Shape
 
@@ -369,6 +380,7 @@ Admin:
   mimeType?: string;
   sizeBytes?: number;
   alt: string;
+  folder?: string;
   width?: number;
   height?: number;
   isPublished: boolean;

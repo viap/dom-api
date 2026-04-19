@@ -81,6 +81,7 @@ export class MediaService {
       ...createMediaDto,
       title: this.normalizeOptionalText(createMediaDto.title),
       alt: this.normalizeOptionalText(createMediaDto.alt),
+      folder: this.normalizeFolder(createMediaDto.folder),
     });
 
     return media.save();
@@ -101,6 +102,11 @@ export class MediaService {
         $regex: this.escapeRegExp(safeParams.search.trim()),
         $options: 'i',
       };
+    }
+
+    const folder = this.parseFolderQuery(safeParams.folder);
+    if (folder) {
+      query.folder = folder;
     }
 
     return this.mediaModel
@@ -129,6 +135,11 @@ export class MediaService {
         $regex: this.escapeRegExp(safeParams.search.trim()),
         $options: 'i',
       };
+    }
+
+    const folder = this.parseFolderQuery(safeParams.folder);
+    if (folder) {
+      query.folder = folder;
     }
 
     const createdAt: Record<string, Date> = {};
@@ -229,6 +240,7 @@ export class MediaService {
       mimeType,
       sizeBytes: file.size,
       alt: this.normalizeOptionalText(uploadMediaDto.alt),
+      folder: this.normalizeFolder(uploadMediaDto.folder),
       width: dimensions.width,
       height: dimensions.height,
       isPublished: true,
@@ -262,15 +274,34 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    const updateData = {
-      ...updateMediaDto,
-      ...(typeof updateMediaDto.title === 'string'
-        ? { title: this.normalizeOptionalText(updateMediaDto.title) }
-        : {}),
-      ...(typeof updateMediaDto.alt === 'string'
-        ? { alt: this.normalizeOptionalText(updateMediaDto.alt) }
-        : {}),
-    };
+    const setData: Record<string, unknown> = {};
+    const unsetData: Record<string, ''> = {};
+
+    if (typeof updateMediaDto.title === 'string') {
+      setData.title = this.normalizeOptionalText(updateMediaDto.title);
+    }
+    if (typeof updateMediaDto.alt === 'string') {
+      setData.alt = this.normalizeOptionalText(updateMediaDto.alt);
+    }
+    if (typeof updateMediaDto.isPublished === 'boolean') {
+      setData.isPublished = updateMediaDto.isPublished;
+    }
+    if (typeof updateMediaDto.folder === 'string') {
+      const normalizedFolder = this.normalizeFolder(updateMediaDto.folder);
+      if (normalizedFolder) {
+        setData.folder = normalizedFolder;
+      } else {
+        unsetData.folder = '';
+      }
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (Object.keys(setData).length > 0) {
+      updateData.$set = setData;
+    }
+    if (Object.keys(unsetData).length > 0) {
+      updateData.$unset = unsetData;
+    }
 
     const media = await this.mediaModel
       .findByIdAndUpdate(validId, updateData, { new: true })
@@ -350,6 +381,17 @@ export class MediaService {
     return new Set(media.map((item) => item._id.toString()));
   }
 
+  async findAllAdminFolders(): Promise<string[]> {
+    const folders = await this.mediaModel.distinct('folder');
+
+    return folders
+      .filter(
+        (folder): folder is string =>
+          typeof folder === 'string' && folder.trim().length > 0,
+      )
+      .sort((a, b) => a.localeCompare(b));
+  }
+
   private detectImageFormat(file: UploadedMediaFile): SupportedImageFormat {
     const format = this.readImageFormatFromBuffer(file.buffer);
     if (!format) {
@@ -396,6 +438,24 @@ export class MediaService {
 
   private normalizeOptionalText(value: string | undefined): string {
     return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private normalizeFolder(value: string | undefined): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+
+  private parseFolderQuery(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed || undefined;
   }
 
   private buildContentUrl(id: string): string {

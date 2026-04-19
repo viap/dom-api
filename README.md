@@ -188,7 +188,8 @@ The API implements comprehensive protection against NoSQL injection attacks:
 
 ### Media
 
-- Public `GET /media` supports `limit`, `offset`, `kind`, and `search`, but still returns published media only.
+- Public `GET /media` supports `limit`, `offset`, `kind`, `search`, and `folder`, but still returns published media only.
+- Admin `GET /media/admin/folders` returns unique non-empty media folders sorted alphabetically.
 - `POST /media/upload` uploads a local image and creates a Media record for it.
 - `POST /media/upload` also creates one thumbnail (`maxWidth=320`, preserve aspect ratio, no upscale) under `uploads/thumbnails/<year>/<month>/<filename>`.
 - GIF uploads preserve animation by copying the original GIF as thumbnail.
@@ -197,7 +198,7 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - `GET /media/:id/thumbnail` returns the generated thumbnail for uploaded Media files.
 - Missing uploaded content/thumbnail files resolve to `404` at stream time.
 - Uploaded media visibility is controlled by `isPublished`. Unpublished uploaded assets are not reachable by raw filesystem URL or by the content endpoint.
-- For uploaded files, `storageKey`, `url`, `mimeType`, `sizeBytes`, `width`, and `height` are system-managed fields. Admin updates are limited to `title`, `alt`, and `isPublished`.
+- For uploaded files, `storageKey`, `url`, `mimeType`, `sizeBytes`, `width`, and `height` are system-managed fields. Admin updates are limited to `title`, `alt`, `folder`, and `isPublished`.
 - Frontend and admin clients must render uploaded assets from the returned `url` field and must not construct Media URLs from `storageKey`.
 - Frontend apps may proxy uploaded media delivery through their own origin, but the stored `url` field remains the canonical asset reference.
 - `/uploads/media/...` is not a supported public API path and must not be used in clients, fixtures, or docs.

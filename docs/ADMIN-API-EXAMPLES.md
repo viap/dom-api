@@ -651,6 +651,7 @@ Response:
     "mimeType": "image/jpeg",
     "sizeBytes": 248311,
     "alt": "Olga portrait",
+    "folder": "people",
     "width": 1200,
     "height": 1600,
     "isPublished": true,
@@ -676,6 +677,7 @@ Response:
     "mimeType": "image/png",
     "sizeBytes": 512044,
     "alt": "Course cover image",
+    "folder": "courses",
     "width": 1440,
     "height": 900,
     "isPublished": true,
@@ -697,6 +699,7 @@ Content-Type: multipart/form-data
 file=<binary image>
 title=Foundation course cover
 alt=Course cover image
+folder=courses
 ```
 
 Response:
@@ -711,6 +714,7 @@ Response:
   "mimeType": "image/png",
   "sizeBytes": 512044,
   "alt": "Course cover image",
+  "folder": "courses",
   "width": 1440,
   "height": 900,
   "isPublished": true,
@@ -736,6 +740,7 @@ Request:
   "mimeType": "image/jpeg",
   "sizeBytes": 512044,
   "alt": "Course cover image",
+  "folder": "courses",
   "width": 1440,
   "height": 900,
   "isPublished": true
@@ -753,6 +758,7 @@ Response:
   "mimeType": "image/jpeg",
   "sizeBytes": 512044,
   "alt": "Course cover image",
+  "folder": "courses",
   "width": 1440,
   "height": 900,
   "isPublished": true,
@@ -769,7 +775,8 @@ Request:
 ```json
 {
   "title": "Foundation course hero image",
-  "alt": "Students in lecture hall"
+  "alt": "Students in lecture hall",
+  "folder": "hero"
 }
 ```
 
@@ -784,6 +791,7 @@ Response:
   "mimeType": "image/jpeg",
   "sizeBytes": 512044,
   "alt": "Students in lecture hall",
+  "folder": "hero",
   "width": 1440,
   "height": 900,
   "isPublished": true,
@@ -791,6 +799,18 @@ Response:
   "createdAt": "2026-04-10T10:25:00.000Z",
   "updatedAt": "2026-04-10T10:27:00.000Z"
 }
+```
+
+### `GET /media/admin/folders`
+
+Response:
+
+```json
+[
+  "courses",
+  "events",
+  "people"
+]
 ```
 
 ### `GET /media/:id/content`

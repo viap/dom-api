@@ -28,6 +28,9 @@ export class Media {
   @Prop({ trim: true, default: '' })
   alt: string;
 
+  @Prop({ trim: true })
+  folder?: string;
+
   @Prop()
   width?: number;
 

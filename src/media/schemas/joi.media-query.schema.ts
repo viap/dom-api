@@ -9,4 +9,5 @@ export const mediaQuerySchema = Joi.object({
     .valid(...Object.values(MediaKind))
     .optional(),
   search: Joi.string().trim().max(150).optional(),
+  folder: Joi.string().trim().max(200).optional(),
 });

@@ -57,6 +57,12 @@ export class MediaController {
     return this.mediaService.findAllAdmin(query);
   }
 
+  @Get('admin/folders')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdminFolders() {
+    return this.mediaService.findAllAdminFolders();
+  }
+
   @Post()
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.CREATED)

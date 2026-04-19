@@ -15,6 +15,7 @@ describe('MediaController', () => {
   const mediaService = {
     findAll: jest.fn(),
     findAllAdmin: jest.fn(),
+    findAllAdminFolders: jest.fn(),
     findOne: jest.fn(),
     getContent: jest.fn(),
     getThumbnail: jest.fn(),
@@ -56,6 +57,12 @@ describe('MediaController', () => {
       Reflect.getMetadata(ROLES_KEY, MediaController.prototype.findAllAdmin),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        MediaController.prototype.findAllAdminFolders,
+      ),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
       Reflect.getMetadata(ROLES_KEY, MediaController.prototype.create),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
@@ -71,6 +78,16 @@ describe('MediaController', () => {
 
   it('should reject upload without a file', () => {
     expect(() => controller.upload(undefined, {})).toThrow(BadRequestException);
+  });
+
+  it('should list media folders for admin flows', async () => {
+    mediaService.findAllAdminFolders.mockResolvedValue(['events', 'team']);
+
+    await expect(controller.findAllAdminFolders()).resolves.toEqual([
+      'events',
+      'team',
+    ]);
+    expect(mediaService.findAllAdminFolders).toHaveBeenCalled();
   });
 
   it('should stream media content through the response object', async () => {
