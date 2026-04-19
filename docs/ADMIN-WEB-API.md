@@ -319,6 +319,7 @@ Domain-agnostic asset registry.
 
 Public `GET` routes return only published media.
 For uploaded files, `/media/:id/content` and `/media/:id/thumbnail` return:
+
 - `404` when file is missing (`ENOENT`) or media is not eligible (invalid id, unpublished, external URL)
 - `500` for non-ENOENT stream errors
 
@@ -633,10 +634,14 @@ Public reads exclude items with `status = draft`.
   endDate?: number;
   applicationDeadline?: number;
   format: 'online' | 'offline' | 'hybrid';
-  price?: {
-    currency: string;
-    value: number;
-  };
+  priceGroups?: Array<{
+    title?: string;
+    deadline?: string; // ISO datetime
+    price: {
+      currency: string;
+      value: number;
+    };
+  }>;
   modules: Array<{
     title: string;
     description: string;
@@ -709,10 +714,14 @@ Public reads exclude items with `status = draft`.
     maxParticipants?: number;
     deadline?: number;
   };
-  price?: {
-    currency: string;
-    value: number;
-  };
+  priceGroups?: Array<{
+    title?: string;
+    deadline?: string; // ISO datetime
+    price: {
+      currency: string;
+      value: number;
+    };
+  }>;
   capacity?: number;
   schemaVersion: number;
   createdAt: string;
@@ -813,9 +822,7 @@ The `payload` object depends on `formType`.
   "formType": "partnership",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "organizationName": "Acme",
@@ -832,9 +839,7 @@ The `payload` object depends on `formType`.
   "formType": "program_enrollment",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "programId": "<programId>",
@@ -851,9 +856,7 @@ The `payload` object depends on `formType`.
   "formType": "event_registration",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "eventId": "<eventId>",
@@ -870,9 +873,7 @@ The `payload` object depends on `formType`.
   "formType": "corporate_training",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "companyName": "Acme",
@@ -889,9 +890,7 @@ The `payload` object depends on `formType`.
   "formType": "specialist_request",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "specialization": "Family therapy",
@@ -908,9 +907,7 @@ The `payload` object depends on `formType`.
   "formType": "general",
   "applicant": {
     "name": "Jane Doe",
-    "contacts": [
-      { "network": "telegram", "username": "jane", "hidden": false }
-    ]
+    "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
     "message": "General request"

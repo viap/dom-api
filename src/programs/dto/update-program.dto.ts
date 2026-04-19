@@ -13,7 +13,11 @@ export interface UpdateProgramDto {
   endDate?: number;
   applicationDeadline?: number;
   format?: ProgramFormat;
-  price?: Price;
+  priceGroups?: Array<{
+    title?: string;
+    deadline?: string;
+    price: Price;
+  }>;
   modules?: Array<{
     title: string;
     description?: string;

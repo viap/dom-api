@@ -1,6 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { Price, priceSchema } from '@/common/schemas/price.schema';
+import {
+  PriceGroup,
+  priceGroupSchema,
+} from '@/common/schemas/price-group.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 
@@ -74,8 +77,8 @@ export class DomainEvent {
     deadline?: number;
   };
 
-  @Prop({ schema: priceSchema })
-  price?: Price;
+  @Prop({ type: [priceGroupSchema] })
+  priceGroups?: PriceGroup[];
 
   @Prop({ min: 1 })
   capacity?: number;

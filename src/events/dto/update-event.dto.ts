@@ -19,6 +19,10 @@ export interface UpdateEventDto {
     maxParticipants?: number;
     deadline?: number;
   };
-  price?: Price;
+  priceGroups?: Array<{
+    title?: string;
+    deadline?: string;
+    price: Price;
+  }>;
   capacity?: number;
 }

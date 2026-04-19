@@ -1,6 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { Price, priceSchema } from '@/common/schemas/price.schema';
+import {
+  PriceGroup,
+  priceGroupSchema,
+} from '@/common/schemas/price-group.schema';
 import { ProgramFormat } from '../enums/program-format.enum';
 import { ProgramKind } from '../enums/program-kind.enum';
 import { ProgramStatus } from '../enums/program-status.enum';
@@ -42,8 +45,8 @@ export class Program {
   @Prop({ required: true, enum: Object.values(ProgramFormat) })
   format: ProgramFormat;
 
-  @Prop({ schema: priceSchema })
-  price?: Price;
+  @Prop({ type: [priceGroupSchema] })
+  priceGroups?: PriceGroup[];
 
   @Prop({ required: true, schema: programModuleSchema, default: [] })
   modules: Array<ProgramModule>;

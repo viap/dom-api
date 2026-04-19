@@ -1,6 +1,6 @@
 import * as Joi from 'joi';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
-import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
+import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 
@@ -43,6 +43,6 @@ export const createEventSchema = Joi.object({
     .default({ isOpen: false })
     .optional(),
 
-  price: joiPriceSchema.optional(),
+  priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
   capacity: Joi.number().integer().min(1).optional(),
 });

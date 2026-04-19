@@ -1,6 +1,6 @@
 import * as Joi from 'joi';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
-import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
+import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { ProgramFormat } from '../enums/program-format.enum';
 import { ProgramKind } from '../enums/program-kind.enum';
 import { ProgramStatus } from '../enums/program-status.enum';
@@ -41,7 +41,7 @@ export const updateProgramSchema = Joi.object({
     .valid(...Object.values(ProgramFormat))
     .optional(),
 
-  price: joiPriceSchema.optional(),
+  priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
 
   modules: Joi.array().items(joiProgramModuleSchema).optional(),
   speakerIds: Joi.array().items(joiObjectId).optional(),

@@ -806,11 +806,7 @@ Response:
 Response:
 
 ```json
-[
-  "courses",
-  "events",
-  "people"
-]
+["courses", "events", "people"]
 ```
 
 ### `GET /media/:id/content`
@@ -1327,10 +1323,16 @@ Response:
     "endDate": 1777939200000,
     "applicationDeadline": 1774742400000,
     "format": "hybrid",
-    "price": {
-      "amount": 1200,
-      "currency": "GEL"
-    },
+    "priceGroups": [
+      {
+        "title": "Regular",
+        "deadline": "2026-04-20T00:00:00.000Z",
+        "price": {
+          "value": 1200,
+          "currency": "gel"
+        }
+      }
+    ],
     "modules": [
       {
         "title": "Introduction",
@@ -1364,10 +1366,16 @@ Request:
   "endDate": 1775952000000,
   "applicationDeadline": 1774742400000,
   "format": "online",
-  "price": {
-    "amount": 950,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Early bird",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 950,
+        "currency": "gel"
+      }
+    }
+  ],
   "modules": [
     {
       "title": "Core theory",
@@ -1396,10 +1404,16 @@ Response:
   "endDate": 1775952000000,
   "applicationDeadline": 1774742400000,
   "format": "online",
-  "price": {
-    "amount": 950,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Early bird",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 950,
+        "currency": "gel"
+      }
+    }
+  ],
   "modules": [
     {
       "title": "Core theory",
@@ -1424,10 +1438,16 @@ Request:
 ```json
 {
   "status": "active",
-  "price": {
-    "amount": 1000,
-    "currency": "GEL"
-  }
+  "priceGroups": [
+    {
+      "title": "Regular",
+      "deadline": "2026-04-25T00:00:00.000Z",
+      "price": {
+        "value": 1000,
+        "currency": "gel"
+      }
+    }
+  ]
 }
 ```
 
@@ -1445,10 +1465,16 @@ Response:
   "endDate": 1775952000000,
   "applicationDeadline": 1774742400000,
   "format": "online",
-  "price": {
-    "amount": 1000,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Regular",
+      "deadline": "2026-04-25T00:00:00.000Z",
+      "price": {
+        "value": 1000,
+        "currency": "gel"
+      }
+    }
+  ],
   "modules": [
     {
       "title": "Core theory",
@@ -1502,10 +1528,16 @@ Response:
       "maxParticipants": 40,
       "deadline": 1775952000000
     },
-    "price": {
-      "amount": 120,
-      "currency": "GEL"
-    },
+    "priceGroups": [
+      {
+        "title": "Standard ticket",
+        "deadline": "2026-04-20T00:00:00.000Z",
+        "price": {
+          "value": 120,
+          "currency": "gel"
+        }
+      }
+    ],
     "capacity": 40,
     "schemaVersion": 1,
     "createdAt": "2026-04-10T10:00:00.000Z",
@@ -1536,10 +1568,16 @@ Request:
     "maxParticipants": 80,
     "deadline": 1775952000000
   },
-  "price": {
-    "amount": 0,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Free registration",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 0,
+        "currency": "gel"
+      }
+    }
+  ],
   "capacity": 80
 }
 ```
@@ -1565,10 +1603,16 @@ Response:
     "maxParticipants": 80,
     "deadline": 1775952000000
   },
-  "price": {
-    "amount": 0,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Free registration",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 0,
+        "currency": "gel"
+      }
+    }
+  ],
   "capacity": 80,
   "schemaVersion": 1,
   "createdAt": "2026-04-10T11:00:00.000Z",
@@ -1587,7 +1631,17 @@ Request:
     "isOpen": false,
     "maxParticipants": 80,
     "deadline": 1775952000000
-  }
+  },
+  "priceGroups": [
+    {
+      "title": "Door price",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 0,
+        "currency": "gel"
+      }
+    }
+  ]
 }
 ```
 
@@ -1612,10 +1666,16 @@ Response:
     "maxParticipants": 80,
     "deadline": 1775952000000
   },
-  "price": {
-    "amount": 0,
-    "currency": "GEL"
-  },
+  "priceGroups": [
+    {
+      "title": "Door price",
+      "deadline": "2026-04-20T00:00:00.000Z",
+      "price": {
+        "value": 0,
+        "currency": "gel"
+      }
+    }
+  ],
   "capacity": 80,
   "schemaVersion": 1,
   "createdAt": "2026-04-10T11:00:00.000Z",
@@ -2627,9 +2687,7 @@ Response:
     "startDateTime": "2026-04-15T11:00:00.000Z",
     "endDateTime": "2026-04-15T12:00:00.000Z",
     "status": "APPROVED",
-    "attendees": [
-      "660900000000000000000010"
-    ],
+    "attendees": ["660900000000000000000010"],
     "timeZone": "Asia/Tbilisi",
     "metadata": {
       "purpose": "Operations",
@@ -2656,9 +2714,7 @@ Request:
   "room": "662200000000000000000001",
   "startDateTime": "2026-04-18T09:00:00.000Z",
   "endDateTime": "2026-04-18T11:00:00.000Z",
-  "attendees": [
-    "660900000000000000000010"
-  ],
+  "attendees": ["660900000000000000000010"],
   "timeZone": "Asia/Tbilisi",
   "metadata": {
     "purpose": "Preparation",
@@ -2687,9 +2743,7 @@ Response:
   "startDateTime": "2026-04-18T09:00:00.000Z",
   "endDateTime": "2026-04-18T11:00:00.000Z",
   "status": "PENDING",
-  "attendees": [
-    "660900000000000000000010"
-  ],
+  "attendees": ["660900000000000000000010"],
   "timeZone": "Asia/Tbilisi",
   "metadata": {
     "purpose": "Preparation",
@@ -2766,9 +2820,7 @@ Response:
   "startDateTime": "2026-04-18T09:00:00.000Z",
   "endDateTime": "2026-04-18T11:30:00.000Z",
   "status": "PENDING",
-  "attendees": [
-    "660900000000000000000010"
-  ],
+  "attendees": ["660900000000000000000010"],
   "timeZone": "Asia/Tbilisi",
   "metadata": {
     "purpose": "Preparation",

@@ -481,7 +481,7 @@ Actions:
   - `platform` select
   - `url` text input (optional, http/https)
   - `value` text input (optional)
-  Note: each row requires at least one of `url` or `value`
+    Note: each row requires at least one of `url` or `value`
 - `contacts[]`
   UI: repeatable rows
   Each row:
@@ -569,10 +569,13 @@ Actions:
   - `online`
   - `offline`
   - `hybrid`
-- `price`
-  UI: grouped fields
-  - `currency`
-  - `value`
+- `priceGroups[]`
+  UI: repeatable grouped fields
+  Each block:
+  - `title` (optional)
+  - `deadline` (ISO datetime string, optional)
+  - `price.currency`
+  - `price.value`
 - `modules[]`
   UI: repeatable sortable blocks
   Each block:
@@ -675,10 +678,13 @@ Actions:
   UI: number input
 - `registration.deadline`
   UI: datetime or timestamp-backed picker
-- `price`
-  UI: grouped fields
-  - `currency`
-  - `value`
+- `priceGroups[]`
+  UI: repeatable grouped fields
+  Each block:
+  - `title` (optional)
+  - `deadline` (ISO datetime string, optional)
+  - `price.currency`
+  - `price.value`
 - `capacity`
   UI: number input
 
@@ -835,16 +841,16 @@ Use `docs/BOOKING-SYSTEM-API.md` as the deeper functional reference.
 
 High-level frontend permissions:
 
-| Section | Read | Write |
-|---|---|---|
-| Domains | admin/editor UI, public API | admin |
-| Media | admin/editor UI, public published API | admin/editor |
-| Locations | admin/editor | admin/editor |
-| People | admin/editor UI, public published API | admin/editor |
-| Partners | admin/editor UI, public published API | admin/editor |
-| Programs | admin/editor UI, public non-draft API | admin/editor |
-| Events | admin/editor UI, public non-draft API | admin/editor |
-| Applications | admin/editor | admin/editor |
+| Section      | Read                                  | Write        |
+| ------------ | ------------------------------------- | ------------ |
+| Domains      | admin/editor UI, public API           | admin        |
+| Media        | admin/editor UI, public published API | admin/editor |
+| Locations    | admin/editor                          | admin/editor |
+| People       | admin/editor UI, public published API | admin/editor |
+| Partners     | admin/editor UI, public published API | admin/editor |
+| Programs     | admin/editor UI, public non-draft API | admin/editor |
+| Events       | admin/editor UI, public non-draft API | admin/editor |
+| Applications | admin/editor                          | admin/editor |
 
 Public create:
 
