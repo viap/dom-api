@@ -8,8 +8,8 @@ export interface UpdateEventDto {
   status?: EventStatus;
   title?: string;
   slug?: string;
-  startAt?: number;
-  endAt?: number;
+  startAt?: string;
+  endAt?: string;
   locationId?: string;
   speakerIds?: string[];
   organizerIds?: string[];
@@ -17,7 +17,7 @@ export interface UpdateEventDto {
   registration?: {
     isOpen?: boolean;
     maxParticipants?: number;
-    deadline?: number;
+    deadline?: string;
   };
   priceGroups?: Array<{
     title?: string;

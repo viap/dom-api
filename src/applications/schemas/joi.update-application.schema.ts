@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiUtcIsoDateTime } from '@/common/schemas/joi.datetime.schema';
 import { ApplicationStatus } from '../enums/application-status.enum';
 
 export const updateApplicationSchema = Joi.object({
@@ -34,7 +35,7 @@ export const updateApplicationSchema = Joi.object({
       Joi.object({
         text: Joi.string().trim().min(1).max(1000).required(),
         authorId: Joi.string().hex().length(24).required(),
-        createdAt: Joi.number().integer().required(),
+        createdAt: joiUtcIsoDateTime.required(),
       }),
     )
     .max(200)

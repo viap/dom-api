@@ -9,9 +9,9 @@ export interface CreateProgramDto {
   status?: ProgramStatus;
   title: string;
   slug: string;
-  startDate?: number;
-  endDate?: number;
-  applicationDeadline?: number;
+  startDate?: string;
+  endDate?: string;
+  applicationDeadline?: string;
   format: ProgramFormat;
   priceGroups?: Array<{
     title?: string;

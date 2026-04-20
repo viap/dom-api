@@ -4,6 +4,7 @@
 
 # docs archive / local-only docs
 /docs/archive/
+/docs/review/
 /docs/**/*.draft.md
 /docs/**/*.local.md
 /docs/**/scratch/

@@ -630,13 +630,13 @@ Public reads exclude items with `status = draft`.
   status: 'draft' | 'upcoming' | 'active' | 'completed' | 'cancelled';
   title: string;
   slug: string;
-  startDate?: number;
-  endDate?: number;
-  applicationDeadline?: number;
+  startDate?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
+  endDate?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
+  applicationDeadline?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   format: 'online' | 'offline' | 'hybrid';
   priceGroups?: Array<{
     title?: string;
-    deadline?: string; // ISO datetime
+    deadline?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
     price: {
       currency: string;
       value: number;
@@ -668,6 +668,8 @@ Public reads exclude items with `status = draft`.
 - `domainId` is required on create/update
 - slug is unique within a domain, not globally
 - referenced `speakerIds`, `organizerIds`, and `partnerIds` must exist
+- if both are provided, `endDate` must be after or equal to `startDate`
+- if both are provided, `applicationDeadline` must be before or equal to `startDate`
 
 ---
 
@@ -703,8 +705,8 @@ Public reads exclude items with `status = draft`.
   status: 'draft' | 'planned' | 'registration_open' | 'ongoing' | 'completed' | 'cancelled';
   title: string;
   slug: string;
-  startAt: number;
-  endAt: number;
+  startAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
+  endAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   locationId?: string; // Location._id
   speakerIds: string[];
   organizerIds: string[];
@@ -712,11 +714,11 @@ Public reads exclude items with `status = draft`.
   registration: {
     isOpen: boolean;
     maxParticipants?: number;
-    deadline?: number;
+    deadline?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   };
   priceGroups?: Array<{
     title?: string;
-    deadline?: string; // ISO datetime
+    deadline?: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
     price: {
       currency: string;
       value: number;
@@ -740,6 +742,8 @@ Public reads exclude items with `status = draft`.
 - `domainId` is required on create/update
 - slug is unique within a domain
 - `locationId`, `speakerIds`, `organizerIds`, `partnerIds` must reference existing records
+- `endAt` must be after `startAt`
+- when provided with `startAt`, `registration.deadline` must be before or equal to `startAt`
 
 ---
 
@@ -802,7 +806,7 @@ Public intake forms with admin/editor processing.
   notes: Array<{
     text: string;
     authorId: string;
-    createdAt: number;
+    createdAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   }>;
   schemaVersion: number;
   createdAt: string;
@@ -813,6 +817,7 @@ Public intake forms with admin/editor processing.
 ### Public create payloads
 
 The `payload` object depends on `formType`.
+`notes` is update-only and is not accepted in `POST /applications` payloads.
 
 #### `partnership`
 

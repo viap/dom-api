@@ -34,13 +34,13 @@ export class Program {
   slug: string;
 
   @Prop()
-  startDate?: number;
+  startDate?: string;
 
   @Prop()
-  endDate?: number;
+  endDate?: string;
 
   @Prop()
-  applicationDeadline?: number;
+  applicationDeadline?: string;
 
   @Prop({ required: true, enum: Object.values(ProgramFormat) })
   format: ProgramFormat;

@@ -22,8 +22,8 @@ describe('EventsService', () => {
     status: 'planned',
     title: 'Event',
     slug: 'event',
-    startAt: 123,
-    endAt: 456,
+    startAt: '2026-04-20T10:00:00.000Z',
+    endAt: '2026-04-20T11:00:00.000Z',
     speakerIds: [],
     organizerIds: [],
     partnerIds: [],
@@ -94,8 +94,8 @@ describe('EventsService', () => {
         type: 'seminar' as any,
         title: 'Event',
         slug: 'event',
-        startAt: 1,
-        endAt: 2,
+        startAt: '2026-04-20T10:00:00.000Z',
+        endAt: '2026-04-20T11:00:00.000Z',
       }),
     ).rejects.toThrow(ConflictException);
   });
@@ -110,8 +110,8 @@ describe('EventsService', () => {
         type: 'seminar' as any,
         title: 'Event',
         slug: 'event-2',
-        startAt: 1,
-        endAt: 2,
+        startAt: '2026-04-20T10:00:00.000Z',
+        endAt: '2026-04-20T11:00:00.000Z',
         locationId: '507f1f77bcf86cd799439099',
       }),
     ).rejects.toThrow(BadRequestException);

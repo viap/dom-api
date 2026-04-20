@@ -59,7 +59,7 @@ export class Application {
       {
         text: { type: String, required: true },
         authorId: { type: mongoose.Schema.Types.ObjectId, required: true },
-        createdAt: { type: Number, required: true },
+        createdAt: { type: String, required: true },
       },
     ],
     default: [],
@@ -67,7 +67,7 @@ export class Application {
   notes: Array<{
     text: string;
     authorId: mongoose.Schema.Types.ObjectId;
-    createdAt: number;
+    createdAt: string;
   }>;
 
   @Prop({ required: true, default: 1 })

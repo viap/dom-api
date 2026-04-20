@@ -1319,9 +1319,9 @@ Response:
     "status": "active",
     "title": "Foundation Program",
     "slug": "foundation-program",
-    "startDate": 1775347200000,
-    "endDate": 1777939200000,
-    "applicationDeadline": 1774742400000,
+    "startDate": "2026-04-05T00:00:00.000Z",
+    "endDate": "2026-05-05T00:00:00.000Z",
+    "applicationDeadline": "2026-03-29T00:00:00.000Z",
     "format": "hybrid",
     "priceGroups": [
       {
@@ -1362,9 +1362,9 @@ Request:
   "status": "upcoming",
   "title": "Counseling Skills Intensive",
   "slug": "counseling-skills-intensive",
-  "startDate": 1775347200000,
-  "endDate": 1775952000000,
-  "applicationDeadline": 1774742400000,
+  "startDate": "2026-04-05T00:00:00.000Z",
+  "endDate": "2026-04-12T00:00:00.000Z",
+  "applicationDeadline": "2026-03-29T00:00:00.000Z",
   "format": "online",
   "priceGroups": [
     {
@@ -1400,9 +1400,9 @@ Response:
   "status": "upcoming",
   "title": "Counseling Skills Intensive",
   "slug": "counseling-skills-intensive",
-  "startDate": 1775347200000,
-  "endDate": 1775952000000,
-  "applicationDeadline": 1774742400000,
+  "startDate": "2026-04-05T00:00:00.000Z",
+  "endDate": "2026-04-12T00:00:00.000Z",
+  "applicationDeadline": "2026-03-29T00:00:00.000Z",
   "format": "online",
   "priceGroups": [
     {
@@ -1461,9 +1461,9 @@ Response:
   "status": "active",
   "title": "Counseling Skills Intensive",
   "slug": "counseling-skills-intensive",
-  "startDate": 1775347200000,
-  "endDate": 1775952000000,
-  "applicationDeadline": 1774742400000,
+  "startDate": "2026-04-05T00:00:00.000Z",
+  "endDate": "2026-04-12T00:00:00.000Z",
+  "applicationDeadline": "2026-03-29T00:00:00.000Z",
   "format": "online",
   "priceGroups": [
     {
@@ -1517,8 +1517,8 @@ Response:
     "status": "planned",
     "title": "Trauma-Informed Practice Workshop",
     "slug": "trauma-informed-practice-workshop",
-    "startAt": 1776038400000,
-    "endAt": 1776049200000,
+    "startAt": "2026-04-13T00:00:00.000Z",
+    "endAt": "2026-04-13T03:00:00.000Z",
     "locationId": "661200000000000000000001",
     "speakerIds": ["661300000000000000000001"],
     "organizerIds": ["661300000000000000000002"],
@@ -1526,7 +1526,7 @@ Response:
     "registration": {
       "isOpen": true,
       "maxParticipants": 40,
-      "deadline": 1775952000000
+      "deadline": "2026-04-12T00:00:00.000Z"
     },
     "priceGroups": [
       {
@@ -1557,8 +1557,8 @@ Request:
   "status": "registration_open",
   "title": "Open Seminar on Burnout",
   "slug": "open-seminar-on-burnout",
-  "startAt": 1776038400000,
-  "endAt": 1776045600000,
+  "startAt": "2026-04-13T00:00:00.000Z",
+  "endAt": "2026-04-13T02:00:00.000Z",
   "locationId": "661200000000000000000001",
   "speakerIds": ["661300000000000000000001"],
   "organizerIds": ["661300000000000000000002"],
@@ -1566,7 +1566,7 @@ Request:
   "registration": {
     "isOpen": true,
     "maxParticipants": 80,
-    "deadline": 1775952000000
+    "deadline": "2026-04-12T00:00:00.000Z"
   },
   "priceGroups": [
     {
@@ -1592,8 +1592,8 @@ Response:
   "status": "registration_open",
   "title": "Open Seminar on Burnout",
   "slug": "open-seminar-on-burnout",
-  "startAt": 1776038400000,
-  "endAt": 1776045600000,
+  "startAt": "2026-04-13T00:00:00.000Z",
+  "endAt": "2026-04-13T02:00:00.000Z",
   "locationId": "661200000000000000000001",
   "speakerIds": ["661300000000000000000001"],
   "organizerIds": ["661300000000000000000002"],
@@ -1601,7 +1601,7 @@ Response:
   "registration": {
     "isOpen": true,
     "maxParticipants": 80,
-    "deadline": 1775952000000
+    "deadline": "2026-04-12T00:00:00.000Z"
   },
   "priceGroups": [
     {
@@ -1630,7 +1630,7 @@ Request:
   "registration": {
     "isOpen": false,
     "maxParticipants": 80,
-    "deadline": 1775952000000
+    "deadline": "2026-04-12T00:00:00.000Z"
   },
   "priceGroups": [
     {
@@ -1655,8 +1655,8 @@ Response:
   "status": "ongoing",
   "title": "Open Seminar on Burnout",
   "slug": "open-seminar-on-burnout",
-  "startAt": 1776038400000,
-  "endAt": 1776045600000,
+  "startAt": "2026-04-13T00:00:00.000Z",
+  "endAt": "2026-04-13T02:00:00.000Z",
   "locationId": "661200000000000000000001",
   "speakerIds": ["661300000000000000000001"],
   "organizerIds": ["661300000000000000000002"],
@@ -1664,7 +1664,7 @@ Response:
   "registration": {
     "isOpen": false,
     "maxParticipants": 80,
-    "deadline": 1775952000000
+    "deadline": "2026-04-12T00:00:00.000Z"
   },
   "priceGroups": [
     {
@@ -1748,7 +1748,7 @@ Request:
     {
       "text": "Called applicant, waiting for confirmation.",
       "authorId": "660900000000000000000001",
-      "createdAt": 1775810400000
+      "createdAt": "2026-04-10T11:20:00.000Z"
     }
   ]
 }
@@ -1789,7 +1789,7 @@ Response:
     {
       "text": "Called applicant, waiting for confirmation.",
       "authorId": "660900000000000000000001",
-      "createdAt": 1775810400000
+      "createdAt": "2026-04-10T11:20:00.000Z"
     }
   ],
   "schemaVersion": 1,

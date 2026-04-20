@@ -32,10 +32,10 @@ export class DomainEvent {
   slug: string;
 
   @Prop({ required: true })
-  startAt: number;
+  startAt: string;
 
   @Prop({ required: true })
-  endAt: number;
+  endAt: string;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Location' })
   locationId?: mongoose.Schema.Types.ObjectId;
@@ -66,7 +66,7 @@ export class DomainEvent {
     type: {
       isOpen: { type: Boolean, default: false },
       maxParticipants: { type: Number },
-      deadline: { type: Number },
+      deadline: { type: String },
     },
     _id: false,
     default: { isOpen: false },
@@ -74,7 +74,7 @@ export class DomainEvent {
   registration: {
     isOpen: boolean;
     maxParticipants?: number;
-    deadline?: number;
+    deadline?: string;
   };
 
   @Prop({ type: [priceGroupSchema] })

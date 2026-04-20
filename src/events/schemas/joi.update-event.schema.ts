@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiUtcIsoDateTime } from '@/common/schemas/joi.datetime.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { EventStatus } from '../enums/event-status.enum';
@@ -25,8 +26,8 @@ export const updateEventSchema = Joi.object({
     .max(120)
     .optional(),
 
-  startAt: Joi.number().integer().optional(),
-  endAt: Joi.number().integer().optional(),
+  startAt: joiUtcIsoDateTime.optional(),
+  endAt: joiUtcIsoDateTime.optional(),
 
   locationId: joiObjectId.optional(),
 
@@ -37,9 +38,35 @@ export const updateEventSchema = Joi.object({
   registration: Joi.object({
     isOpen: Joi.boolean().optional(),
     maxParticipants: Joi.number().integer().min(1).optional(),
-    deadline: Joi.number().integer().optional(),
+    deadline: joiUtcIsoDateTime.optional(),
   }).optional(),
 
   priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
   capacity: Joi.number().integer().min(1).optional(),
-}).min(1);
+})
+  .custom((value, helpers) => {
+    if (value.startAt && value.endAt) {
+      const startAt = new Date(value.startAt).getTime();
+      const endAt = new Date(value.endAt).getTime();
+
+      if (endAt <= startAt) {
+        return helpers.error('any.invalid');
+      }
+    }
+
+    if (value.registration?.deadline && value.startAt) {
+      const startAt = new Date(value.startAt).getTime();
+      const deadline = new Date(value.registration.deadline).getTime();
+
+      if (deadline > startAt) {
+        return helpers.error('any.invalid');
+      }
+    }
+
+    return value;
+  }, 'event temporal ordering validation')
+  .messages({
+    'any.invalid':
+      'endAt must be after startAt and registration.deadline must be before or equal to startAt',
+  })
+  .min(1);

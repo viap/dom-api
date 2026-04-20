@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiUtcIsoDateTime } from '@/common/schemas/joi.datetime.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { ProgramFormat } from '../enums/program-format.enum';
@@ -33,9 +34,9 @@ export const updateProgramSchema = Joi.object({
     .max(120)
     .optional(),
 
-  startDate: Joi.number().integer().optional(),
-  endDate: Joi.number().integer().optional(),
-  applicationDeadline: Joi.number().integer().optional(),
+  startDate: joiUtcIsoDateTime.optional(),
+  endDate: joiUtcIsoDateTime.optional(),
+  applicationDeadline: joiUtcIsoDateTime.optional(),
 
   format: Joi.string()
     .valid(...Object.values(ProgramFormat))
@@ -47,4 +48,30 @@ export const updateProgramSchema = Joi.object({
   speakerIds: Joi.array().items(joiObjectId).optional(),
   organizerIds: Joi.array().items(joiObjectId).optional(),
   partnerIds: Joi.array().items(joiObjectId).optional(),
-}).min(1);
+})
+  .custom((value, helpers) => {
+    if (value.startDate && value.endDate) {
+      const startDate = new Date(value.startDate).getTime();
+      const endDate = new Date(value.endDate).getTime();
+
+      if (endDate < startDate) {
+        return helpers.error('any.invalid');
+      }
+    }
+
+    if (value.applicationDeadline && value.startDate) {
+      const startDate = new Date(value.startDate).getTime();
+      const applicationDeadline = new Date(value.applicationDeadline).getTime();
+
+      if (applicationDeadline > startDate) {
+        return helpers.error('any.invalid');
+      }
+    }
+
+    return value;
+  }, 'program temporal ordering validation')
+  .messages({
+    'any.invalid':
+      'endDate must be after or equal to startDate and applicationDeadline must be before or equal to startDate',
+  })
+  .min(1);

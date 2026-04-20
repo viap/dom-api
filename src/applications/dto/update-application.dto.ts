@@ -12,6 +12,6 @@ export interface UpdateApplicationDto {
   notes?: Array<{
     text: string;
     authorId: string;
-    createdAt: number;
+    createdAt: string;
   }>;
 }
