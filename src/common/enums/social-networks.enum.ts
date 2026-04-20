@@ -2,7 +2,7 @@ export enum SocialNetworks {
   Phone = 'phone',
   Telegram = 'telegram',
   Instagram = 'instagram',
-  WatsApp = 'watsapp',
+  WhatsApp = 'whatsapp',
   Viber = 'viber',
   Other = 'other',
 }

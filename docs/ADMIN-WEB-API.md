@@ -498,7 +498,7 @@ Public `GET` routes return only published people.
   photoId?: string; // Media._id
   contacts: Array<{
     id?: string;
-    network: 'phone' | 'telegram' | 'instagram' | 'watsapp' | 'viber';
+    network: 'phone' | 'telegram' | 'instagram' | 'whatsapp' | 'viber';
     username: string;
     hidden: boolean;
   }>;
@@ -507,7 +507,7 @@ Public `GET` routes return only published people.
       | 'phone'
       | 'telegram'
       | 'instagram'
-      | 'watsapp'
+      | 'whatsapp'
       | 'viber'
       | 'other';
     url?: string; // absolute http/https URL, max 300
@@ -569,14 +569,14 @@ Public `GET` routes return only published partners and never include `contacts`.
       | 'phone'
       | 'telegram'
       | 'instagram'
-      | 'watsapp'
+      | 'whatsapp'
       | 'viber'
       | 'other';
     url?: string; // absolute http/https URL, max 300
     value?: string; // trimmed text value, max 300
   }>;
   contacts?: Array<{
-    network: 'phone' | 'telegram' | 'instagram' | 'watsapp' | 'viber' | 'other';
+    network: 'phone' | 'telegram' | 'instagram' | 'whatsapp' | 'viber' | 'other';
     username: string;
     id?: string;
     hidden?: boolean;
