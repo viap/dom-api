@@ -35,6 +35,21 @@ export class PeopleController {
     return this.peopleService.findAll(query);
   }
 
+  @Get('admin')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdmin(
+    @Query(new JoiValidationPipe(personQuerySchema))
+    query: PersonQueryParams,
+  ) {
+    return this.peopleService.findAllAdmin(query);
+  }
+
+  @Get('admin/:id')
+  @Roles(Role.Admin, Role.Editor)
+  findOneAdmin(@Param('id') id: string) {
+    return this.peopleService.findOneAdmin(id);
+  }
+
   @Get(':id')
   @Public()
   findOne(@Param('id') id: string) {

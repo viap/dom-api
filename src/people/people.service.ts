@@ -61,6 +61,31 @@ export class PeopleService {
       .exec();
   }
 
+  async findAllAdmin(
+    queryParams: PersonQueryParams = {},
+  ): Promise<PersonDocument[]> {
+    const safeParams = safeFindParams(queryParams);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = {};
+
+    if (safeParams.fullName && typeof safeParams.fullName === 'string') {
+      query.fullName = { $regex: new RegExp(safeParams.fullName, 'i') };
+    }
+
+    if (safeParams.role && typeof safeParams.role === 'string') {
+      query.roles = safeParams.role;
+    }
+
+    return this.personModel
+      .find(query)
+      .sort({ fullName: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
   async findOne(id: string): Promise<PersonDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -71,6 +96,20 @@ export class PeopleService {
       .findOne({ _id: validId, isPublished: true })
       .lean()
       .exec();
+    if (!person) {
+      throw new NotFoundException('Person not found');
+    }
+
+    return person as PersonDocument;
+  }
+
+  async findOneAdmin(id: string): Promise<PersonDocument> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      throw new NotFoundException('Invalid person ID format');
+    }
+
+    const person = await this.personModel.findById(validId).lean().exec();
     if (!person) {
       throw new NotFoundException('Person not found');
     }

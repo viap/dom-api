@@ -51,6 +51,21 @@ describe('EventsService', () => {
   const mockLocationsService = { exists: jest.fn() };
   const mockPeopleService = { exists: jest.fn() };
   const mockPartnersService = { exists: jest.fn() };
+  const createFindQueryMock = (result: unknown[] = []) => {
+    const exec = jest.fn().mockResolvedValue(result);
+    const lean = jest.fn().mockReturnValue({ exec });
+    const limit = jest.fn().mockReturnValue({ lean });
+    const skip = jest.fn().mockReturnValue({ limit });
+    const sort = jest.fn().mockReturnValue({ skip });
+
+    return {
+      sort,
+      skip,
+      limit,
+      lean,
+      exec,
+    };
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -81,8 +96,35 @@ describe('EventsService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should require domainId for public list queries', async () => {
-    await expect(service.findAll({})).rejects.toThrow(BadRequestException);
+  it('returns events without domainId and does not validate domain', async () => {
+    const findQuery = createFindQueryMock([mockEvent]);
+    mockEventModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAll({});
+
+    expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+    expect(mockEventModel.find).toHaveBeenCalledWith({
+      status: { $ne: 'draft' },
+    });
+    expect(findQuery.sort).toHaveBeenCalledWith({ startAt: 1, title: 1 });
+    expect(findQuery.skip).toHaveBeenCalledWith(0);
+    expect(findQuery.limit).toHaveBeenCalledWith(20);
+    expect(result).toEqual([mockEvent]);
+  });
+
+  it('with domainId validates domain and filters by that domain', async () => {
+    const findQuery = createFindQueryMock([mockEvent]);
+    mockEventModel.find.mockReturnValue(findQuery);
+
+    await service.findAll({ domainId: mockEvent.domainId });
+
+    expect(mockDomainsService.getActiveById).toHaveBeenCalledWith(
+      mockEvent.domainId,
+    );
+    expect(mockEventModel.find).toHaveBeenCalledWith({
+      domainId: mockEvent.domainId,
+      status: { $ne: 'draft' },
+    });
   });
 
   it('should reject duplicate slug within the same domain', async () => {

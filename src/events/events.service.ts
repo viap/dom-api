@@ -53,20 +53,21 @@ export class EventsService {
     const safeParams = safeFindParams(queryParams);
     const domainId =
       typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
-    if (!domainId) {
-      throw new BadRequestException('domainId is required');
+    if (domainId) {
+      await this.domainsService.getActiveById(domainId);
     }
-
-    await this.domainsService.getActiveById(domainId);
 
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = {
+      status: { $ne: EventStatus.Draft },
+    };
+    if (domainId) {
+      query.domainId = domainId;
+    }
 
     return this.eventModel
-      .find({
-        domainId,
-        status: { $ne: EventStatus.Draft },
-      })
+      .find(query)
       .sort({ startAt: 1, title: 1 })
       .skip(offset)
       .limit(limit)

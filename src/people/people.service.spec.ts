@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MediaService } from '@/media/media.service';
@@ -26,6 +26,8 @@ describe('PeopleService', () => {
     })),
     {
       find: jest.fn().mockReturnValue(mockQueryChain),
+      findById: jest.fn(),
+      findOne: jest.fn(),
     },
   );
   const mockUsersService = {
@@ -73,5 +75,38 @@ describe('PeopleService', () => {
       roles: PersonRole.Speaker,
     });
     expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1 });
+  });
+
+  it('should not include isPublished in admin list query', async () => {
+    await service.findAllAdmin({ role: PersonRole.Speaker });
+
+    expect(mockPersonModel.find).toHaveBeenCalledWith({
+      roles: PersonRole.Speaker,
+    });
+    expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1 });
+  });
+
+  it('should return unpublished person from admin read by id', async () => {
+    const person = {
+      _id: '507f1f77bcf86cd799439032',
+      fullName: 'John Doe',
+      isPublished: false,
+    };
+    const exec = jest.fn().mockResolvedValue(person);
+    const lean = jest.fn().mockReturnValue({ exec });
+    mockPersonModel.findById.mockReturnValue({ lean });
+
+    const result = await service.findOneAdmin('507f1f77bcf86cd799439032');
+
+    expect(mockPersonModel.findById).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439032',
+    );
+    expect(result).toEqual(person);
+  });
+
+  it('should throw NotFoundException for invalid admin read id', async () => {
+    await expect(service.findOneAdmin('invalid-id')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
