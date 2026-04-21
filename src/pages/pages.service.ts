@@ -541,7 +541,6 @@ export class PagesService {
       refs.mediaIds.add(block.backgroundMedia.mediaId);
     }
 
-    this.collectButtonRefs(block.buttons, refs);
     for (const item of block.items || []) {
       if (item.button) {
         this.collectButtonRefs([item.button], refs);

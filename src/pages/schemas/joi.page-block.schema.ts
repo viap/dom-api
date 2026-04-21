@@ -137,7 +137,6 @@ const heroBlockSchema = Joi.object({
   type: Joi.string().valid(PageBlockType.Hero).required(),
   backgroundMedia: mediaRefSchema.optional(),
   overlayStyle: Joi.string().trim().max(120).optional(),
-  buttons: Joi.array().items(blockButtonSchema).optional(),
   items: Joi.array().items(heroItemSchema).optional(),
 });
 

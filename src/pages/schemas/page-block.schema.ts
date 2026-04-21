@@ -127,7 +127,6 @@ export const heroBlockSchema = new mongoose.Schema(
   {
     backgroundMedia: { type: mediaRefSchema },
     overlayStyle: { type: String },
-    buttons: { type: [blockButtonSchema], default: [] },
     items: { type: [heroItemSchema], default: [] },
   },
   { _id: false, id: false, strict: 'throw' },

@@ -306,7 +306,7 @@ describe('PagesService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should reject external buttons without url at the service layer', async () => {
+  it('should reject hero item external buttons without url at the service layer', async () => {
     mockPageModel.findOne.mockResolvedValueOnce(null);
 
     await expect(
@@ -317,10 +317,13 @@ describe('PagesService', () => {
           {
             id: 'hero',
             type: PageBlockType.Hero,
-            buttons: [
+            items: [
               {
-                label: 'Visit',
-                type: BlockButtonType.External,
+                title: 'Card',
+                button: {
+                  label: 'Visit',
+                  type: BlockButtonType.External,
+                },
               },
             ],
           },
@@ -329,8 +332,7 @@ describe('PagesService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should reject page buttons that also include url at the service layer', async () => {
-    mockPageModel.countDocuments.mockResolvedValue(1);
+  it('should accept valid hero item buttons at the service layer', async () => {
     mockPageModel.findOne.mockResolvedValueOnce(null);
 
     await expect(
@@ -341,18 +343,20 @@ describe('PagesService', () => {
           {
             id: 'hero',
             type: PageBlockType.Hero,
-            buttons: [
+            items: [
               {
-                label: 'About',
-                type: BlockButtonType.Page,
-                targetId: mockPage._id,
-                url: 'https://example.com/about',
+                title: 'Card',
+                button: {
+                  label: 'Visit',
+                  type: BlockButtonType.External,
+                  url: 'https://example.com/about',
+                },
               },
             ],
           },
         ],
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).resolves.toEqual(mockPage);
   });
 
   it('should reject cta blocks without buttons at the service layer', async () => {

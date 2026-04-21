@@ -66,6 +66,28 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should reject top-level hero buttons at the joi layer', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'hero',
+          type: 'hero',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'external',
+              url: 'https://example.com',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('should allow up to 50 gallery items', () => {
     const { error } = createPageSchema.validate({
       title: 'Gallery',

@@ -71,7 +71,6 @@ export interface HeroBlock extends PageBlockBase {
   type: PageBlockType.Hero;
   backgroundMedia?: MediaRef;
   overlayStyle?: string;
-  buttons?: BlockButton[];
   items?: HeroBlockItem[];
 }
 
