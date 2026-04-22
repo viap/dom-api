@@ -33,14 +33,19 @@ export class JoiValidationPipe implements PipeTransform {
       },
     );
     if (error) {
-      const messageDetails = Array.isArray(error.details)
-        ? error.details.map((detail) => {
-            return detail.message;
-          })
-        : [];
-      throw new BadRequestException(
-        `Validation failed: ${messageDetails.join(' | ')}`,
+      const errors = error.details.reduce<Record<string, string>>(
+        (acc, detail) => {
+          const field = detail.path.length ? detail.path.join('.') : '_root';
+          if (!acc[field]) acc[field] = detail.message;
+          return acc;
+        },
+        {},
       );
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'Validation failed',
+        errors,
+      });
     }
 
     return validatedValue as T;
