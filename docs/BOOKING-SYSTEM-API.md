@@ -12,6 +12,7 @@ This document provides comprehensive API documentation for the booking-system mo
 7. [Bookings API](#bookings-api)
 8. [Common Query Parameters](#common-query-parameters)
 9. [Error Handling](#error-handling)
+10. [ID Validation](#id-validation)
 
 ## Overview
 
@@ -631,6 +632,12 @@ Returns HTTP 204 No Content on success.
 - String matching: Usually partial/contains matching unless specified
 
 ## Error Handling
+
+## ID Validation
+
+All booking-system fields that reference Mongo entities (for example `room`, `company`, `bookedBy`, `approvedBy`, `parentBooking`) must be valid 24-character hex ObjectIds.
+
+Invalid ObjectId values are rejected by Joi validation with `400 Bad Request` before service-level processing.
 
 ### Common HTTP Status Codes
 - `200 OK`: Successful GET request

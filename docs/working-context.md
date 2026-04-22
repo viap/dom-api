@@ -47,6 +47,12 @@ Additional constraints to keep in mind:
 - Page block behavior is backend-driven; frontend editor behavior must stay aligned with backend Joi/page schemas.
 - Route authorization is guard-driven and role-checked globally; use the permissions matrix for route-by-route expectations.
 
+Deferred behavior-change items (tracked, not part of current hardening pass):
+
+- `therapy-requests.service.ts:update()` currently calls `findByIdAndUpdate` without a prior `validateObjectId` guard.
+- `therapy-requests.service.ts:create()` sends one notification via fire-and-forget `notificationService.create(...)` (not awaited).
+- `joi.create-therapy-session.schema.ts` keeps `dateTime` optional (current behavior preserved).
+
 ## Resume-Work Checklist
 
 Read these first:

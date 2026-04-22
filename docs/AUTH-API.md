@@ -234,6 +234,10 @@ WEBSOCKET_PORT=3002
 
 ## Error Responses
 
+## ObjectId Validation Convention
+
+Across authenticated modules, any request field that represents a Mongo reference ID is validated as a 24-character hex ObjectId at Joi boundary and rejected with `400 Bad Request` when invalid.
+
 ### Authentication Errors
 
 **401 Unauthorized** - Invalid credentials or token:

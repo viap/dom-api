@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 export const menuAdminQuerySchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -9,7 +10,7 @@ export const menuAdminQuerySchema = Joi.object({
     .pattern(/^[a-z0-9-]+$/)
     .max(120)
     .optional(),
-  domainId: Joi.string().hex().length(24).optional(),
+  domainId: joiObjectId.optional(),
   isGlobal: Joi.boolean().optional(),
 }).custom((value, helpers) => {
   if (value.domainId && value.isGlobal) {

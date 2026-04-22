@@ -65,6 +65,12 @@ Most validation failures return:
 }
 ```
 
+ObjectId validation policy:
+
+- all API fields that represent Mongo references are validated as 24-character hex ObjectIds at Joi boundary
+- invalid ObjectId input returns `400` before service-layer lookup logic runs
+- this applies to route params, query filters, and body fields where ObjectId references are expected
+
 Common statuses:
 
 - `400` invalid input or invalid references

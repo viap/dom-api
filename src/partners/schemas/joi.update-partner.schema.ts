@@ -1,6 +1,7 @@
 import * as Joi from 'joi';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { PartnerType } from '../enums/partner-type.enum';
 
 export const updatePartnerSchema = Joi.object({
@@ -20,7 +21,7 @@ export const updatePartnerSchema = Joi.object({
     'string.max': 'Description cannot exceed 2000 characters',
   }),
 
-  logoId: Joi.string().hex().length(24).optional(),
+  logoId: joiObjectId.optional(),
 
   links: Joi.array()
     .items(

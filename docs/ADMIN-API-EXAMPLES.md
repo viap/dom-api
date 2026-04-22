@@ -17,6 +17,38 @@ Conventions:
 
 ---
 
+## 0. ObjectId Validation Examples
+
+### Valid ObjectId query/body values
+
+```http
+GET /programs?domainId=661000000000000000000003
+```
+
+```json
+{
+  "assignedTo": "661040000000000000000001",
+  "source": {
+    "entityId": "661070000000000000000001"
+  }
+}
+```
+
+### Invalid ObjectId example (400)
+
+```http
+GET /pages?domainId=not-an-objectid
+```
+
+```json
+{
+  "statusCode": 400,
+  "message": "Validation failed: ..."
+}
+```
+
+---
+
 ## 1. Domains
 
 ### `GET /domains`

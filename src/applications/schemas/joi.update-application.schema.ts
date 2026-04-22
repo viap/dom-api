@@ -10,11 +10,11 @@ export const updateApplicationSchema = Joi.object({
     .valid(...Object.values(ApplicationStatus))
     .optional(),
 
-  assignedTo: Joi.string().hex().length(24).optional(),
+  assignedTo: joiObjectId.optional(),
 
   source: Joi.object({
     entityType: Joi.string().valid('program', 'event', 'partner').optional(),
-    entityId: Joi.string().hex().length(24).optional(),
+    entityId: joiObjectId.optional(),
     utm: Joi.object()
       .pattern(Joi.string().max(50), Joi.string().max(200))
       .optional(),
@@ -37,7 +37,7 @@ export const updateApplicationSchema = Joi.object({
     .items(
       Joi.object({
         text: Joi.string().trim().min(1).max(1000).required(),
-        authorId: Joi.string().hex().length(24).required(),
+        authorId: joiObjectId.required(),
         createdAt: joiUtcIsoDateTime.required(),
       }),
     )

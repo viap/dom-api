@@ -8,30 +8,44 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 describe('RequestsService', () => {
   let service: TherapyRequestsService;
+  let therapyRequestModel: {
+    find: jest.Mock;
+    findById: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    findByIdAndUpdate: jest.Mock;
+    findByIdAndDelete: jest.Mock;
+  };
+  let psychologistsService: jest.Mocked<
+    Pick<PsychologistsService, 'getById' | 'getByUserId'>
+  >;
+  let usersService: jest.Mocked<Pick<UsersService, 'getById' | 'create' | 'update'>>;
+  let notificationsService: jest.Mocked<
+    Pick<NotificationsService, 'create' | 'getAll' | 'getAllByUserId'>
+  >;
 
   beforeEach(async () => {
-    const mockTherapyRequestModel = {
+    therapyRequestModel = {
       find: jest.fn(),
       findById: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
-      save: jest.fn(),
       findByIdAndUpdate: jest.fn(),
       findByIdAndDelete: jest.fn(),
     };
 
-    const mockPsychologistsService = {
+    psychologistsService = {
       getById: jest.fn(),
       getByUserId: jest.fn(),
     };
 
-    const mockUsersService = {
+    usersService = {
       getById: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     };
 
-    const mockNotificationsService = {
+    notificationsService = {
       create: jest.fn(),
       getAll: jest.fn(),
       getAllByUserId: jest.fn(),
@@ -42,19 +56,19 @@ describe('RequestsService', () => {
         TherapyRequestsService,
         {
           provide: getModelToken(TherapyRequest.name),
-          useValue: mockTherapyRequestModel,
+          useValue: therapyRequestModel,
         },
         {
           provide: PsychologistsService,
-          useValue: mockPsychologistsService,
+          useValue: psychologistsService,
         },
         {
           provide: UsersService,
-          useValue: mockUsersService,
+          useValue: usersService,
         },
         {
           provide: NotificationsService,
-          useValue: mockNotificationsService,
+          useValue: notificationsService,
         },
       ],
     }).compile();
@@ -64,5 +78,76 @@ describe('RequestsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('create resolves user by createData.user id', async () => {
+    const createPayload = {
+      name: 'John',
+      descr: 'Needs support',
+      user: '507f1f77bcf86cd799439011',
+      psychologist: '507f1f77bcf86cd799439012',
+      contacts: [{ network: 'telegram', username: '@john' }],
+    };
+
+    psychologistsService.getById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439012',
+      user: { _id: '507f1f77bcf86cd799439099' },
+    } as any);
+    usersService.getById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+    } as any);
+
+    const createdDoc = {
+      psychologist: {
+        user: { _id: { toString: () => '507f1f77bcf86cd799439099' } },
+      },
+      populate: jest.fn().mockResolvedValue({
+        psychologist: {
+          user: { _id: { toString: () => '507f1f77bcf86cd799439099' } },
+        },
+      }),
+    };
+    therapyRequestModel.create.mockResolvedValue(createdDoc);
+
+    await service.create(createPayload as any);
+
+    expect(usersService.getById).toHaveBeenCalledWith(createPayload.user);
+    expect(usersService.getById).not.toHaveBeenCalledWith(
+      createPayload.psychologist,
+    );
+  });
+
+  it('create does not query user when createData.user is omitted', async () => {
+    const createPayload = {
+      name: 'John',
+      descr: 'Needs support',
+      psychologist: '507f1f77bcf86cd799439012',
+      contacts: [{ network: 'telegram', username: '@john' }],
+    };
+
+    psychologistsService.getById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439012',
+      user: { _id: '507f1f77bcf86cd799439099' },
+    } as any);
+
+    const createdDoc = {
+      psychologist: {
+        user: { _id: { toString: () => '507f1f77bcf86cd799439099' } },
+      },
+      populate: jest.fn().mockResolvedValue({
+        psychologist: {
+          user: { _id: { toString: () => '507f1f77bcf86cd799439099' } },
+        },
+      }),
+    };
+    therapyRequestModel.create.mockResolvedValue(createdDoc);
+
+    await service.create(createPayload as any);
+
+    expect(psychologistsService.getById).toHaveBeenCalledWith(
+      createPayload.psychologist,
+      false,
+    );
+    expect(usersService.getById).not.toHaveBeenCalled();
   });
 });
