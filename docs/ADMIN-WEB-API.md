@@ -818,6 +818,19 @@ Public intake forms with admin/editor processing.
 
 The `payload` object depends on `formType`.
 `notes` is update-only and is not accepted in `POST /applications` payloads.
+`domainId` is optional in `POST /applications`.
+When omitted, backend resolves it from `formType`:
+
+| `formType` | fallback domain code |
+| --- | --- |
+| `partnership` | `psych_center` |
+| `program_enrollment` | `academy` |
+| `event_registration` | `psych_center` |
+| `corporate_training` | `psych_center` |
+| `specialist_request` | `psych_center` |
+| `general` | `psych_center` |
+
+If mapped domain is missing or inactive, request fails with `Active domain not found`.
 
 #### `partnership`
 
@@ -919,6 +932,14 @@ The `payload` object depends on `formType`.
   }
 }
 ```
+
+### Update payload notes (`PATCH /applications/:id`)
+
+- `domainId` is optional.
+- If `domainId` is provided, backend validates it as an active domain and uses it.
+- If `domainId` is omitted:
+  - existing `domainId` is kept when present;
+  - fallback mapping is applied only for records that currently have no `domainId`.
 
 ### Frontend use
 

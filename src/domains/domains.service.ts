@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import { Model } from 'mongoose';
 import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { CreateDomainDto } from './dto/create-domain.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
+import { DomainCode } from './enums/domain-code.enum';
 import { Domain, DomainDocument } from './schemas/domain.schema';
 
 @Injectable()
@@ -125,6 +127,22 @@ export class DomainsService {
       .exec();
     if (!domain) {
       throw new NotFoundException('Active domain not found');
+    }
+
+    return domain as DomainDocument;
+  }
+
+  async getActiveByCode(code: DomainCode): Promise<DomainDocument> {
+    if (!code || !Object.values(DomainCode).includes(code)) {
+      throw new BadRequestException('Invalid domain code');
+    }
+
+    const domain = await this.domainModel
+      .findOne({ code, isActive: true })
+      .lean()
+      .exec();
+    if (!domain) {
+      throw new NotFoundException(`Active domain not found for code: ${code}`);
     }
 
     return domain as DomainDocument;

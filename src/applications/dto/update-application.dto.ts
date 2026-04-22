@@ -1,6 +1,7 @@
 import { ApplicationStatus } from '../enums/application-status.enum';
 
 export interface UpdateApplicationDto {
+  domainId?: string;
   status?: ApplicationStatus;
   assignedTo?: string;
   source?: {

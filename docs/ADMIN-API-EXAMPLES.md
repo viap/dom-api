@@ -1754,6 +1754,15 @@ Request:
 }
 ```
 
+Request (optional `domainId` override):
+
+```json
+{
+  "domainId": "661000000000000000000003",
+  "status": "in_review"
+}
+```
+
 Response:
 
 ```json
@@ -1801,6 +1810,7 @@ Response:
 ### `POST /applications`
 
 This route is public rather than admin-only, but it is useful for admin QA and frontend integration.
+`domainId` is optional; when omitted backend resolves it by `formType` mapping.
 
 Request:
 
@@ -1829,6 +1839,33 @@ Request:
   "payload": {
     "ticketCount": 1,
     "comment": "Please confirm by email"
+  }
+}
+```
+
+Request (without `domainId`, fallback by `formType`):
+
+```json
+{
+  "formType": "general",
+  "source": {
+    "utm": {
+      "source": "site",
+      "campaign": "contact-form"
+    }
+  },
+  "applicant": {
+    "name": "Mia K.",
+    "contacts": [
+      {
+        "network": "email",
+        "username": "mia@example.com",
+        "hidden": false
+      }
+    ]
+  },
+  "payload": {
+    "message": "Need details about your services."
   }
 }
 ```

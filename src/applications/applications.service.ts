@@ -13,6 +13,7 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
+import { DomainCode } from '@/domains/enums/domain-code.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { EventsService } from '@/events/events.service';
 import { PartnersService } from '@/partners/partners.service';
@@ -20,8 +21,18 @@ import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { UpdateApplicationDto } from './dto/update-application.dto';
+import { ApplicationFormType } from './enums/application-form-type.enum';
 import { ApplicationQueryParams } from './types/query-params.interface';
 import { Application, ApplicationDocument } from './schemas/application.schema';
+
+const FORM_TYPE_DOMAIN_CODE_MAP: Record<ApplicationFormType, DomainCode> = {
+  [ApplicationFormType.Partnership]: DomainCode.PsychCenter,
+  [ApplicationFormType.ProgramEnrollment]: DomainCode.Academy,
+  [ApplicationFormType.EventRegistration]: DomainCode.PsychCenter,
+  [ApplicationFormType.CorporateTraining]: DomainCode.PsychCenter,
+  [ApplicationFormType.SpecialistRequest]: DomainCode.PsychCenter,
+  [ApplicationFormType.General]: DomainCode.PsychCenter,
+};
 
 @Injectable()
 export class ApplicationsService {
@@ -38,9 +49,16 @@ export class ApplicationsService {
   async create(
     createApplicationDto: CreateApplicationDto,
   ): Promise<ApplicationDocument> {
-    await this.validateDomainAndRefs(createApplicationDto);
+    const domainId = await this.resolveEffectiveDomainId({
+      domainId: createApplicationDto.domainId,
+      formType: createApplicationDto.formType,
+    });
+    await this.validateDomainAndRefs({ ...createApplicationDto, domainId });
 
-    const application = new this.applicationModel(createApplicationDto);
+    const application = new this.applicationModel({
+      ...createApplicationDto,
+      domainId,
+    });
     return application.save();
   }
 
@@ -112,14 +130,60 @@ export class ApplicationsService {
       throw new NotFoundException('Application not found');
     }
 
+    const hasDomainIdField = Object.prototype.hasOwnProperty.call(
+      updateApplicationDto,
+      'domainId',
+    );
+    const existingDomainId = existingApplication.domainId?.toString();
+    const shouldResolveFallbackDomain = !hasDomainIdField && !existingDomainId;
+
+    let resolvedDomainId: string | undefined;
+    if (hasDomainIdField && typeof updateApplicationDto.domainId === 'string') {
+      await this.domainsService.getActiveById(updateApplicationDto.domainId);
+      resolvedDomainId = await this.resolveEffectiveDomainId({
+        domainId: updateApplicationDto.domainId,
+        formType: existingApplication.formType as ApplicationFormType,
+      });
+    } else if (shouldResolveFallbackDomain) {
+      resolvedDomainId = await this.resolveEffectiveDomainId({
+        formType: existingApplication.formType as ApplicationFormType,
+      });
+    }
+
     await this.validateUpdateRefs(updateApplicationDto);
 
+    const updateData: Record<string, unknown> = { ...updateApplicationDto };
+    if (hasDomainIdField && updateApplicationDto.domainId === undefined) {
+      delete updateData.domainId;
+    }
+    if (resolvedDomainId) {
+      updateData.domainId = resolvedDomainId;
+    }
+
     const application = await this.applicationModel
-      .findByIdAndUpdate(validId, updateApplicationDto, { new: true })
+      .findByIdAndUpdate(validId, updateData, { new: true })
       .lean()
       .exec();
 
     return application as ApplicationDocument;
+  }
+
+  private async resolveEffectiveDomainId(data: {
+    formType: ApplicationFormType;
+    domainId?: string;
+  }): Promise<string> {
+    if (typeof data.domainId === 'string') {
+      return data.domainId;
+    }
+
+    const mappedCode = FORM_TYPE_DOMAIN_CODE_MAP[data.formType];
+    if (!mappedCode) {
+      throw new BadRequestException(
+        `No domain mapping defined for formType: ${data.formType}`,
+      );
+    }
+    const mappedDomain = await this.domainsService.getActiveByCode(mappedCode);
+    return mappedDomain._id.toString();
   }
 
   private async validateDomainAndRefs(data: {

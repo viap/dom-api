@@ -51,7 +51,7 @@ const payloadSchema = Joi.when('formType', {
 });
 
 export const createApplicationSchema = Joi.object({
-  domainId: joiObjectId.required(),
+  domainId: joiObjectId.optional(),
 
   formType: Joi.string()
     .valid(...Object.values(ApplicationFormType))

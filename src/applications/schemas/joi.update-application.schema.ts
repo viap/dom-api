@@ -1,8 +1,11 @@
 import * as Joi from 'joi';
 import { joiUtcIsoDateTime } from '@/common/schemas/joi.datetime.schema';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { ApplicationStatus } from '../enums/application-status.enum';
 
 export const updateApplicationSchema = Joi.object({
+  domainId: joiObjectId.optional(),
+
   status: Joi.string()
     .valid(...Object.values(ApplicationStatus))
     .optional(),

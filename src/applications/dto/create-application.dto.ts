@@ -2,7 +2,7 @@ import { Contact } from '@/common/schemas/contact.schema';
 import { ApplicationFormType } from '../enums/application-form-type.enum';
 
 export interface CreateApplicationDto {
-  domainId: string;
+  domainId?: string;
   formType: ApplicationFormType;
   source?: {
     entityType?: string;

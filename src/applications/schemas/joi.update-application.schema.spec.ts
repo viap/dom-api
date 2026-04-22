@@ -1,6 +1,22 @@
 import { updateApplicationSchema } from './joi.update-application.schema';
 
 describe('updateApplicationSchema notes.createdAt validation', () => {
+  it('accepts domainId as an optional patch field', () => {
+    const { error } = updateApplicationSchema.validate({
+      domainId: '660900000000000000000099',
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects domainId null', () => {
+    const { error } = updateApplicationSchema.validate({
+      domainId: null,
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('accepts UTC ISO datetime for notes.createdAt', () => {
     const { error } = updateApplicationSchema.validate({
       notes: [
