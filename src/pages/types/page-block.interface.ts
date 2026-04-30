@@ -15,7 +15,7 @@ export interface BlockButton {
   targetId?: string;
   url?: string;
   openInNewTab?: boolean;
-  style?: 'primary' | 'secondary' | 'ghost' | 'link';
+  style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
 }
 
 export interface MediaRef {
@@ -40,8 +40,8 @@ export interface PageBlockBase {
   isVisible?: boolean;
   anchorId?: string;
   theme?: string;
-  paddingTop?: BlockSpacing;
-  paddingBottom?: BlockSpacing;
+  background?: string;
+  padding?: BlockSpacing;
 }
 
 export interface RichTextBlock extends PageBlockBase {
@@ -76,7 +76,6 @@ export interface HeroBlock extends PageBlockBase {
 
 export interface CtaBlock extends PageBlockBase {
   type: PageBlockType.Cta;
-  backgroundStyle?: string;
   buttons: BlockButton[];
 }
 

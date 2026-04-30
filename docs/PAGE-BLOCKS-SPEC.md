@@ -67,8 +67,8 @@ type PageBlockBase = {
   isVisible?: boolean;
   anchorId?: string;
   theme?: string;
-  paddingTop?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
-  paddingBottom?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  background?: string;
+  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
 };
 ```
 
@@ -77,6 +77,7 @@ Notes:
 - `description` is the main rich text / body field for blocks that need it
 - `variant` is block-specific and should not replace `type`
 - `theme` should stay token-based, not raw design values, where possible
+- `background` is an optional shared string field for any block and should stay within 300 characters
 
 ---
 
@@ -91,7 +92,7 @@ type BlockButton = {
   targetId?: string;
   url?: string;
   openInNewTab?: boolean;
-  style?: 'primary' | 'secondary' | 'ghost' | 'link';
+  style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
 };
 ```
 
@@ -255,7 +256,6 @@ Reason:
 ```ts
 type CtaBlock = PageBlockBase & {
   type: 'cta';
-  backgroundStyle?: string;
   buttons: BlockButton[];
 };
 ```

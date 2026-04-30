@@ -24,7 +24,7 @@ const blockButtonSchema = Joi.object({
   targetId: Joi.string().trim().max(120).optional(),
   url: Joi.string().trim().uri().optional(),
   openInNewTab: Joi.boolean().default(false).optional(),
-  style: Joi.string().valid('primary', 'secondary', 'ghost', 'link').optional(),
+  style: Joi.string().valid('primary', 'secondary', 'ghost', 'outline', 'link').optional(),
 })
   .custom((value, helpers) => {
     if (value.type === BlockButtonType.External) {
@@ -97,8 +97,8 @@ const pageBlockBaseSchema = {
   isVisible: Joi.boolean().default(true).optional(),
   anchorId: attributeTokenSchema.optional(),
   theme: attributeTokenSchema.optional(),
-  paddingTop: spacingSchema.optional(),
-  paddingBottom: spacingSchema.optional(),
+  background: Joi.string().trim().max(300).optional(),
+  padding: spacingSchema.optional(),
 };
 
 const richTextBlockSchema = Joi.object({
@@ -143,7 +143,6 @@ const heroBlockSchema = Joi.object({
 const ctaBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Cta).required(),
-  backgroundStyle: Joi.string().trim().max(120).optional(),
   buttons: Joi.array().items(blockButtonSchema).min(1).required(),
 });
 

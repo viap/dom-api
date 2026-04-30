@@ -147,6 +147,84 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should allow background on non-cta blocks', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          background: 'linear-gradient(90deg, #ffffff 0%, #f5f5f5 100%)',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should allow background on cta blocks', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          background: 'brand-surface-accent',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'external',
+              url: 'https://example.com',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject background values longer than 300 characters', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          background: 'a'.repeat(301),
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject legacy cta backgroundStyle values', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          backgroundStyle: 'legacy-background',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'external',
+              url: 'https://example.com',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('should allow isHomepage boolean on create', () => {
     const { error } = createPageSchema.validate({
       title: 'Home',

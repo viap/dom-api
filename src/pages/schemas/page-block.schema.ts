@@ -8,7 +8,7 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 
 const spacingValues = ['none', 'sm', 'md', 'lg', 'xl'];
 const variantValues = ['section', 'block', 'element'];
-const buttonStyleValues = ['primary', 'secondary', 'ghost', 'link'];
+const buttonStyleValues = ['primary', 'secondary', 'ghost', 'outline', 'link'];
 const mediaPositionValues = ['left', 'right', 'top', 'bottom'];
 const galleryLayoutValues = ['grid', 'masonry', 'slider'];
 
@@ -84,8 +84,8 @@ export const pageBlockBaseSchema = new mongoose.Schema(
     isVisible: { type: Boolean, default: true },
     anchorId: { type: String },
     theme: { type: String },
-    paddingTop: { type: String, enum: spacingValues },
-    paddingBottom: { type: String, enum: spacingValues },
+    background: { type: String, trim: true, maxlength: 300 },
+    padding: { type: String, enum: spacingValues },
   },
   {
     _id: false,
@@ -134,7 +134,6 @@ export const heroBlockSchema = new mongoose.Schema(
 
 export const ctaBlockSchema = new mongoose.Schema(
   {
-    backgroundStyle: { type: String },
     buttons: { type: [blockButtonSchema], required: true, default: [] },
   },
   { _id: false, id: false, strict: 'throw' },
