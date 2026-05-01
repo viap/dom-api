@@ -17,6 +17,7 @@ import {
 } from '@/common/utils/mongo-sanitizer';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
+import { MediaService } from '@/media/media.service';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -35,6 +36,7 @@ export class EventsService {
     private eventModel: Model<DomainEventDocument>,
     private domainsService: DomainsService,
     private locationsService: LocationsService,
+    private mediaService: MediaService,
     private peopleService: PeopleService,
     private partnersService: PartnersService,
   ) {}
@@ -114,6 +116,7 @@ export class EventsService {
       domainId,
       locationId:
         updateEventDto.locationId || existingEvent.locationId?.toString(),
+      mediaId: updateEventDto.mediaId || existingEvent.mediaId?.toString(),
       speakerIds:
         updateEventDto.speakerIds ||
         existingEvent.speakerIds.map((id) => id.toString()),
@@ -165,6 +168,7 @@ export class EventsService {
   private async validateDomainAndRefs(data: {
     domainId: string;
     locationId?: string;
+    mediaId?: string;
     speakerIds?: string[];
     organizerIds?: string[];
     partnerIds?: string[];
@@ -175,6 +179,13 @@ export class EventsService {
       const exists = await this.locationsService.exists(data.locationId);
       if (!exists) {
         throw new BadRequestException('Referenced location not found');
+      }
+    }
+
+    if (data.mediaId) {
+      const mediaExists = await this.mediaService.existsPublished(data.mediaId);
+      if (!mediaExists) {
+        throw new BadRequestException('Referenced published media not found');
       }
     }
 

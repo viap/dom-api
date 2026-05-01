@@ -7,6 +7,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
+import { MediaService } from '@/media/media.service';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { DomainEvent } from './schemas/domain-event.schema';
@@ -49,6 +50,7 @@ describe('EventsService', () => {
 
   const mockDomainsService = { getActiveById: jest.fn() };
   const mockLocationsService = { exists: jest.fn() };
+  const mockMediaService = { existsPublished: jest.fn() };
   const mockPeopleService = { exists: jest.fn() };
   const mockPartnersService = { exists: jest.fn() };
   const createFindQueryMock = (result: unknown[] = []) => {
@@ -77,6 +79,7 @@ describe('EventsService', () => {
         },
         { provide: DomainsService, useValue: mockDomainsService },
         { provide: LocationsService, useValue: mockLocationsService },
+        { provide: MediaService, useValue: mockMediaService },
         { provide: PeopleService, useValue: mockPeopleService },
         { provide: PartnersService, useValue: mockPartnersService },
       ],
@@ -88,6 +91,7 @@ describe('EventsService', () => {
       _id: mockEvent.domainId,
     });
     mockLocationsService.exists.mockResolvedValue(true);
+    mockMediaService.existsPublished.mockResolvedValue(true);
     mockPeopleService.exists.mockResolvedValue(true);
     mockPartnersService.exists.mockResolvedValue(true);
   });
@@ -155,6 +159,42 @@ describe('EventsService', () => {
         startAt: '2026-04-20T10:00:00.000Z',
         endAt: '2026-04-20T11:00:00.000Z',
         locationId: '507f1f77bcf86cd799439099',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject missing referenced published media during create', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockMediaService.existsPublished.mockResolvedValue(false);
+
+    await expect(
+      service.create({
+        domainId: mockEvent.domainId,
+        type: 'seminar' as any,
+        title: 'Event',
+        slug: 'event-with-cover',
+        startAt: '2026-04-20T10:00:00.000Z',
+        endAt: '2026-04-20T11:00:00.000Z',
+        mediaId: '507f1f77bcf86cd799439111',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject update when existing merged media reference is missing', async () => {
+    const existingEvent = {
+      ...mockEvent,
+      mediaId: '507f1f77bcf86cd799439111',
+    };
+    mockMediaService.existsPublished.mockResolvedValue(false);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingEvent),
+      }),
+    });
+
+    await expect(
+      service.update(mockEvent._id, {
+        status: 'ongoing' as any,
       }),
     ).rejects.toThrow(BadRequestException);
   });

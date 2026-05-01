@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DomainsModule } from '@/domains/domains.module';
 import { LocationsModule } from '@/locations/locations.module';
+import { MediaModule } from '@/media/media.module';
 import { PartnersModule } from '@/partners/partners.module';
 import { PeopleModule } from '@/people/people.module';
 import { EventsController } from './events.controller';
@@ -15,6 +16,7 @@ import { DomainEvent, domainEventSchema } from './schemas/domain-event.schema';
     ]),
     DomainsModule,
     LocationsModule,
+    MediaModule,
     PeopleModule,
     PartnersModule,
   ],

@@ -11,6 +11,7 @@ export interface CreateEventDto {
   startAt: string;
   endAt: string;
   locationId?: string;
+  mediaId?: string;
   speakerIds?: string[];
   organizerIds?: string[];
   partnerIds?: string[];

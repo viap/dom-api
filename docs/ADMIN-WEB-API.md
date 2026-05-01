@@ -714,6 +714,7 @@ Public reads exclude items with `status = draft`.
   startAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   endAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   locationId?: string; // Location._id
+  mediaId?: string; // Media._id, optional event cover media
   speakerIds: string[];
   organizerIds: string[];
   partnerIds: string[];
@@ -747,7 +748,7 @@ Public reads exclude items with `status = draft`.
 
 - `domainId` is required on create/update
 - slug is unique within a domain
-- `locationId`, `speakerIds`, `organizerIds`, `partnerIds` must reference existing records
+- `locationId`, `mediaId`, `speakerIds`, `organizerIds`, `partnerIds` must reference existing records
 - `endAt` must be after `startAt`
 - when provided with `startAt`, `registration.deadline` must be before or equal to `startAt`
 

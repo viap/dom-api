@@ -31,6 +31,7 @@ export const createEventSchema = Joi.object({
   endAt: joiUtcIsoDateTime.required(),
 
   locationId: joiObjectId.optional(),
+  mediaId: joiObjectId.optional(),
 
   speakerIds: Joi.array().items(joiObjectId).default([]),
   organizerIds: Joi.array().items(joiObjectId).default([]),

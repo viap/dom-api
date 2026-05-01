@@ -40,6 +40,9 @@ export class DomainEvent {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Location' })
   locationId?: mongoose.Schema.Types.ObjectId;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media' })
+  mediaId?: mongoose.Schema.Types.ObjectId;
+
   @Prop({
     required: true,
     type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }],

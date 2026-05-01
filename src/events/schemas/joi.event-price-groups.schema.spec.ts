@@ -14,10 +14,28 @@ describe('Event Joi priceGroups validation', () => {
   it('accepts UTC ISO datetime fields', () => {
     const { error } = createEventSchema.validate({
       ...baseCreatePayload,
+      mediaId: '507f1f77bcf86cd799439099',
       registration: { deadline: '2026-04-20T08:00:00.000Z' },
     });
 
     expect(error).toBeUndefined();
+  });
+
+  it('rejects invalid mediaId in create payload', () => {
+    const { error } = createEventSchema.validate({
+      ...baseCreatePayload,
+      mediaId: 'not-an-object-id',
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('rejects invalid mediaId in update payload', () => {
+    const { error } = updateEventSchema.validate({
+      mediaId: 'not-an-object-id',
+    });
+
+    expect(error).toBeDefined();
   });
 
   it('rejects numeric datetime fields', () => {

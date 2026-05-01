@@ -30,6 +30,7 @@ export const updateEventSchema = Joi.object({
   endAt: joiUtcIsoDateTime.optional(),
 
   locationId: joiObjectId.optional(),
+  mediaId: joiObjectId.optional(),
 
   speakerIds: Joi.array().items(joiObjectId).optional(),
   organizerIds: Joi.array().items(joiObjectId).optional(),
