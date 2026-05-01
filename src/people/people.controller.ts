@@ -19,6 +19,7 @@ import { UpdatePersonDto } from './dto/update-person.dto';
 import { PeopleService } from './people.service';
 import { createPersonSchema } from './schemas/joi.create-person.schema';
 import { personQuerySchema } from './schemas/joi.person-query.schema';
+import { personSlugParamsSchema } from './schemas/joi.person-slug.params.schema';
 import { updatePersonSchema } from './schemas/joi.update-person.schema';
 import { PersonQueryParams } from './types/query-params.interface';
 
@@ -50,7 +51,19 @@ export class PeopleController {
     return this.peopleService.findOneAdmin(id);
   }
 
-  @Get(':id')
+  // Keep this specific slug route above the ObjectId route below.
+  @Get('slug/:slug')
+  @Public()
+  findOneBySlug(
+    @Param(new JoiValidationPipe(personSlugParamsSchema))
+    params: {
+      slug: string;
+    },
+  ) {
+    return this.peopleService.findOneBySlug(params.slug);
+  }
+
+  @Get(':id([0-9a-fA-F]{24})')
   @Public()
   findOne(@Param('id') id: string) {
     return this.peopleService.findOne(id);
@@ -66,7 +79,7 @@ export class PeopleController {
     return this.peopleService.create(createPersonDto);
   }
 
-  @Patch(':id')
+  @Patch(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   update(
     @Param('id') id: string,
@@ -76,7 +89,7 @@ export class PeopleController {
     return this.peopleService.update(id, updatePersonDto);
   }
 
-  @Delete(':id')
+  @Delete(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {

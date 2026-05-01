@@ -13,6 +13,7 @@ describe('PeopleController', () => {
       findAll: jest.fn(),
       findAllAdmin: jest.fn(),
       findOneAdmin: jest.fn(),
+      findOneBySlug: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -23,6 +24,12 @@ describe('PeopleController', () => {
   it('should mark public reads as public', () => {
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PeopleController.prototype.findAll),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        PeopleController.prototype.findOneBySlug,
+      ),
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PeopleController.prototype.findOne),

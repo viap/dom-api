@@ -16,6 +16,9 @@ export class Person {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'User' })
   userId?: UserDocument;
 
+  @Prop({ trim: true, minlength: 1 })
+  slug?: string;
+
   @Prop({ required: true, trim: true })
   fullName: string;
 
@@ -42,5 +45,14 @@ export class Person {
 }
 
 export const personSchema = SchemaFactory.createForClass(Person);
+personSchema.index(
+  { slug: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      slug: { $exists: true, $type: 'string', $gt: '' },
+    },
+  },
+);
 personSchema.index({ isPublished: 1, fullName: 1 });
 personSchema.index({ userId: 1 }, { sparse: true });

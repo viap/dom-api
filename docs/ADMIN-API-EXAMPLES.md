@@ -1016,6 +1016,7 @@ Response:
   {
     "_id": "661300000000000000000001",
     "userId": "660900000000000000000010",
+    "slug": "olga-chkheidze",
     "fullName": "Olga Chkheidze",
     "roles": ["speaker", "community"],
     "bio": "Psychotherapist and lecturer.",
@@ -1045,6 +1046,43 @@ Response:
 ]
 ```
 
+### `GET /people/slug/olga-chkheidze`
+
+Response:
+
+```json
+{
+  "_id": "661300000000000000000001",
+  "userId": "660900000000000000000010",
+  "slug": "olga-chkheidze",
+  "fullName": "Olga Chkheidze",
+  "roles": ["speaker", "community"],
+  "bio": "Psychotherapist and lecturer.",
+  "photoId": "661100000000000000000001",
+  "contacts": [
+    {
+      "network": "telegram",
+      "username": "@olga",
+      "hidden": false
+    }
+  ],
+  "socialLinks": [
+    {
+      "platform": "instagram",
+      "url": "https://instagram.com/olga"
+    },
+    {
+      "platform": "telegram",
+      "value": "@olga"
+    }
+  ],
+  "isPublished": true,
+  "schemaVersion": 1,
+  "createdAt": "2026-04-10T10:00:00.000Z",
+  "updatedAt": "2026-04-10T10:00:00.000Z"
+}
+```
+
 ### `POST /people`
 
 Request:
@@ -1052,6 +1090,7 @@ Request:
 ```json
 {
   "userId": "660900000000000000000010",
+  "slug": "nino-m",
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator and event host.",
@@ -1080,6 +1119,7 @@ Response:
 {
   "_id": "661300000000000000000002",
   "userId": "660900000000000000000010",
+  "slug": "nino-m",
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator and event host.",
@@ -1111,6 +1151,7 @@ Request:
 
 ```json
 {
+  "slug": "nino-m-curator",
   "bio": "Community moderator, speaker, and curator."
 }
 ```
@@ -1121,6 +1162,7 @@ Response:
 {
   "_id": "661300000000000000000002",
   "userId": "660900000000000000000010",
+  "slug": "nino-m-curator",
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator, speaker, and curator.",

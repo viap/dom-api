@@ -4,6 +4,7 @@ import { PersonRole } from '../enums/person-role.enum';
 
 export interface CreatePersonDto {
   userId?: string;
+  slug: string;
   fullName: string;
   roles?: PersonRole[];
   bio?: string;

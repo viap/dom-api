@@ -2,10 +2,15 @@ import * as Joi from 'joi';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { PersonRole } from '../enums/person-role.enum';
 
 export const updatePersonSchema = Joi.object({
   userId: joiObjectId.optional(),
+
+  slug: joiSlugSchema.optional().messages({
+    'string.empty': 'Slug cannot be empty',
+  }),
 
   fullName: Joi.string().trim().min(1).max(150).optional().messages({
     'string.empty': 'Full name cannot be empty',

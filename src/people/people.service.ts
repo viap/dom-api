@@ -1,25 +1,33 @@
 import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+  safeFindParams,
+  validateObjectId,
+} from '@/common/utils/mongo-sanitizer';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
-import {
-  safeFindParams,
-  validateObjectId,
-} from '@/common/utils/mongo-sanitizer';
 import { MediaService } from '@/media/media.service';
 import { UsersService } from '@/users/users.service';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import { CreatePersonDto } from './dto/create-person.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
-import { PersonQueryParams } from './types/query-params.interface';
 import { Person, PersonDocument } from './schemas/person.schema';
+import { PersonQueryParams } from './types/query-params.interface';
+
+type MongoDuplicateSlugError = {
+  code: number;
+  keyPattern?: {
+    slug?: number;
+  };
+};
 
 @Injectable()
 export class PeopleService {
@@ -31,9 +39,17 @@ export class PeopleService {
 
   async create(createPersonDto: CreatePersonDto): Promise<PersonDocument> {
     await this.validateRefs(createPersonDto.userId, createPersonDto.photoId);
+    await this.ensureUniqueSlug(createPersonDto.slug);
 
     const person = new this.personModel(createPersonDto);
-    return person.save();
+    try {
+      return await person.save();
+    } catch (error) {
+      if (this.isMongoDuplicateSlugError(error)) {
+        throw new ConflictException('Person with this slug already exists');
+      }
+      throw error;
+    }
   }
 
   async findAll(
@@ -103,6 +119,18 @@ export class PeopleService {
     return person as PersonDocument;
   }
 
+  async findOneBySlug(slug: string): Promise<PersonDocument> {
+    const person = await this.personModel
+      .findOne({ slug, isPublished: true })
+      .lean()
+      .exec();
+    if (!person) {
+      throw new NotFoundException('Person not found');
+    }
+
+    return person as PersonDocument;
+  }
+
   async findOneAdmin(id: string): Promise<PersonDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -128,15 +156,36 @@ export class PeopleService {
 
     await this.validateRefs(updatePersonDto.userId, updatePersonDto.photoId);
 
-    const person = await this.personModel
-      .findByIdAndUpdate(validId, updatePersonDto, { new: true })
-      .lean()
-      .exec();
-    if (!person) {
-      throw new NotFoundException('Person not found');
+    if (updatePersonDto.slug !== undefined) {
+      const existingPerson = await this.personModel
+        .findById(validId)
+        .lean()
+        .exec();
+      if (!existingPerson) {
+        throw new NotFoundException('Person not found');
+      }
+
+      if (updatePersonDto.slug !== existingPerson.slug) {
+        await this.ensureUniqueSlug(updatePersonDto.slug, validId);
+      }
     }
 
-    return person as PersonDocument;
+    try {
+      const person = await this.personModel
+        .findByIdAndUpdate(validId, updatePersonDto, { new: true })
+        .lean()
+        .exec();
+      if (!person) {
+        throw new NotFoundException('Person not found');
+      }
+
+      return person as PersonDocument;
+    } catch (error) {
+      if (this.isMongoDuplicateSlugError(error)) {
+        throw new ConflictException('Person with this slug already exists');
+      }
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<boolean> {
@@ -204,5 +253,39 @@ export class PeopleService {
         throw new BadRequestException('Referenced published media not found');
       }
     }
+  }
+
+  private async ensureUniqueSlug(
+    slug?: string,
+    excludeId?: string,
+  ): Promise<void> {
+    if (!slug) {
+      return;
+    }
+
+    const query: FilterQuery<PersonDocument> = { slug };
+    if (excludeId) {
+      query._id = { $ne: new Types.ObjectId(excludeId) };
+    }
+
+    const existing = await this.personModel.findOne(query).lean().exec();
+    if (existing) {
+      throw new ConflictException('Person with this slug already exists');
+    }
+  }
+
+  private isMongoDuplicateSlugError(
+    error: unknown,
+  ): error is MongoDuplicateSlugError {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    if (!('code' in error) || !('keyPattern' in error)) {
+      return false;
+    }
+
+    const mongoError = error as MongoDuplicateSlugError;
+    return mongoError.code === 11000 && !!mongoError.keyPattern?.slug;
   }
 }

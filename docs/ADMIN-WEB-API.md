@@ -468,6 +468,7 @@ Public personas and speakers/organizers.
 ### Routes
 
 - `GET /people` public
+- `GET /people/slug/:slug` public
 - `GET /people/:id` public
 - `POST /people` admin/editor
 - `PATCH /people/:id` admin/editor
@@ -498,6 +499,7 @@ Public `GET` routes return only published people.
 {
   _id: string;
   userId?: string;
+  slug?: string;
   fullName: string;
   roles: Array<'founder' | 'team' | 'speaker' | 'organizer' | 'community'>;
   bio: string;
@@ -828,14 +830,14 @@ The `payload` object depends on `formType`.
 `domainId` is optional in `POST /applications`.
 When omitted, backend resolves it from `formType`:
 
-| `formType` | fallback domain code |
-| --- | --- |
-| `partnership` | `psych_center` |
-| `program_enrollment` | `academy` |
-| `event_registration` | `psych_center` |
-| `corporate_training` | `psych_center` |
-| `specialist_request` | `psych_center` |
-| `general` | `psych_center` |
+| `formType`           | fallback domain code |
+| -------------------- | -------------------- |
+| `partnership`        | `psych_center`       |
+| `program_enrollment` | `academy`            |
+| `event_registration` | `psych_center`       |
+| `corporate_training` | `psych_center`       |
+| `specialist_request` | `psych_center`       |
+| `general`            | `psych_center`       |
 
 If mapped domain is missing or inactive, request fails with `Active domain not found`.
 
