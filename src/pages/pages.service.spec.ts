@@ -613,6 +613,105 @@ describe('PagesService', () => {
     ]);
   });
 
+  it('should list only pages for selected domain in admin domain listing', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([
+                mockPage,
+                { ...mockPage, _id: '507f1f77bcf86cd799439113' },
+              ]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(
+      service.findAllByDomainIdAdmin({
+        domainId: String(mockPage.domainId),
+      }),
+    ).resolves.toEqual([
+      mockPage,
+      expect.objectContaining({ _id: '507f1f77bcf86cd799439113' }),
+    ]);
+
+    expect(mockDomainsService.getActiveById).toHaveBeenCalledWith(
+      String(mockPage.domainId),
+    );
+    expect(mockPageModel.find).toHaveBeenCalledWith({
+      domainId: String(mockPage.domainId),
+    });
+  });
+
+  it('should list all pages in admin listing', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest
+                .fn()
+                .mockResolvedValue([mockGlobalPage, mockPage]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(service.findAllAdmin()).resolves.toEqual([
+      mockGlobalPage,
+      mockPage,
+    ]);
+    expect(mockPageModel.find).toHaveBeenCalledWith({});
+  });
+
+  it('should include draft pages in admin domain listing', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([
+                { ...mockPage, status: PageStatus.Draft },
+              ]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(
+      service.findAllByDomainIdAdmin({
+        domainId: String(mockPage.domainId),
+      }),
+    ).resolves.toEqual([expect.objectContaining({ status: PageStatus.Draft })]);
+  });
+
+  it('should list all domain-scoped pages when domainId is omitted', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([mockPage]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(service.findAllByDomainIdAdmin({})).resolves.toEqual([
+      mockPage,
+    ]);
+    expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+    expect(mockPageModel.find).toHaveBeenCalledWith({
+      domainId: { $exists: true },
+    });
+  });
+
   it('should reject duplicate slug among global pages', async () => {
     mockPageModel.findOne.mockResolvedValue(mockGlobalPage);
 

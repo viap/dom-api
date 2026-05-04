@@ -1,0 +1,8 @@
+import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+
+export const pageAdminDomainQuerySchema = Joi.object({
+  domainId: joiObjectId.optional(),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  offset: Joi.number().integer().min(0).default(0),
+});

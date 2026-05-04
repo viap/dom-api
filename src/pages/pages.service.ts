@@ -254,6 +254,56 @@ export class PagesService {
       .exec();
   }
 
+  async findAllAdmin(
+    queryParams: {
+      limit?: string;
+      offset?: string;
+    } = {},
+  ): Promise<PageDocument[]> {
+    const safeParams = safeFindParams(queryParams);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+
+    return this.pageModel
+      .find({})
+      .sort({ updatedAt: -1, title: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async findAllByDomainIdAdmin(
+    queryParams: {
+      domainId?: string;
+      limit?: string;
+      offset?: string;
+    },
+  ): Promise<PageDocument[]> {
+    const safeParams = safeFindParams(queryParams);
+    const domainId =
+      typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
+    const filter: Record<string, unknown> = {};
+
+    if (domainId) {
+      await this.domainsService.getActiveById(domainId);
+      filter.domainId = domainId;
+    } else {
+      filter.domainId = { $exists: true };
+    }
+
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+
+    return this.pageModel
+      .find(filter)
+      .sort({ updatedAt: -1, title: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
   async findAdminOne(id: string): Promise<PageDocument> {
     const validId = validateObjectId(id);
     if (!validId) {

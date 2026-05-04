@@ -23,6 +23,7 @@ import {
   pageDomainParamsSchema,
   pageGlobalPageParamsSchema,
 } from './schemas/joi.page-domain.params.schema';
+import { pageAdminDomainQuerySchema } from './schemas/joi.page-admin-domain-query.schema';
 import { pageDomainQuerySchema } from './schemas/joi.page-domain-query.schema';
 import { pageGlobalQuerySchema } from './schemas/joi.page-global-query.schema';
 import { pageQuerySchema } from './schemas/joi.page-query.schema';
@@ -52,6 +53,31 @@ export class PagesController {
     },
   ) {
     return this.pagesService.findAllGlobal(query);
+  }
+
+  @Get('admin/all')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdmin(
+    @Query(new JoiValidationPipe(pageGlobalQuerySchema))
+    query: {
+      limit?: string;
+      offset?: string;
+    },
+  ) {
+    return this.pagesService.findAllAdmin(query);
+  }
+
+  @Get('admin/domain')
+  @Roles(Role.Admin, Role.Editor)
+  findAllByDomainIdAdmin(
+    @Query(new JoiValidationPipe(pageAdminDomainQuerySchema))
+    query: {
+      domainId?: string;
+      limit?: string;
+      offset?: string;
+    },
+  ) {
+    return this.pagesService.findAllByDomainIdAdmin(query);
   }
 
   @Get('admin/:id')
