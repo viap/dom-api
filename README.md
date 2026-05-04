@@ -180,6 +180,8 @@ The API implements comprehensive protection against NoSQL injection attacks:
 
 ### Core Resources
 
+- `GET /menus/public/page/:pageId` - Returns the active public menu resolved for a specific page (used by frontend page-level secondary navigation). Only items with resolvable public URLs are usable for rendering.
+
 - `GET /psychologists` - List all psychologists
 - `GET /psychologists/me` - Get current psychologist profile
 - `POST /psychologists/me/add-new-client` - Add new client

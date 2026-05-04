@@ -20,8 +20,8 @@ import { PagesService } from '@/pages/pages.service';
 import { CreateMenuDto, MenuItemDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenuItemType } from './enums/menu-item-type.enum';
-import { MenuAdminQueryParams } from './types/admin-query-params.interface';
 import { Menu, MenuDocument } from './schemas/menu.schema';
+import { MenuAdminQueryParams } from './types/admin-query-params.interface';
 
 type ResolvedMenuItem = MenuItemDto & {
   resolvedUrl?: string;
@@ -42,15 +42,22 @@ export class MenusService {
 
   async create(createMenuDto: CreateMenuDto): Promise<ResolvedMenu> {
     await this.validateMenuPayload(createMenuDto);
-    await this.ensureUniqueKey(createMenuDto.key, createMenuDto.domainId);
+
+    await this.ensureUniqueKey(createMenuDto.key);
+    await this.ensureUniquePageId(createMenuDto.pageId);
 
     const normalizedItems = this.normalizeItems(createMenuDto.items || []);
     const menu = new this.menuModel({
       ...createMenuDto,
       items: normalizedItems,
     });
-    const saved = await menu.save();
-    return this.toAdminMenu(saved.toObject());
+    try {
+      const saved = await menu.save();
+      return this.toAdminMenu(saved.toObject());
+    } catch (error) {
+      this.rethrowDuplicateKeyError(error);
+      throw error;
+    }
   }
 
   async findAll(
@@ -64,20 +71,17 @@ export class MenusService {
     if (typeof safeParams.key === 'string') {
       query.key = safeParams.key;
     }
-    if (typeof safeParams.domainId === 'string') {
-      const validId = validateObjectId(safeParams.domainId);
+    if (typeof safeParams.pageId === 'string') {
+      const validId = validateObjectId(safeParams.pageId);
       if (!validId) {
-        throw new BadRequestException('Invalid domain ID format');
+        throw new BadRequestException('Invalid page ID format');
       }
-      query.domainId = validId;
-    }
-    if (safeParams.isGlobal === true || safeParams.isGlobal === 'true') {
-      query.domainId = { $exists: false };
+      query.pageId = validId;
     }
 
     const menus = await this.menuModel
       .find(query)
-      .sort({ updatedAt: -1, title: 1 })
+      .sort({ updatedAt: -1, title: 1, key: 1 })
       .skip(offset)
       .limit(limit)
       .lean()
@@ -103,9 +107,28 @@ export class MenusService {
     return this.toAdminMenu(menu);
   }
 
-  async findPublicGlobalByKey(key: string): Promise<ResolvedMenu> {
+  async findByPageId(pageId: string): Promise<ResolvedMenu> {
+    const validPageId = validateObjectId(pageId);
+    if (!validPageId) {
+      throw new NotFoundException('Invalid page ID format');
+    }
+
+    const menu = await this.menuModel.findOne({ pageId: validPageId }).lean().exec();
+    if (!menu) {
+      throw new NotFoundException('Menu not found');
+    }
+
+    return this.toAdminMenu(menu);
+  }
+
+  async findPublicByPageId(pageId: string): Promise<ResolvedMenu> {
+    const validPageId = validateObjectId(pageId);
+    if (!validPageId) {
+      throw new NotFoundException('Invalid page ID format');
+    }
+
     const menu = await this.menuModel
-      .findOne({ key, isActive: true, domainId: { $exists: false } })
+      .findOne({ pageId: validPageId, isActive: true })
       .lean()
       .exec();
     if (!menu) {
@@ -115,13 +138,9 @@ export class MenusService {
     return this.toPublicMenu(menu);
   }
 
-  async findPublicByDomainAndKey(
-    domainSlug: string,
-    key: string,
-  ): Promise<ResolvedMenu> {
-    const domain = await this.domainsService.getActiveBySlug(domainSlug);
+  async findPublicGlobalByKey(key: string): Promise<ResolvedMenu> {
     const menu = await this.menuModel
-      .findOne({ key, isActive: true, domainId: domain._id })
+      .findOne({ key, isActive: true, pageId: { $exists: false } })
       .lean()
       .exec();
     if (!menu) {
@@ -145,19 +164,20 @@ export class MenusService {
       throw new NotFoundException('Menu not found');
     }
 
-    const hasDomainIdField = Object.prototype.hasOwnProperty.call(
+    const hasPageIdField = Object.prototype.hasOwnProperty.call(
       updateMenuDto,
-      'domainId',
+      'pageId',
     );
-    const domainId = hasDomainIdField
-      ? updateMenuDto.domainId || undefined
-      : existing.domainId?.toString();
-    const key = updateMenuDto.key || existing.key;
+    const hasKeyField = Object.prototype.hasOwnProperty.call(updateMenuDto, 'key');
+    const pageId = hasPageIdField
+      ? updateMenuDto.pageId || undefined
+      : existing.pageId?.toString();
+    const key = hasKeyField ? updateMenuDto.key || undefined : existing.key;
 
     await this.validateMenuPayload({
       key,
-      title: updateMenuDto.title || existing.title,
-      domainId,
+      title: updateMenuDto.title ?? existing.title,
+      pageId,
       isActive:
         typeof updateMenuDto.isActive === 'boolean'
           ? updateMenuDto.isActive
@@ -165,31 +185,54 @@ export class MenusService {
       items:
         updateMenuDto.items || (existing.items as unknown as MenuItemDto[]),
     });
-    await this.ensureUniqueKey(key, domainId, validId);
+    await this.ensureUniqueKey(key, validId);
+    await this.ensureUniquePageId(pageId, validId);
 
-    const updateData: Record<string, unknown> = {};
-    if (updateMenuDto.key !== undefined) {
-      updateData.key = updateMenuDto.key;
+    const $set: Record<string, unknown> = {};
+    const $unset: Record<string, 1> = {};
+
+    if (hasKeyField) {
+      if (updateMenuDto.key) {
+        $set.key = updateMenuDto.key;
+      } else {
+        $unset.key = 1;
+      }
     }
     if (updateMenuDto.title !== undefined) {
-      updateData.title = updateMenuDto.title;
+      $set.title = updateMenuDto.title;
     }
     if (updateMenuDto.isActive !== undefined) {
-      updateData.isActive = updateMenuDto.isActive;
+      $set.isActive = updateMenuDto.isActive;
     }
-    if (updateMenuDto.items) {
-      updateData.items = this.normalizeItems(updateMenuDto.items);
+    if (updateMenuDto.items !== undefined) {
+      $set.items = this.normalizeItems(updateMenuDto.items);
     }
-    if (hasDomainIdField && domainId) {
-      updateData.domainId = domainId;
-    } else if (hasDomainIdField) {
-      updateData.$unset = { domainId: 1 };
+    if (hasPageIdField) {
+      if (pageId) {
+        $set.pageId = pageId;
+      } else {
+        $unset.pageId = 1;
+      }
     }
 
-    const menu = await this.menuModel
-      .findByIdAndUpdate(validId, updateData, { new: true })
-      .lean()
-      .exec();
+    const updateData: Record<string, unknown> = {};
+    if (Object.keys($set).length > 0) {
+      updateData.$set = $set;
+    }
+    if (Object.keys($unset).length > 0) {
+      updateData.$unset = $unset;
+    }
+
+    let menu: MenuDocument | null;
+    try {
+      menu = await this.menuModel
+        .findByIdAndUpdate(validId, updateData, { new: true })
+        .lean()
+        .exec();
+    } catch (error) {
+      this.rethrowDuplicateKeyError(error);
+      throw error;
+    }
 
     if (!menu) {
       throw new NotFoundException('Menu not found');
@@ -213,19 +256,17 @@ export class MenusService {
   }
 
   private async validateMenuPayload(menu: {
-    key: string;
-    title: string;
-    domainId?: string;
+    key?: string;
+    title?: string;
+    pageId?: string;
     isActive?: boolean;
     items?: MenuItemDto[];
   }): Promise<void> {
-    if (menu.domainId) {
-      const domain = await this.domainsService
-        .findOne(menu.domainId)
-        .catch(() => null);
-      if (!domain) {
+    if (menu.pageId) {
+      const page = await this.pagesService.findReferenceById(menu.pageId);
+      if (!page) {
         throw new BadRequestException(
-          `Referenced domain not found: ${menu.domainId}`,
+          `Referenced page not found: ${menu.pageId}`,
         );
       }
     }
@@ -286,25 +327,38 @@ export class MenusService {
     }
   }
 
-  private async ensureUniqueKey(
-    key: string,
-    domainId?: string,
-    excludeId?: string,
-  ): Promise<void> {
-    const query: Record<string, unknown> = domainId
-      ? { key, domainId }
-      : { key, domainId: { $exists: false } };
+  private async ensureUniqueKey(key?: string, excludeId?: string): Promise<void> {
+    if (!key) {
+      return;
+    }
+
+    const query: Record<string, unknown> = { key };
     if (excludeId) {
       query._id = { $ne: excludeId };
     }
 
-    const existing = await this.menuModel.findOne(query);
+    const existing = await this.menuModel.findOne(query).select('_id').lean();
     if (existing) {
-      throw new ConflictException(
-        domainId
-          ? 'Menu with this key already exists in the domain'
-          : 'Global menu with this key already exists',
-      );
+      throw new ConflictException('Menu with this key already exists');
+    }
+  }
+
+  private async ensureUniquePageId(
+    pageId?: string,
+    excludeId?: string,
+  ): Promise<void> {
+    if (!pageId) {
+      return;
+    }
+
+    const query: Record<string, unknown> = { pageId };
+    if (excludeId) {
+      query._id = { $ne: excludeId };
+    }
+
+    const existing = await this.menuModel.findOne(query).select('_id').lean();
+    if (existing) {
+      throw new ConflictException('Menu for this page already exists');
     }
   }
 
@@ -449,5 +503,24 @@ export class MenusService {
     }
 
     return null;
+  }
+
+  private rethrowDuplicateKeyError(error: unknown): never | void {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 11000
+    ) {
+      const keyPattern =
+        (error as { keyPattern?: Record<string, unknown> }).keyPattern || {};
+      if (keyPattern.pageId) {
+        throw new ConflictException('Menu for this page already exists');
+      }
+      if (keyPattern.key) {
+        throw new ConflictException('Menu with this key already exists');
+      }
+      throw new ConflictException('Menu uniqueness constraint violated');
+    }
   }
 }

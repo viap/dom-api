@@ -1,5 +1,6 @@
 import * as Joi from 'joi';
 import { DomainCode } from '../enums/domain-code.enum';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 
 export const createDomainSchema = Joi.object({
   code: Joi.string()
@@ -16,19 +17,7 @@ export const createDomainSchema = Joi.object({
     'string.max': 'Title cannot exceed 150 characters',
   }),
 
-  slug: Joi.string()
-    .trim()
-    .lowercase()
-    .pattern(/^[a-z0-9-]+$/)
-    .min(1)
-    .max(100)
-    .required()
-    .messages({
-      'string.empty': 'Slug is required',
-      'string.pattern.base':
-        'Slug must contain only lowercase letters, numbers, and hyphens',
-      'string.max': 'Slug cannot exceed 100 characters',
-    }),
+  slug: joiSlugSchema.required(),
 
   isActive: Joi.boolean().default(true).optional(),
 

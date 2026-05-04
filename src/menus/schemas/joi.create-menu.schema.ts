@@ -1,13 +1,7 @@
 import * as Joi from 'joi';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { MenuItemType } from '../enums/menu-item-type.enum';
-
-const slugSchema = Joi.string()
-  .trim()
-  .lowercase()
-  .pattern(/^[a-z0-9-]+$/)
-  .min(1)
-  .max(120);
 
 const buildItemSchema = (allowChildren: boolean): Joi.ObjectSchema => {
   return Joi.object({
@@ -58,10 +52,12 @@ const buildItemSchema = (allowChildren: boolean): Joi.ObjectSchema => {
   }, 'menu item validation');
 };
 
+export const menuItemSchema = Joi.array().items(buildItemSchema(true));
+
 export const createMenuSchema = Joi.object({
-  key: slugSchema.required(),
-  title: Joi.string().trim().min(1).max(150).required(),
-  domainId: joiObjectId.optional(),
+  key: joiSlugSchema.optional(),
+  title: Joi.string().trim().min(1).max(150).optional(),
+  pageId: joiObjectId.optional(),
   isActive: Joi.boolean().default(true).optional(),
-  items: Joi.array().items(buildItemSchema(true)).default([]),
-});
+  items: menuItemSchema.default([]),
+}).or('key', 'pageId');

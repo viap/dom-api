@@ -22,46 +22,6 @@ export interface SanitizableObject {
 
 export type SanitizableArray = Array<SanitizableValue>;
 
-const MONGODB_OPERATORS = [
-  '$where',
-  '$ne',
-  '$in',
-  '$nin',
-  '$gt',
-  '$gte',
-  '$lt',
-  '$lte',
-  '$exists',
-  '$regex',
-  '$options',
-  '$all',
-  '$size',
-  '$elemMatch',
-  '$slice',
-  '$or',
-  '$and',
-  '$nor',
-  '$not',
-  '$expr',
-  '$jsonSchema',
-  '$mod',
-  '$text',
-  '$search',
-  '$language',
-  '$caseSensitive',
-  '$diacriticSensitive',
-  '$near',
-  '$nearSphere',
-  '$geometry',
-  '$maxDistance',
-  '$center',
-  '$centerSphere',
-  '$box',
-  '$polygon',
-  '$geoIntersects',
-  '$geoWithin',
-];
-
 /**
  * Recursively sanitizes an object by removing MongoDB operators from user input
  */
@@ -80,7 +40,7 @@ export function sanitizeObject(obj: SanitizableValue): SanitizableValue {
     for (const key in obj) {
       if (obj.hasOwnProperty(key)) {
         // Remove keys that start with $ (MongoDB operators)
-        if (!key.startsWith('$') || !MONGODB_OPERATORS.includes(key)) {
+        if (!key.startsWith('$')) {
           sanitized[key] = sanitizeObject(obj[key]);
         }
       }

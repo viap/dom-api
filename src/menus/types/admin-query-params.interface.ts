@@ -2,7 +2,6 @@ export interface MenuAdminQueryParams {
   limit?: string;
   offset?: string;
   key?: string;
-  domainId?: string;
-  isGlobal?: string | boolean;
+  pageId?: string;
   [key: string]: string | string[] | boolean | undefined;
 }

@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2026-05-04
+
+- Breaking change (`menus`): `domainId` has been removed from menu payloads and storage.
+- Breaking change (`menus`): `GET /menus/domain/:domainSlug/:key` has been removed.
+- New menu lookup routes:
+  - `GET /menus/public/page/:pageId` (public)
+  - `GET /menus/page/:pageId` (admin/editor)
+- `menus` now support optional `pageId` with global one-menu-per-page uniqueness.
+- `menus.key` and `menus.title` are now optional.
+
 ## 2026-04-22
 
 - `applications` now support fallback domain resolution by `formType` when `domainId` is omitted.

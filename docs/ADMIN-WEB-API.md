@@ -247,13 +247,14 @@ Public page responses:
 
 ## 3.3 Menus
 
-Named global or domain-specific navigation menus with typed items.
+Named navigation menus with typed items.
 
 ### Routes
 
 - `GET /menus/:key` public
-- `GET /menus/domain/:domainSlug/:key` public
+- `GET /menus/public/page/:pageId` public
 - `GET /menus` admin/editor
+- `GET /menus/page/:pageId` admin/editor
 - `GET /menus/:id` admin/editor
 - `POST /menus` admin/editor
 - `PATCH /menus/:id` admin/editor
@@ -272,9 +273,9 @@ Public menu responses:
 ```ts
 {
   _id: string;
-  key: string;
-  title: string;
-  domainId?: string;
+  key?: string;
+  title?: string;
+  pageId?: string;
   isActive: boolean;
   items: Array<{
     id: string;
@@ -298,8 +299,7 @@ Public menu responses:
 ### Frontend use
 
 - website header/footer/sidebar navigation
-- global menus by `key`
-- domain-specific menus by `domainSlug + key`
+- menus by `key` or `pageId`
 - admin menu editor with resolved and broken-target preview
 
 ---

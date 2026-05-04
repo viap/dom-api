@@ -1,9 +1,9 @@
 import { MenuItemDto } from './create-menu.dto';
 
 export interface UpdateMenuDto {
-  key?: string;
+  key?: string | null;
   title?: string;
-  domainId?: string | null;
+  pageId?: string | null;
   isActive?: boolean;
   items?: MenuItemDto[];
 }

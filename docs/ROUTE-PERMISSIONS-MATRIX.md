@@ -99,7 +99,8 @@ Notes:
 | Method   | Route                            | Access        | Intended UI |
 | -------- | -------------------------------- | ------------- | ----------- |
 | `GET`    | `/menus/:key`                    | Public        | Public site |
-| `GET`    | `/menus/domain/:domainSlug/:key` | Public        | Public site |
+| `GET`    | `/menus/public/page/:pageId`     | Public        | Public site |
+| `GET`    | `/menus/page/:pageId`            | Admin, Editor | Admin only  |
 | `GET`    | `/menus`                         | Admin, Editor | Admin only  |
 | `GET`    | `/menus/:id`                     | Admin, Editor | Admin only  |
 | `POST`   | `/menus`                         | Admin, Editor | Admin only  |

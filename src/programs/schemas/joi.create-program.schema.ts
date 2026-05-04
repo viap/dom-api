@@ -5,6 +5,7 @@ import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { ProgramFormat } from '../enums/program-format.enum';
 import { ProgramKind } from '../enums/program-kind.enum';
 import { ProgramStatus } from '../enums/program-status.enum';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 
 const joiProgramModuleSchema = Joi.object({
   title: Joi.string().trim().min(1).max(150).required(),
@@ -27,12 +28,7 @@ export const createProgramSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).required(),
 
-  slug: Joi.string()
-    .trim()
-    .lowercase()
-    .pattern(/^[a-z0-9-]+$/)
-    .min(1)
-    .max(120)
+  slug: joiSlugSchema
     .required(),
 
   startDate: joiUtcIsoDateTime.optional(),

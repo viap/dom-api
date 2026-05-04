@@ -12,8 +12,9 @@ describe('MenusController', () => {
     controller = new MenusController({
       findAll: jest.fn(),
       findOne: jest.fn(),
+      findByPageId: jest.fn(),
+      findPublicByPageId: jest.fn(),
       findPublicGlobalByKey: jest.fn(),
-      findPublicByDomainAndKey: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
@@ -30,7 +31,7 @@ describe('MenusController', () => {
     expect(
       Reflect.getMetadata(
         IS_PUBLIC_KEY,
-        MenusController.prototype.findPublicByDomainAndKey,
+        MenusController.prototype.findPublicByPageId,
       ),
     ).toBe(true);
   });
@@ -41,6 +42,9 @@ describe('MenusController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findOne),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, MenusController.prototype.findByPageId),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, MenusController.prototype.create),

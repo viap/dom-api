@@ -7,14 +7,14 @@ export type MenuDocument = Menu &
 
 @Schema({ timestamps: true })
 export class Menu {
-  @Prop({ required: true, trim: true })
-  key: string;
+  @Prop({ trim: true })
+  key?: string;
 
-  @Prop({ required: true, trim: true })
-  title: string;
+  @Prop({ trim: true })
+  title?: string;
 
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Domain' })
-  domainId?: mongoose.Schema.Types.ObjectId;
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Page' })
+  pageId?: mongoose.Schema.Types.ObjectId;
 
   @Prop({ required: true, default: true })
   isActive: boolean;
@@ -27,12 +27,20 @@ export class Menu {
 }
 
 export const menuSchema = SchemaFactory.createForClass(Menu);
-menuSchema.index({ domainId: 1, key: 1 }, { unique: true });
 menuSchema.index(
   { key: 1 },
   {
     unique: true,
-    partialFilterExpression: { domainId: { $exists: false } },
+    partialFilterExpression: {
+      key: { $exists: true, $type: 'string', $ne: '' },
+    },
+  },
+);
+menuSchema.index(
+  { pageId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { pageId: { $exists: true } },
   },
 );
 menuSchema.index({ isActive: 1, updatedAt: -1 });

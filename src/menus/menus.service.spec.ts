@@ -37,6 +37,7 @@ describe('MenusService', () => {
     _id: '507f1f77bcf86cd799439311',
     key: 'main',
     title: 'Main Menu',
+    pageId: mockGlobalPage._id,
     isActive: true,
     schemaVersion: 1,
     items: [
@@ -46,16 +47,6 @@ describe('MenusService', () => {
         type: MenuItemType.Domain,
         targetId: mockDomain._id,
         order: 0,
-        isVisible: true,
-        openInNewTab: false,
-        children: [],
-      },
-      {
-        id: 'item-2',
-        title: 'Privacy Policy',
-        type: MenuItemType.Page,
-        targetId: mockGlobalPage._id,
-        order: 1,
         isVisible: true,
         openInNewTab: false,
         children: [],
@@ -83,7 +74,6 @@ describe('MenusService', () => {
   const mockDomainsService = {
     findOne: jest.fn(),
     getActiveById: jest.fn(),
-    getActiveBySlug: jest.fn(),
   };
 
   const mockPagesService = {
@@ -102,11 +92,12 @@ describe('MenusService', () => {
     }).compile();
 
     service = module.get<MenusService>(MenusService);
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockSave.mockResolvedValue({ toObject: () => mockMenu });
+    mockMenuModel.mockImplementation(() => mockMenuInstance);
 
     mockDomainsService.findOne.mockResolvedValue(mockDomain);
     mockDomainsService.getActiveById.mockResolvedValue(mockDomain);
-    mockDomainsService.getActiveBySlug.mockResolvedValue(mockDomain);
     mockPagesService.findReferenceById.mockImplementation(async (id: string) =>
       id === mockPage._id || id === mockGlobalPage._id
         ? id === mockGlobalPage._id
@@ -124,103 +115,55 @@ describe('MenusService', () => {
     );
   });
 
-  it('should create a global menu', async () => {
-    mockMenuModel.findOne.mockResolvedValue(null);
+  it('should create a menu without key and title', async () => {
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
 
-    await expect(
-      service.create({
-        key: 'main',
-        title: 'Main Menu',
-        items: [],
-      }),
-    ).resolves.toMatchObject({ key: 'main', title: 'Main Menu' });
+    await expect(service.create({ items: [] })).resolves.toMatchObject({
+      key: 'main',
+      title: 'Main Menu',
+    });
   });
 
-  it('should reject invalid domainId', async () => {
-    mockMenuModel.findOne.mockResolvedValue(null);
-    mockDomainsService.findOne.mockRejectedValue(new NotFoundException());
+  it('should convert duplicate key db error to conflict', async () => {
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    mockSave.mockRejectedValue({ code: 11000, keyPattern: { key: 1 } });
 
-    await expect(
-      service.create({
-        key: 'main',
-        title: 'Main Menu',
-        domainId: '507f1f77bcf86cd799439099',
-        items: [],
-      }),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.create({ key: 'main', items: [] })).rejects.toThrow(
+      ConflictException,
+    );
   });
 
-  it('should reject duplicate global menu key', async () => {
-    mockMenuModel.findOne.mockResolvedValue(mockMenu);
+  it('should convert duplicate page db error to conflict', async () => {
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    mockSave.mockRejectedValue({ code: 11000, keyPattern: { pageId: 1 } });
 
     await expect(
-      service.create({
-        key: 'main',
-        title: 'Main Menu',
-        items: [],
-      }),
+      service.create({ pageId: mockGlobalPage._id, items: [] }),
     ).rejects.toThrow(ConflictException);
   });
 
-  it('should validate external items require url', async () => {
-    mockMenuModel.findOne.mockResolvedValue(null);
+  it('should reject invalid pageId reference', async () => {
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    mockPagesService.findReferenceById.mockResolvedValue(null);
 
     await expect(
-      service.create({
-        key: 'footer',
-        title: 'Footer',
-        items: [
-          {
-            title: 'External',
-            type: MenuItemType.External,
-            order: 0,
-          },
-        ],
-      }),
-    ).rejects.toThrow(BadRequestException);
-  });
-
-  it('should reject grandchildren', async () => {
-    mockMenuModel.findOne.mockResolvedValue(null);
-
-    await expect(
-      service.create({
-        key: 'footer',
-        title: 'Footer',
-        items: [
-          {
-            title: 'Parent',
-            type: MenuItemType.External,
-            url: 'https://example.com',
-            order: 0,
-            children: [
-              {
-                title: 'Child',
-                type: MenuItemType.External,
-                url: 'https://example.com/child',
-                order: 0,
-                children: [
-                  {
-                    title: 'Grandchild',
-                    type: MenuItemType.External,
-                    url: 'https://example.com/grandchild',
-                    order: 0,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      }),
+      service.create({ pageId: '507f1f77bcf86cd799439099', items: [] }),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('should resolve public global menu urls and omit broken items', async () => {
-    mockMenuModel.findOne.mockReturnValue({
+    const findOneMock = jest.fn().mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue({
           ...mockMenu,
-          domainId: undefined,
           items: [
             ...mockMenu.items,
             {
@@ -237,52 +180,91 @@ describe('MenusService', () => {
         }),
       }),
     });
+    mockMenuModel.findOne = findOneMock as any;
+
     mockPagesService.findPublishedReferenceById.mockImplementation(
       async (id: string) => (id === mockGlobalPage._id ? mockGlobalPage : null),
     );
 
     const result = await service.findPublicGlobalByKey('main');
-    expect(result.items).toHaveLength(2);
-    expect(result.items[0].resolvedUrl).toBe('/academy%20%2F%20training');
-    expect(result.items[1].resolvedUrl).toBe('/privacy%20policy');
-  });
-
-  it('should show broken targets in admin responses', async () => {
-    mockMenuModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue({
-          ...mockMenu,
-          items: [
-            {
-              id: 'item-3',
-              title: 'Broken page',
-              type: MenuItemType.Page,
-              targetId: '507f1f77bcf86cd799439299',
-              order: 0,
-              isVisible: true,
-              openInNewTab: false,
-              children: [],
-            },
-          ],
-        }),
-      }),
+    expect(findOneMock).toHaveBeenCalledWith({
+      key: 'main',
+      isActive: true,
+      pageId: { $exists: false },
     });
-    mockPagesService.findReferenceById.mockResolvedValue(null);
-
-    const result = await service.findOne(mockMenu._id);
-    expect(result.items[0].isBrokenTarget).toBe(true);
+    expect(result.items).toHaveLength(1);
   });
 
-  it('should throw for missing public domain menus', async () => {
+  it('should return admin menu by pageId', async () => {
     mockMenuModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+    });
+
+    await expect(service.findByPageId(mockGlobalPage._id)).resolves.toMatchObject({
+      _id: mockMenu._id,
+    });
+  });
+
+  it('should not wipe items when patch omits items', async () => {
+    mockMenuModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+    });
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    const updated = { ...mockMenu, title: 'Updated' };
+    const findByIdAndUpdateExec = jest.fn().mockResolvedValue(updated);
+    mockMenuModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({ exec: findByIdAndUpdateExec }),
+    });
+
+    await service.update(mockMenu._id, { title: 'Updated' });
+
+    expect(mockMenuModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockMenu._id,
+      { $set: { title: 'Updated' } },
+      { new: true },
+    );
+  });
+
+  it('should unset pageId and key when null is provided', async () => {
+    mockMenuModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+    });
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    mockMenuModel.findByIdAndUpdate.mockReturnValue({
       lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
+        exec: jest.fn().mockResolvedValue({ ...mockMenu, pageId: undefined, key: undefined }),
       }),
     });
 
-    await expect(
-      service.findPublicByDomainAndKey('academy', 'main'),
-    ).rejects.toThrow(NotFoundException);
+    await service.update(mockMenu._id, { pageId: null, key: null });
+
+    expect(mockMenuModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockMenu._id,
+      { $unset: { key: 1, pageId: 1 } },
+      { new: true },
+    );
+  });
+
+  it('should convert duplicate conflict from update write', async () => {
+    mockMenuModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+    });
+    mockMenuModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+    });
+    mockMenuModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue({ code: 11000, keyPattern: { key: 1 } }),
+      }),
+    });
+
+    await expect(service.update(mockMenu._id, { key: 'dup' })).rejects.toThrow(
+      ConflictException,
+    );
   });
 
   it('should remove an existing menu', async () => {

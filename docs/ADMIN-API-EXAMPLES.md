@@ -574,7 +574,7 @@ Response:
 }
 ```
 
-### `GET /menus/domain/academy/main`
+### `GET /menus/public/page/661050000000000000000001`
 
 Response:
 
@@ -583,21 +583,9 @@ Response:
   "_id": "661060000000000000000002",
   "key": "main",
   "title": "Academy Main Navigation",
-  "domainId": "661000000000000000000003",
+  "pageId": "661050000000000000000001",
   "isActive": true,
-  "items": [
-    {
-      "id": "menu-10",
-      "title": "About Academy",
-      "type": "page",
-      "targetId": "661050000000000000000001",
-      "resolvedUrl": "/academy/about-academy",
-      "order": 0,
-      "isVisible": true,
-      "openInNewTab": false,
-      "children": []
-    }
-  ],
+  "items": [],
   "schemaVersion": 1,
   "createdAt": "2026-04-11T12:10:00.000Z",
   "updatedAt": "2026-04-11T12:10:00.000Z"
@@ -612,6 +600,7 @@ Request:
 {
   "key": "footer",
   "title": "Footer Navigation",
+  "pageId": "661050000000000000000000",
   "items": [
     {
       "title": "External Link",
@@ -645,6 +634,7 @@ Response:
   "_id": "661060000000000000000003",
   "key": "footer",
   "title": "Footer Navigation",
+  "pageId": "661050000000000000000000",
   "isActive": true,
   "items": [
     {

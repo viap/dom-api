@@ -20,8 +20,8 @@ import { MenusService } from './menus.service';
 import { createMenuSchema } from './schemas/joi.create-menu.schema';
 import { menuAdminQuerySchema } from './schemas/joi.menu-admin-query.schema';
 import {
-  menuDomainKeyParamsSchema,
   menuKeyParamsSchema,
+  menuPageIdParamsSchema,
 } from './schemas/joi.menu-key-params.schema';
 import { updateMenuSchema } from './schemas/joi.update-menu.schema';
 import { MenuAdminQueryParams } from './types/admin-query-params.interface';
@@ -39,19 +39,26 @@ export class MenusController {
     return this.menusService.findAll(query);
   }
 
-  @Get('domain/:domainSlug/:key')
-  @Public()
-  findPublicByDomainAndKey(
-    @Param(new JoiValidationPipe(menuDomainKeyParamsSchema))
+  @Get('page/:pageId')
+  @Roles(Role.Admin, Role.Editor)
+  findByPageId(
+    @Param(new JoiValidationPipe(menuPageIdParamsSchema))
     params: {
-      domainSlug: string;
-      key: string;
+      pageId: string;
     },
   ) {
-    return this.menusService.findPublicByDomainAndKey(
-      params.domainSlug,
-      params.key,
-    );
+    return this.menusService.findByPageId(params.pageId);
+  }
+
+  @Get('public/page/:pageId')
+  @Public()
+  findPublicByPageId(
+    @Param(new JoiValidationPipe(menuPageIdParamsSchema))
+    params: {
+      pageId: string;
+    },
+  ) {
+    return this.menusService.findPublicByPageId(params.pageId);
   }
 
   @Get(':id([0-9a-fA-F]{24})')

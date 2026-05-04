@@ -13,9 +13,9 @@ export interface MenuItemDto {
 }
 
 export interface CreateMenuDto {
-  key: string;
-  title: string;
-  domainId?: string;
+  key?: string;
+  title?: string;
+  pageId?: string;
   isActive?: boolean;
   items?: MenuItemDto[];
 }

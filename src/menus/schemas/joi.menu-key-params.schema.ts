@@ -1,20 +1,11 @@
 import * as Joi from 'joi';
-
-const keySchema = Joi.string()
-  .trim()
-  .lowercase()
-  .pattern(/^[a-z0-9-]+$/)
-  .min(1)
-  .max(120)
-  .required();
-
-const slugSchema = keySchema;
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 
 export const menuKeyParamsSchema = Joi.object({
-  key: keySchema,
+  key: joiSlugSchema.required(),
 });
 
-export const menuDomainKeyParamsSchema = Joi.object({
-  domainSlug: slugSchema,
-  key: keySchema,
+export const menuPageIdParamsSchema = Joi.object({
+  pageId: joiObjectId.required(),
 });

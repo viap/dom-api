@@ -1,22 +1,15 @@
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import * as Joi from 'joi';
 
-const slugSchema = Joi.string()
-  .trim()
-  .lowercase()
-  .pattern(/^[a-z0-9-]+$/)
-  .min(1)
-  .max(120)
-  .required();
-
 export const pageDomainParamsSchema = Joi.object({
-  domainSlug: slugSchema,
+  domainSlug: joiSlugSchema.required(),
 });
 
 export const pageDomainPageParamsSchema = Joi.object({
-  domainSlug: slugSchema,
-  pageSlug: slugSchema,
+  domainSlug: joiSlugSchema.required(),
+  pageSlug: joiSlugSchema.required(),
 });
 
 export const pageGlobalPageParamsSchema = Joi.object({
-  pageSlug: slugSchema,
+  pageSlug: joiSlugSchema.required(),
 });

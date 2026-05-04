@@ -4,6 +4,7 @@ import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 
 export const updateEventSchema = Joi.object({
   domainId: joiObjectId.optional(),
@@ -18,13 +19,7 @@ export const updateEventSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).optional(),
 
-  slug: Joi.string()
-    .trim()
-    .lowercase()
-    .pattern(/^[a-z0-9-]+$/)
-    .min(1)
-    .max(120)
-    .optional(),
+  slug: joiSlugSchema.optional(),
 
   startAt: joiUtcIsoDateTime.optional(),
   endAt: joiUtcIsoDateTime.optional(),
