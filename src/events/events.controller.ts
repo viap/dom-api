@@ -9,8 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
+import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
+import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
@@ -39,6 +43,14 @@ export class EventsController {
   @Public()
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
+  }
+
+  @Post('bulk')
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
+    return this.eventsService.findManyByIds(body.ids);
   }
 
   @Post()

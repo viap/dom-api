@@ -108,7 +108,15 @@ describe('EventsService', () => {
 
     expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
     expect(mockEventModel.find).toHaveBeenCalledWith({
-      status: { $ne: 'draft' },
+      status: {
+        $in: [
+          'planned',
+          'registration_open',
+          'ongoing',
+          'completed',
+          'cancelled',
+        ],
+      },
     });
     expect(findQuery.sort).toHaveBeenCalledWith({ startAt: 1, title: 1 });
     expect(findQuery.skip).toHaveBeenCalledWith(0);
@@ -127,7 +135,15 @@ describe('EventsService', () => {
     );
     expect(mockEventModel.find).toHaveBeenCalledWith({
       domainId: mockEvent.domainId,
-      status: { $ne: 'draft' },
+      status: {
+        $in: [
+          'planned',
+          'registration_open',
+          'ongoing',
+          'completed',
+          'cancelled',
+        ],
+      },
     });
   });
 

@@ -11,6 +11,7 @@ describe('PartnersController', () => {
   beforeEach(() => {
     controller = new PartnersController({
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findOne: jest.fn(),
       findAllAdmin: jest.fn(),
       findOneAdmin: jest.fn(),
@@ -26,6 +27,9 @@ describe('PartnersController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PartnersController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, PartnersController.prototype.findMany),
     ).toBe(true);
   });
 

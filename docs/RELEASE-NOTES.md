@@ -1,5 +1,27 @@
 # Release Notes
 
+## 2026-05-05
+
+- New public bulk-read routes were added for content collections:
+  - `POST /domains/bulk`
+  - `POST /media/bulk`
+  - `POST /pages/bulk`
+  - `POST /people/bulk`
+  - `POST /partners/bulk`
+  - `POST /programs/bulk`
+  - `POST /events/bulk`
+- Bulk route contract:
+  - request: `{ ids: string[] }` (max 100)
+  - response: `{ items: T[] }`
+- Bulk reads omit unresolved ids from public responses (invalid, missing, unpublished, inactive, and draft-filtered ids are excluded from `items`).
+- Public domain reads were tightened to active-only semantics:
+  - `GET /domains/:id`
+  - `POST /domains/bulk`
+- Public bulk routes are throttled at `120 requests / 60 seconds` per IP.
+- Programs public reads allow only: `upcoming`, `active`, `completed`, `cancelled`.
+- Events public reads allow only: `planned`, `registration_open`, `ongoing`, `completed`, `cancelled`.
+- Public page reference resolving in `dom-web` now uses bulk routes to reduce request fan-out.
+
 ## 2026-05-04
 
 - Breaking change (`menus`): `domainId` has been removed from menu payloads and storage.

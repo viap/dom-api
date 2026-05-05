@@ -2,6 +2,8 @@ import { Types } from 'mongoose';
 import { QueryParams, SafeQueryParams } from '../types/query-params.types';
 import { parseNumericValue } from './parse-numeric-value';
 
+const OBJECT_ID_HEX_PATTERN = /^[a-f\d]{24}$/i;
+
 /**
  * MongoDB NoSQL Injection Prevention Utilities
  */
@@ -58,6 +60,10 @@ export function sanitizeObject(obj: SanitizableValue): SanitizableValue {
  */
 export function validateObjectId(id: string | null | undefined): string | null {
   if (!id || typeof id !== 'string') {
+    return null;
+  }
+
+  if (!OBJECT_ID_HEX_PATTERN.test(id)) {
     return null;
   }
 

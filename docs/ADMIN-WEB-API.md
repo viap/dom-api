@@ -80,6 +80,16 @@ Common statuses:
 - `409` uniqueness conflict
 - `429` throttled
 
+### Public bulk read contract
+
+Public content collections support `POST /<resource>/bulk` with a shared shape:
+
+- request: `{ "ids": string[] }` (1..100 ids)
+- response: `{ "items": T[] }`
+- invalid, missing, unpublished, inactive, or draft-filtered ids are omitted from `items`
+- `items` preserve the input id order for resolved entities
+- route throttling: `120 requests / 60 seconds` per IP
+
 ---
 
 ## 2. Current API Areas
@@ -126,6 +136,7 @@ Reference taxonomy for the four main domains.
 
 - `GET /domains` public
 - `GET /domains/:id` public
+- `POST /domains/bulk` public
 - `POST /domains` admin only
 - `PATCH /domains/:id` admin only
 - `DELETE /domains/:id` admin only
@@ -151,6 +162,11 @@ Reference taxonomy for the four main domains.
 - populate domain switchers
 - validate domain ownership for `programs`, `events`, `applications`
 
+Public read behavior:
+
+- `GET /domains/:id` returns only active domains
+- `POST /domains/bulk` returns only active domains
+
 ---
 
 ## 3.2 Pages
@@ -161,6 +177,7 @@ Public/domain pages with embedded `blocks[]`.
 
 - `GET /pages` public
 - `GET /pages/:id([0-9a-fA-F]{24})` public
+- `POST /pages/bulk` public
 - `GET /pages/global/home` public
 - `GET /pages/global/:pageSlug` public
 - `GET /pages/domain/:domainSlug` public
@@ -314,6 +331,7 @@ Domain-agnostic asset registry.
 - `GET /media/admin` admin/editor
 - `GET /media/admin/folders` admin/editor
 - `GET /media/:id` public
+- `POST /media/bulk` public
 - `GET /media/:id/content` public
 - `GET /media/:id/thumbnail` public
 - `POST /media` admin/editor
@@ -470,6 +488,7 @@ Public personas and speakers/organizers.
 - `GET /people` public
 - `GET /people/slug/:slug` public
 - `GET /people/:id` public
+- `POST /people/bulk` public
 - `POST /people` admin/editor
 - `PATCH /people/:id` admin/editor
 - `DELETE /people/:id` admin/editor
@@ -546,6 +565,7 @@ Public partner organizations.
 
 - `GET /partners` public
 - `GET /partners/:id` public
+- `POST /partners/bulk` public
 - `GET /partners/admin` admin/editor
 - `GET /partners/admin/:id` admin/editor
 - `POST /partners` admin/editor
@@ -614,13 +634,19 @@ Domain-owned public education/program records.
 
 - `GET /programs` public
 - `GET /programs/:id` public
+- `POST /programs/bulk` public
 - `POST /programs` admin/editor
 - `PATCH /programs/:id` admin/editor
 - `DELETE /programs/:id` admin/editor
 
 ### Public read behavior
 
-Public reads exclude items with `status = draft`.
+Public reads allow only statuses:
+
+- `upcoming`
+- `active`
+- `completed`
+- `cancelled`
 
 ### Query params
 
@@ -689,13 +715,20 @@ Domain-owned public events records.
 
 - `GET /events` public
 - `GET /events/:id` public
+- `POST /events/bulk` public
 - `POST /events` admin/editor
 - `PATCH /events/:id` admin/editor
 - `DELETE /events/:id` admin/editor
 
 ### Public read behavior
 
-Public reads exclude items with `status = draft`.
+Public reads allow only statuses:
+
+- `planned`
+- `registration_open`
+- `ongoing`
+- `completed`
+- `cancelled`
 
 ### Query params
 

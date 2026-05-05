@@ -10,6 +10,8 @@ import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -28,6 +30,14 @@ import {
   DomainEvent,
   DomainEventDocument,
 } from './schemas/domain-event.schema';
+
+const PUBLIC_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.Planned,
+  EventStatus.RegistrationOpen,
+  EventStatus.Ongoing,
+  EventStatus.Completed,
+  EventStatus.Cancelled,
+];
 
 @Injectable()
 export class EventsService {
@@ -62,7 +72,7 @@ export class EventsService {
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
     const query: Record<string, unknown> = {
-      status: { $ne: EventStatus.Draft },
+      status: { $in: PUBLIC_EVENT_STATUSES },
     };
     if (domainId) {
       query.domainId = domainId;
@@ -84,7 +94,7 @@ export class EventsService {
     }
 
     const event = await this.eventModel
-      .findOne({ _id: validId, status: { $ne: EventStatus.Draft } })
+      .findOne({ _id: validId, status: { $in: PUBLIC_EVENT_STATUSES } })
       .lean()
       .exec();
     if (!event) {
@@ -92,6 +102,31 @@ export class EventsService {
     }
 
     return event as DomainEventDocument;
+  }
+
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<DomainEventDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const events = await this.eventModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+        status: { $in: PUBLIC_EVENT_STATUSES },
+      })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: events as DomainEventDocument[],
+      getId: (event) => event._id.toString(),
+    });
   }
 
   async update(

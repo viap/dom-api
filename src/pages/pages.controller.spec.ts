@@ -12,6 +12,7 @@ describe('PagesController', () => {
   beforeEach(() => {
     controller = new PagesController({
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findAllGlobal: jest.fn(),
       findAllAdmin: jest.fn(),
       findAllByDomainIdAdmin: jest.fn(),
@@ -68,6 +69,9 @@ describe('PagesController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, PagesController.prototype.findMany),
     ).toBe(true);
   });
 

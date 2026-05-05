@@ -34,6 +34,10 @@ Related docs:
 - Global auth is enabled by default via `AuthGuard`
 - Public routes are explicitly marked with `@Public()`
 - Role restrictions are enforced by `RolesGuard`
+- Public `POST /<resource>/bulk` routes return:
+  `{ items: T[] }`
+- Invalid, missing, unpublished, inactive, or draft-filtered ids are omitted from `items`
+- Public bulk routes are throttled at `120 requests / 60 seconds` per IP
 
 ---
 
@@ -45,6 +49,7 @@ Related docs:
 | -------- | -------------- | ------ | ------------------ |
 | `GET`    | `/domains`     | Public | Public site, admin |
 | `GET`    | `/domains/:id` | Public | Public site, admin |
+| `POST`   | `/domains/bulk`| Public | Public site, admin |
 | `POST`   | `/domains`     | Admin  | Admin only         |
 | `PATCH`  | `/domains/:id` | Admin  | Admin only         |
 | `DELETE` | `/domains/:id` | Admin  | Admin only         |
@@ -57,6 +62,7 @@ Related docs:
 | -------- | ------------ | ------------- | ------------------ |
 | `GET`    | `/media`     | Public        | Public site, admin |
 | `GET`    | `/media/:id` | Public        | Public site, admin |
+| `POST`   | `/media/bulk`| Public        | Public site, admin |
 | `POST`   | `/media`     | Admin, Editor | Admin only         |
 | `PATCH`  | `/media/:id` | Admin, Editor | Admin only         |
 | `DELETE` | `/media/:id` | Admin, Editor | Admin only         |
@@ -73,6 +79,7 @@ Notes:
 | -------- | ------------------------------------- | ------------- | ------------------ |
 | `GET`    | `/pages`                              | Public        | Public site, admin |
 | `GET`    | `/pages/:id`                          | Public        | Public site, admin |
+| `POST`   | `/pages/bulk`                         | Public        | Public site, admin |
 | `GET`    | `/pages/global/home`                  | Public        | Public site        |
 | `GET`    | `/pages/global/:pageSlug`             | Public        | Public site        |
 | `GET`    | `/pages/domain/:domainSlug`           | Public        | Public site        |
@@ -134,6 +141,7 @@ Notes:
 | `GET`    | `/people`            | Public        | Public site, admin |
 | `GET`    | `/people/slug/:slug` | Public        | Public site, admin |
 | `GET`    | `/people/:id`        | Public        | Public site, admin |
+| `POST`   | `/people/bulk`       | Public        | Public site, admin |
 | `POST`   | `/people`            | Admin, Editor | Admin only         |
 | `PATCH`  | `/people/:id`        | Admin, Editor | Admin only         |
 | `DELETE` | `/people/:id`        | Admin, Editor | Admin only         |
@@ -150,6 +158,7 @@ Notes:
 | -------- | --------------------- | ------------- | ------------------ |
 | `GET`    | `/partners`           | Public        | Public site, admin |
 | `GET`    | `/partners/:id`       | Public        | Public site, admin |
+| `POST`   | `/partners/bulk`      | Public        | Public site, admin |
 | `GET`    | `/partners/admin`     | Admin, Editor | Admin only         |
 | `GET`    | `/partners/admin/:id` | Admin, Editor | Admin only         |
 | `POST`   | `/partners`           | Admin, Editor | Admin only         |
@@ -169,6 +178,7 @@ Notes:
 | -------- | --------------- | ------------- | ------------------ |
 | `GET`    | `/programs`     | Public        | Public site, admin |
 | `GET`    | `/programs/:id` | Public        | Public site, admin |
+| `POST`   | `/programs/bulk`| Public        | Public site, admin |
 | `POST`   | `/programs`     | Admin, Editor | Admin only         |
 | `PATCH`  | `/programs/:id` | Admin, Editor | Admin only         |
 | `DELETE` | `/programs/:id` | Admin, Editor | Admin only         |
@@ -176,7 +186,7 @@ Notes:
 Notes:
 
 - list endpoint requires `domainId`
-- public reads exclude `draft`
+- public reads allow only `upcoming`, `active`, `completed`, `cancelled`
 
 ---
 
@@ -186,6 +196,7 @@ Notes:
 | -------- | ------------- | ------------- | ------------------ |
 | `GET`    | `/events`     | Public        | Public site, admin |
 | `GET`    | `/events/:id` | Public        | Public site, admin |
+| `POST`   | `/events/bulk`| Public        | Public site, admin |
 | `POST`   | `/events`     | Admin, Editor | Admin only         |
 | `PATCH`  | `/events/:id` | Admin, Editor | Admin only         |
 | `DELETE` | `/events/:id` | Admin, Editor | Admin only         |
@@ -193,7 +204,7 @@ Notes:
 Notes:
 
 - list endpoint requires `domainId`
-- public reads exclude `draft`
+- public reads allow only `planned`, `registration_open`, `ongoing`, `completed`, `cancelled`
 
 ---
 

@@ -14,6 +14,7 @@ describe('MediaController', () => {
   let controller: MediaController;
   const mediaService = {
     findAll: jest.fn(),
+    findManyByIds: jest.fn(),
     findAllAdmin: jest.fn(),
     findAllAdminFolders: jest.fn(),
     findOne: jest.fn(),
@@ -49,6 +50,9 @@ describe('MediaController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, MediaController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, MediaController.prototype.findMany),
     ).toBe(true);
   });
 

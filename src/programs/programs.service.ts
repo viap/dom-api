@@ -10,6 +10,8 @@ import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import {
   safeFindParams,
   validateObjectId,
@@ -22,6 +24,13 @@ import { UpdateProgramDto } from './dto/update-program.dto';
 import { ProgramStatus } from './enums/program-status.enum';
 import { ProgramQueryParams } from './types/query-params.interface';
 import { Program, ProgramDocument } from './schemas/program.schema';
+
+const PUBLIC_PROGRAM_STATUSES: ProgramStatus[] = [
+  ProgramStatus.Upcoming,
+  ProgramStatus.Active,
+  ProgramStatus.Completed,
+  ProgramStatus.Cancelled,
+];
 
 @Injectable()
 export class ProgramsService {
@@ -61,7 +70,7 @@ export class ProgramsService {
     return this.programModel
       .find({
         domainId,
-        status: { $ne: ProgramStatus.Draft },
+        status: { $in: PUBLIC_PROGRAM_STATUSES },
       })
       .sort({ startDate: 1, title: 1 })
       .skip(offset)
@@ -77,7 +86,7 @@ export class ProgramsService {
     }
 
     const program = await this.programModel
-      .findOne({ _id: validId, status: { $ne: ProgramStatus.Draft } })
+      .findOne({ _id: validId, status: { $in: PUBLIC_PROGRAM_STATUSES } })
       .lean()
       .exec();
     if (!program) {
@@ -85,6 +94,31 @@ export class ProgramsService {
     }
 
     return program as ProgramDocument;
+  }
+
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<ProgramDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const programs = await this.programModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+        status: { $in: PUBLIC_PROGRAM_STATUSES },
+      })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: programs as ProgramDocument[],
+      getId: (program) => program._id.toString(),
+    });
   }
 
   async update(

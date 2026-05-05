@@ -9,6 +9,8 @@ import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -76,6 +78,29 @@ export class PartnersService {
     }
 
     return partner as PartnerDocument;
+  }
+
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PartnerDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const partners = await this.partnerModel
+      .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
+      .select({ contacts: 0 })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: partners as PartnerDocument[],
+      getId: (partner) => partner._id.toString(),
+    });
   }
 
   async findAllAdmin(

@@ -102,6 +102,8 @@ describe('MongoDB Sanitization Utilities', () => {
       expect(validateObjectId('invalid')).toBe(null);
       expect(validateObjectId('12345')).toBe(null);
       expect(validateObjectId('')).toBe(null);
+      expect(validateObjectId('aaaabbbbcccc')).toBe(null);
+      expect(validateObjectId('hello world!')).toBe(null);
     });
 
     it('should reject non-string inputs', () => {

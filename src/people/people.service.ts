@@ -7,8 +7,10 @@ import {
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import { MediaService } from '@/media/media.service';
 import { UsersService } from '@/users/users.service';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
 import {
   BadRequestException,
   ConflictException,
@@ -117,6 +119,26 @@ export class PeopleService {
     }
 
     return person as PersonDocument;
+  }
+
+  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<PersonDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const people = await this.personModel
+      .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: people as PersonDocument[],
+      getId: (person) => person._id.toString(),
+    });
   }
 
   async findOneBySlug(slug: string): Promise<PersonDocument> {

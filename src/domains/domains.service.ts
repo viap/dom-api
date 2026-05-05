@@ -7,6 +7,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { validateObjectId } from '@/common/utils/mongo-sanitizer';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
 import { CreateDomainDto } from './dto/create-domain.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { DomainCode } from './enums/domain-code.enum';
@@ -26,7 +31,11 @@ export class DomainsService {
   }
 
   async findAll(): Promise<DomainDocument[]> {
-    return this.domainModel.find().sort({ order: 1, title: 1 }).lean().exec();
+    return this.domainModel
+      .find({ isActive: true })
+      .sort({ order: 1, title: 1 })
+      .lean()
+      .exec();
   }
 
   async findOne(id: string): Promise<DomainDocument> {
@@ -35,12 +44,37 @@ export class DomainsService {
       throw new NotFoundException('Invalid domain ID format');
     }
 
-    const domain = await this.domainModel.findById(validId).lean().exec();
+    const domain = await this.domainModel
+      .findOne({ _id: validId, isActive: true })
+      .lean()
+      .exec();
     if (!domain) {
       throw new NotFoundException('Domain not found');
     }
 
     return domain as DomainDocument;
+  }
+
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<DomainDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const domains = await this.domainModel
+      .find({ _id: { $in: preparedIds.validIds }, isActive: true })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: domains as DomainDocument[],
+      getId: (domain) => domain._id.toString(),
+    });
   }
 
   async update(

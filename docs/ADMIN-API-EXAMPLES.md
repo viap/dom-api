@@ -47,6 +47,43 @@ GET /pages?domainId=not-an-objectid
 }
 ```
 
+### Bulk public read example
+
+```http
+POST /media/bulk
+Content-Type: application/json
+```
+
+```json
+{
+  "ids": [
+    "661100000000000000000010",
+    "invalid-id",
+    "661100000000000000000011"
+  ]
+}
+```
+
+```json
+{
+  "items": [
+    {
+      "_id": "661100000000000000000010",
+      "kind": "image",
+      "url": "/media/661100000000000000000010/content",
+      "title": "Hero image",
+      "alt": "Main hero image",
+      "isPublished": true
+    }
+  ]
+}
+```
+
+Notes:
+
+- invalid, missing, unpublished, inactive, or draft-filtered ids are omitted from `items`.
+- max ids per bulk request: `100`.
+
 ---
 
 ## 1. Domains

@@ -11,6 +11,7 @@ describe('PeopleController', () => {
   beforeEach(() => {
     controller = new PeopleController({
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findAllAdmin: jest.fn(),
       findOneAdmin: jest.fn(),
       findOneBySlug: jest.fn(),
@@ -33,6 +34,9 @@ describe('PeopleController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PeopleController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(IS_PUBLIC_KEY, PeopleController.prototype.findMany),
     ).toBe(true);
   });
 

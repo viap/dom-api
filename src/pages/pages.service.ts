@@ -11,6 +11,8 @@ import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -160,6 +162,30 @@ export class PagesService {
     }
 
     return this.toPublicPage(page);
+  }
+
+  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<PageDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const pages = await this.pageModel
+      .find({ _id: { $in: preparedIds.validIds }, status: PageStatus.Published })
+      .lean()
+      .exec();
+
+    const publicPages = await Promise.all(
+      pages.map((page) => this.toPublicPage(page)),
+    );
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: publicPages,
+      getId: (page) => page._id.toString(),
+    });
   }
 
   async findOneByDomainSlugAndPageSlug(

@@ -15,6 +15,8 @@ import {
   parsePaginationLimit,
   parsePaginationOffset,
 } from '@/common/utils/pagination';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -180,6 +182,26 @@ export class MediaService {
     }
 
     return media as MediaDocument;
+  }
+
+  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<MediaDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const media = await this.mediaModel
+      .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: media as MediaDocument[],
+      getId: (item) => item._id.toString(),
+    });
   }
 
   async getContent(id: string): Promise<{ path: string; mimeType: string }> {
