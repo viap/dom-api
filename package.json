@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "seed:domains": "ts-node -r tsconfig-paths/register src/domains/seeds/domains.seed.ts",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -27,13 +28,17 @@
     "@nestjs/mongoose": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.2.6",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^10.2.6",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
+    "image-size": "^2.0.2",
     "joi": "^17.9.2",
     "mongoose": "^7.3.4",
     "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sanitize-html": "^2.17.2",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

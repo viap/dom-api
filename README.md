@@ -75,6 +75,7 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
    # Application
    PORT=3000
    WEBSOCKET_PORT=3004
+   CORS_ORIGINS=http://localhost:3006
 
    # Database
    MONGO_URL=mongodb://localhost:27017
@@ -86,6 +87,8 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
    JWT_SECRET=your-secret-key
    JWT_EXPIRES_IN=1d
    ```
+
+   `CORS_ORIGINS` accepts a comma-separated allowlist. Empty/omitted values default to `http://localhost:3006`.
 
 4. **Database Setup**
 
@@ -177,11 +180,58 @@ The API implements comprehensive protection against NoSQL injection attacks:
 
 ### Core Resources
 
+- `GET /menus/public/page/:pageId` - Returns the active public menu resolved for a specific page (used by frontend page-level secondary navigation). Only items with resolvable public URLs are usable for rendering.
+
 - `GET /psychologists` - List all psychologists
 - `GET /psychologists/me` - Get current psychologist profile
 - `POST /psychologists/me/add-new-client` - Add new client
 - `GET /therapy-sessions/me` - Get my therapy sessions
 - `POST /therapy-requests` - Create therapy request
+
+### Media
+
+- Public `GET /media` supports `limit`, `offset`, `kind`, `search`, and `folder`, but still returns published media only.
+- Admin `GET /media/admin/folders` returns unique non-empty media folders sorted alphabetically.
+- `POST /media/upload` uploads a local image and creates a Media record for it.
+- `POST /media/upload` also creates one thumbnail (`maxWidth=320`, preserve aspect ratio, no upscale) under `uploads/thumbnails/<year>/<month>/<filename>`.
+- GIF uploads preserve animation by copying the original GIF as thumbnail.
+- `POST /media` creates an external media record only. The `url` must be an absolute `http` or `https` URL.
+- `GET /media/:id/content` is the only public delivery path for uploaded Media files.
+- `GET /media/:id/thumbnail` returns the generated thumbnail for uploaded Media files.
+- Missing uploaded content/thumbnail files resolve to `404` at stream time.
+- Uploaded media visibility is controlled by `isPublished`. Unpublished uploaded assets are not reachable by raw filesystem URL or by the content endpoint.
+- For uploaded files, `storageKey`, `url`, `mimeType`, `sizeBytes`, `width`, and `height` are system-managed fields. Admin updates are limited to `title`, `alt`, `folder`, and `isPublished`.
+- Frontend and admin clients must render uploaded assets from the returned `url` field and must not construct Media URLs from `storageKey`.
+- Frontend apps may proxy uploaded media delivery through their own origin, but the stored `url` field remains the canonical asset reference.
+- `/uploads/media/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
+- `/uploads/thumbnails/...` is not a supported public API path and must not be used in clients, fixtures, or docs.
+
+### Persistent Upload Storage (Deployment)
+
+- Production deployment requires GitHub Actions secret `REMOTE_UPLOADS_PATH` (absolute path on the server, example: `/var/lib/dom-api/uploads`).
+- Deployment must maintain the invariant: `${REMOTE_TARGET}/uploads -> ${REMOTE_UPLOADS_PATH}` (symlink).
+- Deployment scripts create `REMOTE_UPLOADS_PATH` (and `media`/`thumbnails` subdirectories) automatically when missing.
+- If `${REMOTE_TARGET}/uploads` exists as a real non-empty directory, deployment fails and requires manual cleanup/move before re-run (no migration/backfill in workflow).
+- No migration/backfill is performed by the deployment workflow.
+- Clients must still use media API endpoints (`/media/:id/content`, `/media/:id/thumbnail`) and must not use raw `/uploads/...` URLs.
+
+### Deployment Workflow Requirements
+
+- Required GitHub Actions secrets:
+  - `PORT`, `WEBSOCKET_PORT`, `CORS_ORIGINS`
+  - `JWT_SECRET`
+  - `BOT_CLIENT_NAME`, `BOT_CLIENT_PASSWORD`
+  - `WEB_CLIENT_NAME`, `WEB_CLIENT_PASSWORD`
+  - `MONGO_URL`, `MONGO_DBNAME`, `MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD`
+  - `REMOTE_HOST`, `REMOTE_USER`, `SSH_PRIVATE_KEY`, `REMOTE_TARGET`, `REMOTE_UPLOADS_PATH`
+- Deploy uses deterministic server dependency install: `npm ci --omit=dev`.
+- Deploy performs PM2 zero-downtime cutover (`reload` when process exists, `start` otherwise).
+- Health check uses retries (up to 12 attempts with 5-second intervals) against `GET /auth/ping`.
+- Rollback runs automatically when the deploy job fails for both `push` and `workflow_dispatch` triggers.
+- Deployment shell behavior is centralized in reusable scripts under `scripts/deploy/*`:
+  - `scripts/deploy/lib.sh`
+  - `scripts/deploy/post_sync_start.sh`
+  - `scripts/deploy/rollback.sh`
 
 ### Real-time WebSocket Events
 
@@ -227,6 +277,12 @@ npm run test:cov
 - Include proper decorators and guards
 - Implement service-controller separation
 - Add Joi validation schemas for all DTOs
+
+## 📚 Related Docs
+
+- [Docs index](./docs/README.md)
+- [Working context](./docs/working-context.md)
+- [Local development](./docs/specs/local-development.md)
 
 ## 📄 License
 

@@ -1,7 +1,13 @@
 # compiled output
 /dist
 /node_modules
-/docs
+
+# docs archive / local-only docs
+/docs/archive/
+/docs/review/
+/docs/**/*.draft.md
+/docs/**/*.local.md
+/docs/**/scratch/
 
 #env
 /config/.env.prod
@@ -50,3 +56,4 @@ tsconfig.tsbuildinfo
 *.tmp
 *.temp
 .cache
+/uploads

@@ -95,7 +95,7 @@ export class TherapyRequestsService {
 
     let user: UserDocument | undefined = undefined;
     if (createData.user) {
-      user = await this.userService.getById(createData.psychologist);
+      user = await this.userService.getById(createData.user);
     }
 
     const therapyRequest = await (

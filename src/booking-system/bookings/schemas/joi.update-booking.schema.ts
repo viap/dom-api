@@ -1,5 +1,6 @@
 import { timeZoneRegEx } from '@/common/const/time-zone-pattern';
 import * as Joi from 'joi';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 export const updateBookingSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).optional().messages({
@@ -12,12 +13,9 @@ export const updateBookingSchema = Joi.object({
     'string.max': 'Description cannot exceed 1000 characters',
   }),
 
-  room: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid room ID format',
-    }),
+  room: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid room ID format',
+  }),
 
   startDateTime: Joi.date().iso().optional().messages({
     'date.base': 'Start date time must be a valid date',

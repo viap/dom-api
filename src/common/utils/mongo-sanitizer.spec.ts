@@ -79,6 +79,17 @@ describe('MongoDB Sanitization Utilities', () => {
       expect(sanitizeObject(123)).toBe(123);
       expect(sanitizeObject(true)).toBe(true);
     });
+
+    it('should remove unknown dollar-prefixed keys', () => {
+      const maliciousInput: SanitizableObject = {
+        name: 'John',
+        $customOperator: 'bad',
+      };
+
+      const result = sanitizeObject(maliciousInput) as SanitizableObject;
+      expect(result).toEqual({ name: 'John' });
+      expect(result.$customOperator).toBeUndefined();
+    });
   });
 
   describe('validateObjectId', () => {
@@ -91,6 +102,8 @@ describe('MongoDB Sanitization Utilities', () => {
       expect(validateObjectId('invalid')).toBe(null);
       expect(validateObjectId('12345')).toBe(null);
       expect(validateObjectId('')).toBe(null);
+      expect(validateObjectId('aaaabbbbcccc')).toBe(null);
+      expect(validateObjectId('hello world!')).toBe(null);
     });
 
     it('should reject non-string inputs', () => {

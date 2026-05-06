@@ -1,5 +1,6 @@
 import * as Joi from 'joi';
 import { Role } from '../../../roles/enums/roles.enum';
+import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 export const updateRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(100).optional().messages({
@@ -12,12 +13,9 @@ export const updateRoomSchema = Joi.object({
     'string.max': 'Description cannot exceed 500 characters',
   }),
 
-  company: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid company ID format',
-    }),
+  company: joiObjectId.optional().messages({
+    'string.pattern.base': 'Invalid company ID format',
+  }),
 
   capacity: Joi.number().integer().min(1).max(1000).optional().messages({
     'number.base': 'Capacity must be a number',
