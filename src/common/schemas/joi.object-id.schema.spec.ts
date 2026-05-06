@@ -1,8 +1,8 @@
-import { joiObjectId } from './joi.object-id.schema';
+import { joiObjectId, joiObjectIdWithFallback } from './joi.object-id.schema';
 
 describe('joiObjectId', () => {
   it('accepts sentinel value "none"', () => {
-    const { error, value } = joiObjectId.validate('none', {
+    const { error, value } = joiObjectIdWithFallback('none').validate('none', {
       abortEarly: false,
     });
 
