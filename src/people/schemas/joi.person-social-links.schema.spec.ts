@@ -4,6 +4,7 @@ import { updatePersonSchema } from './joi.update-person.schema';
 describe('Person socialLinks Joi validation', () => {
   it('accepts valid url-only socialLinks on create', () => {
     const { error, value } = createPersonSchema.validate({
+      slug: 'jane-doe',
       fullName: 'Jane Doe',
       socialLinks: [
         { platform: 'instagram', url: 'https://instagram.com/jane' },
@@ -16,6 +17,7 @@ describe('Person socialLinks Joi validation', () => {
 
   it('defaults socialLinks to empty array on create', () => {
     const { error, value } = createPersonSchema.validate({
+      slug: 'jane-doe',
       fullName: 'Jane Doe',
     });
 
@@ -47,6 +49,7 @@ describe('Person socialLinks Joi validation', () => {
 
   it('rejects socialLinks entries without url and value', () => {
     const { error } = createPersonSchema.validate({
+      slug: 'jane-doe',
       fullName: 'Jane Doe',
       socialLinks: [{ platform: 'instagram' }],
     });
