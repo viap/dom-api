@@ -175,6 +175,28 @@ cors_smoke_check() {
   echo "CORS smoke check passed"
 }
 
+cors_smoke_check_all() {
+  local port="${1}"
+  local raw_origins="${2}"
+  IFS=',' read -r -a origins <<< "${raw_origins}"
+  local candidate
+  local checked=0
+
+  for candidate in "${origins[@]}"; do
+    candidate="$(trim "${candidate}")"
+    [ -n "${candidate}" ] || continue
+    checked=1
+    if ! cors_smoke_check "${port}" "${candidate}"; then
+      return 1
+    fi
+  done
+
+  if [ "${checked}" -ne 1 ]; then
+    echo "No valid CORS origins found for smoke check" >&2
+    return 1
+  fi
+}
+
 pm2_cutover_domapi() {
   echo "Cutting over domApi with PM2..."
   if pm2 describe domApi >/dev/null 2>&1; then
