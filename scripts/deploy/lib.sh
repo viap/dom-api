@@ -88,10 +88,122 @@ healthcheck_with_retries() {
   fi
 }
 
+trim() {
+  local value="${1}"
+  # shellcheck disable=SC2001
+  echo "${value}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+is_valid_origin() {
+  local origin="${1}"
+  [[ "${origin}" =~ ^https?://[^/]+$ ]]
+}
+
+first_cors_origin() {
+  local raw_origins="${1}"
+  IFS=',' read -r -a origins <<< "${raw_origins}"
+  local candidate
+  for candidate in "${origins[@]}"; do
+    candidate="$(trim "${candidate}")"
+    [ -n "${candidate}" ] || continue
+    if ! is_valid_origin "${candidate}"; then
+      echo "Invalid CORS_ORIGINS entry: '${candidate}'. Expected format: scheme://host:port (no path/trailing slash)." >&2
+      return 1
+    fi
+    echo "${candidate}"
+    return 0
+  done
+
+  echo "CORS_ORIGINS has no non-empty entries" >&2
+  return 1
+}
+
+validate_cors_origins() {
+  local raw_origins="${1}"
+  IFS=',' read -r -a origins <<< "${raw_origins}"
+  local candidate
+  for candidate in "${origins[@]}"; do
+    candidate="$(trim "${candidate}")"
+    [ -n "${candidate}" ] || continue
+    if ! is_valid_origin "${candidate}"; then
+      echo "Invalid CORS_ORIGINS entry: '${candidate}'. Expected format: scheme://host:port (no path/trailing slash)." >&2
+      return 1
+    fi
+  done
+}
+
+cors_header_present() {
+  local headers="${1}"
+  local expected_origin="${2}"
+  local clean_headers
+  clean_headers="$(printf '%s' "${headers}" | tr -d '\r')"
+  if echo "${clean_headers}" | grep -iq "^Access-Control-Allow-Origin: ${expected_origin}$"; then
+    return 0
+  fi
+  return 1
+}
+
+cors_smoke_check() {
+  local port="${1}"
+  local expected_origin="${2}"
+  local options_headers
+  local post_headers
+  local endpoint="http://localhost:${port}/auth/login/user"
+
+  echo "Running CORS smoke check for origin: ${expected_origin}"
+
+  options_headers="$(curl -sS -D - -o /dev/null -X OPTIONS "${endpoint}" \
+    -H "Origin: ${expected_origin}" \
+    -H "Access-Control-Request-Method: POST" \
+    -H "Access-Control-Request-Headers: content-type,authorization")"
+
+  if ! cors_header_present "${options_headers}" "${expected_origin}"; then
+    echo "CORS preflight check failed: missing Access-Control-Allow-Origin for ${expected_origin}" >&2
+    echo "${options_headers}" >&2
+    return 1
+  fi
+
+  post_headers="$(curl -sS -D - -o /dev/null -X POST "${endpoint}" \
+    -H "Origin: ${expected_origin}" \
+    -H "Content-Type: application/json" \
+    --data '{"apiClient":{"name":"__cors_probe__","password":"__cors_probe__"},"user":{"login":"__cors_probe__","password":"__cors_probe__"}}')"
+
+  if ! cors_header_present "${post_headers}" "${expected_origin}"; then
+    echo "CORS POST check failed: missing Access-Control-Allow-Origin for ${expected_origin}" >&2
+    echo "${post_headers}" >&2
+    return 1
+  fi
+
+  echo "CORS smoke check passed"
+}
+
+cors_smoke_check_all() {
+  local port="${1}"
+  local raw_origins="${2}"
+  IFS=',' read -r -a origins <<< "${raw_origins}"
+  local candidate
+  local checked=0
+
+  for candidate in "${origins[@]}"; do
+    candidate="$(trim "${candidate}")"
+    [ -n "${candidate}" ] || continue
+    checked=1
+    if ! cors_smoke_check "${port}" "${candidate}"; then
+      return 1
+    fi
+  done
+
+  if [ "${checked}" -ne 1 ]; then
+    echo "No valid CORS origins found for smoke check" >&2
+    return 1
+  fi
+}
+
 pm2_cutover_domapi() {
   echo "Cutting over domApi with PM2..."
   if pm2 describe domApi >/dev/null 2>&1; then
-    pm2 reload ecosystem.config.js --only domApi --update-env
+    pm2 delete domApi
+    pm2 start ecosystem.config.js --only domApi
   else
     pm2 start ecosystem.config.js --only domApi || pm2 start npm --name domApi -- start
   fi
@@ -100,8 +212,8 @@ pm2_cutover_domapi() {
 pm2_cutover_dombot_optional() {
   echo "Cutting over domBot application (if exists)..."
   if pm2 describe domBot >/dev/null 2>&1; then
-    pm2 reload domBot --update-env || echo "Warning: failed to reload domBot - skipping"
+    pm2 restart domBot --update-env
   else
-    pm2 start domBot || echo "Warning: domBot configuration not found - skipping"
-  fi
+    echo "Warning: failed to reload domBot - skipping"
+  fi 
 }

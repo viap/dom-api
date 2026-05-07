@@ -1,0 +1,36 @@
+name: Manual Restart
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: dom-api-prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Restart app on server
+        uses: fifsky/ssh-action@v0.0.6
+        with:
+          command: |
+            bash "${{secrets.REMOTE_TARGET}}/scripts/deploy/manual_restart.sh"
+          host: ${{secrets.REMOTE_HOST}}
+          user: ${{secrets.REMOTE_USER}}
+          key: ${{secrets.SSH_PRIVATE_KEY}}
+
+      - name: Notify restart success
+        if: success()
+        run: |
+          echo "✅ Manual restart successful!"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Restarted at: $(date)"
+
+      - name: Notify restart failure
+        if: failure()
+        run: |
+          echo "❌ Manual restart failed!"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Failed at: $(date)"
+          echo "Check server logs: pm2 logs domApi --lines 50 --nostream"

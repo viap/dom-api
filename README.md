@@ -227,11 +227,37 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - Deploy uses deterministic server dependency install: `npm ci --omit=dev`.
 - Deploy performs PM2 zero-downtime cutover (`reload` when process exists, `start` otherwise).
 - Health check uses retries (up to 12 attempts with 5-second intervals) against `GET /auth/ping`.
+- Deploy validates `CORS_ORIGINS` format and runs a CORS smoke check for the first configured origin against `OPTIONS` and `POST /auth/login/user`.
 - Rollback runs automatically when the deploy job fails for both `push` and `workflow_dispatch` triggers.
 - Deployment shell behavior is centralized in reusable scripts under `scripts/deploy/*`:
   - `scripts/deploy/lib.sh`
   - `scripts/deploy/post_sync_start.sh`
   - `scripts/deploy/rollback.sh`
+- `CORS_ORIGINS` must be comma-separated exact origins only (`scheme://host:port`), for example:
+  - `http://207.154.221.110:3006,https://dom.example.com`
+  - Do not include paths (like `/ru/login`) or trailing slashes.
+
+### CORS Runtime Verification (Operator Runbook)
+
+After deploy, verify CORS headers from any terminal:
+
+```bash
+API_URL="http://138.68.101.214:3003"
+ORIGIN="http://207.154.221.110:3006"
+
+# 1) Preflight should include:
+#    Access-Control-Allow-Origin: ${ORIGIN}
+curl -i -X OPTIONS "${API_URL}/auth/login/user" \
+  -H "Origin: ${ORIGIN}" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,authorization"
+
+# 2) POST should also include Access-Control-Allow-Origin, even if status is 401
+curl -i -X POST "${API_URL}/auth/login/user" \
+  -H "Origin: ${ORIGIN}" \
+  -H "Content-Type: application/json" \
+  --data '{"apiClient":{"name":"probe","password":"probe"},"user":{"login":"probe","password":"probe"}}'
+```
 
 ### Real-time WebSocket Events
 

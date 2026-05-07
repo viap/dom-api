@@ -30,5 +30,8 @@ async function bootstrap() {
   app.use('/uploads', serveStatic(uploadsRoot));
 
   await app.listen(process.env.PORT ?? 3003);
+  if (process.send) {
+    process.send('ready');
+  }
 }
 bootstrap();
