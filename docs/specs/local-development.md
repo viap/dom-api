@@ -35,6 +35,9 @@ MONGO_INITDB_ROOT_PASSWORD=example
 Notes:
 
 - `CORS_ORIGINS` supports a comma-separated allowlist.
+- Each allowlist value must be an exact origin in the format `scheme://host:port`.
+- Do not include paths (e.g. `/ru/login`) or trailing slashes.
+- Multi-origin example: `CORS_ORIGINS=http://localhost:3006,https://dom.example.com`
 - Empty/missing `CORS_ORIGINS` falls back to `http://localhost:3006`.
 - Keep real production/staging secrets out of local env files.
 
@@ -72,5 +75,6 @@ npm run test:cov
   - verify `MONGO_URL`, `MONGO_DBNAME`, and credentials
 - CORS issues from frontend:
   - confirm `CORS_ORIGINS` includes `http://localhost:3006`
+  - if deployed frontend uses IP/domain origin, include that exact origin with scheme and port
 - Missing uploaded media in local verification:
   - ensure clients use media endpoints (`/media/:id/content`, `/media/:id/thumbnail`), not raw `/uploads/...` paths

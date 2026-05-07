@@ -32,11 +32,23 @@ mkdir -p logs
 echo "Installing dependencies..."
 npm ci --omit=dev
 
+echo "Validating CORS_ORIGINS format..."
+validate_cors_origins "${CORS_ORIGINS}"
+
 pm2_cutover_domapi
 pm2_cutover_dombot_optional
 pm2 status
 
 if ! healthcheck_with_retries "${PORT}" "Deploy"; then
+  echo "Checking application logs..."
+  pm2 logs domApi --lines 20 --nostream
+  echo "Checking process status..."
+  pm2 status
+  exit 1
+fi
+
+cors_check_origin="$(first_cors_origin "${CORS_ORIGINS}")"
+if ! cors_smoke_check "${PORT}" "${cors_check_origin}"; then
   echo "Checking application logs..."
   pm2 logs domApi --lines 20 --nostream
   echo "Checking process status..."
