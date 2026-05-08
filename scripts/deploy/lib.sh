@@ -222,8 +222,8 @@ auth_reason_smoke_check() {
   local invalid_client_request_id
   local status_code
 
-  valid_client_request_id="deploy-auth-valid-client-$(date +%s)-$RANDOM"
-  invalid_client_request_id="deploy-auth-invalid-client-$(date +%s)-$RANDOM"
+  valid_client_request_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  invalid_client_request_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 
   status_code="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
     -H "Content-Type: application/json" \
