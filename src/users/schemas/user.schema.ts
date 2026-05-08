@@ -11,7 +11,7 @@ export class User {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ unique: true })
+  @Prop({ unique: true, sparse: true })
   login: string;
 
   @Prop({ select: false })
