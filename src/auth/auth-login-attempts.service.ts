@@ -127,7 +127,10 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       return {
         locked: true,
         lockedUntil: nextState.lockedUntil,
-        retryAfterSeconds: this.getRetryAfterSeconds(nextState.lockedUntil, now),
+        retryAfterSeconds: this.getRetryAfterSeconds(
+          nextState.lockedUntil,
+          now,
+        ),
       };
     }
 

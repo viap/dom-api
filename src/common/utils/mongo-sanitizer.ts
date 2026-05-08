@@ -1,8 +1,9 @@
-import { Types } from 'mongoose';
 import { QueryParams, SafeQueryParams } from '../types/query-params.types';
 import { parseNumericValue } from './parse-numeric-value';
 
 const OBJECT_ID_HEX_PATTERN = /^[a-f\d]{24}$/i;
+
+const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
  * MongoDB NoSQL Injection Prevention Utilities
@@ -27,28 +28,29 @@ export type SanitizableArray = Array<SanitizableValue>;
 /**
  * Recursively sanitizes an object by removing MongoDB operators from user input
  */
-export function sanitizeObject(obj: SanitizableValue): SanitizableValue {
+export function sanitizeObject<T extends SanitizableValue>(obj: T): T {
   if (obj === null || obj === undefined) {
     return obj;
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(sanitizeObject) as SanitizableArray;
+    return obj.map(sanitizeObject) as T;
   }
 
-  if (typeof obj === 'object' && obj.constructor === Object) {
+  const proto = Object.getPrototypeOf(obj);
+  if (
+    typeof obj === 'object' &&
+    (proto === Object.prototype || proto === null)
+  ) {
     const sanitized: SanitizableObject = {};
 
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        // Remove keys that start with $ (MongoDB operators)
-        if (!key.startsWith('$')) {
-          sanitized[key] = sanitizeObject(obj[key]);
-        }
+    for (const key of Object.keys(obj as SanitizableObject)) {
+      if (!key.startsWith('$') && !BLOCKED_KEYS.has(key)) {
+        sanitized[key] = sanitizeObject((obj as SanitizableObject)[key]);
       }
     }
 
-    return sanitized;
+    return sanitized as T;
   }
 
   // For primitive types, return as-is
@@ -58,17 +60,12 @@ export function sanitizeObject(obj: SanitizableValue): SanitizableValue {
 /**
  * Validates and sanitizes MongoDB ObjectId
  */
-export function validateObjectId(id: string | null | undefined): string | null {
+export function validateObjectId(id: unknown): string | null {
   if (!id || typeof id !== 'string') {
     return null;
   }
 
   if (!OBJECT_ID_HEX_PATTERN.test(id)) {
-    return null;
-  }
-
-  // Check if it's a valid ObjectId format
-  if (!Types.ObjectId.isValid(id)) {
     return null;
   }
 
@@ -86,40 +83,38 @@ export function sanitizeQueryParams(
   }
 
   // First sanitize the object to remove operators
-  const sanitized = sanitizeObject(params) as SanitizableObject;
+  const sanitized = sanitizeObject(params);
 
   // Additional validation for specific patterns
   const cleaned: SafeQueryParams = {};
 
-  for (const key in sanitized) {
-    if (sanitized.hasOwnProperty(key)) {
-      const value = sanitized[key];
+  for (const key of Object.keys(sanitized)) {
+    const value = sanitized[key];
 
-      // Special handling for _id fields
-      if (key === '_id' || key.endsWith('Id')) {
-        const validId = validateObjectId(value as string);
-        if (validId) {
-          cleaned[key] = validId;
-        }
-      } else if (
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        typeof value === 'boolean' ||
-        value === null
-      ) {
-        cleaned[key] = value as string | number | boolean | null;
-      } else if (Array.isArray(value)) {
-        // Filter array to only contain primitive values
-        const primitiveValues = value.filter(
-          (item): item is string | number | boolean | null =>
-            typeof item === 'string' ||
-            typeof item === 'number' ||
-            typeof item === 'boolean' ||
-            item === null,
-        );
-        if (primitiveValues.length > 0) {
-          cleaned[key] = primitiveValues;
-        }
+    // Special handling for _id fields
+    if (key === '_id' || key.endsWith('Id')) {
+      const validId = validateObjectId(value);
+      if (validId) {
+        cleaned[key] = validId;
+      }
+    } else if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      value === null
+    ) {
+      cleaned[key] = value as string | number | boolean | null;
+    } else if (Array.isArray(value)) {
+      // Filter array to only contain primitive values
+      const primitiveValues = value.filter(
+        (item): item is string | number | boolean | null =>
+          typeof item === 'string' ||
+          typeof item === 'number' ||
+          typeof item === 'boolean' ||
+          item === null,
+      );
+      if (primitiveValues.length > 0) {
+        cleaned[key] = primitiveValues;
       }
     }
   }
@@ -160,8 +155,10 @@ export function sanitizeDateRange(
   from?: Date | string | number | null,
   to?: Date | string | number | null,
 ): { from?: number; to?: number } {
+  const fromVal = parseNumericValue(from, true);
+  const toVal = parseNumericValue(to, true);
   return {
-    from: parseNumericValue(from, true) || undefined,
-    to: parseNumericValue(to, true) || undefined,
+    from: fromVal != null && !isNaN(fromVal) ? fromVal : undefined,
+    to: toVal != null && !isNaN(toVal) ? toVal : undefined,
   };
 }

@@ -19,7 +19,9 @@ describe('RequestsService', () => {
   let psychologistsService: jest.Mocked<
     Pick<PsychologistsService, 'getById' | 'getByUserId'>
   >;
-  let usersService: jest.Mocked<Pick<UsersService, 'getById' | 'create' | 'update'>>;
+  let usersService: jest.Mocked<
+    Pick<UsersService, 'getById' | 'create' | 'update'>
+  >;
   let notificationsService: jest.Mocked<
     Pick<NotificationsService, 'create' | 'getAll' | 'getAllByUserId'>
   >;

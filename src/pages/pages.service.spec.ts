@@ -619,10 +619,12 @@ describe('PagesService', () => {
         skip: jest.fn().mockReturnValue({
           limit: jest.fn().mockReturnValue({
             lean: jest.fn().mockReturnValue({
-              exec: jest.fn().mockResolvedValue([
-                mockPage,
-                { ...mockPage, _id: '507f1f77bcf86cd799439113' },
-              ]),
+              exec: jest
+                .fn()
+                .mockResolvedValue([
+                  mockPage,
+                  { ...mockPage, _id: '507f1f77bcf86cd799439113' },
+                ]),
             }),
           }),
         }),
@@ -652,9 +654,7 @@ describe('PagesService', () => {
         skip: jest.fn().mockReturnValue({
           limit: jest.fn().mockReturnValue({
             lean: jest.fn().mockReturnValue({
-              exec: jest
-                .fn()
-                .mockResolvedValue([mockGlobalPage, mockPage]),
+              exec: jest.fn().mockResolvedValue([mockGlobalPage, mockPage]),
             }),
           }),
         }),
@@ -674,9 +674,9 @@ describe('PagesService', () => {
         skip: jest.fn().mockReturnValue({
           limit: jest.fn().mockReturnValue({
             lean: jest.fn().mockReturnValue({
-              exec: jest.fn().mockResolvedValue([
-                { ...mockPage, status: PageStatus.Draft },
-              ]),
+              exec: jest
+                .fn()
+                .mockResolvedValue([{ ...mockPage, status: PageStatus.Draft }]),
             }),
           }),
         }),

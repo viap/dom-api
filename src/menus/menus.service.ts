@@ -113,7 +113,10 @@ export class MenusService {
       throw new NotFoundException('Invalid page ID format');
     }
 
-    const menu = await this.menuModel.findOne({ pageId: validPageId }).lean().exec();
+    const menu = await this.menuModel
+      .findOne({ pageId: validPageId })
+      .lean()
+      .exec();
     if (!menu) {
       throw new NotFoundException('Menu not found');
     }
@@ -168,7 +171,10 @@ export class MenusService {
       updateMenuDto,
       'pageId',
     );
-    const hasKeyField = Object.prototype.hasOwnProperty.call(updateMenuDto, 'key');
+    const hasKeyField = Object.prototype.hasOwnProperty.call(
+      updateMenuDto,
+      'key',
+    );
     const pageId = hasPageIdField
       ? updateMenuDto.pageId || undefined
       : existing.pageId?.toString();
@@ -327,7 +333,10 @@ export class MenusService {
     }
   }
 
-  private async ensureUniqueKey(key?: string, excludeId?: string): Promise<void> {
+  private async ensureUniqueKey(
+    key?: string,
+    excludeId?: string,
+  ): Promise<void> {
     if (!key) {
       return;
     }

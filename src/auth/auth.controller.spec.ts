@@ -128,7 +128,9 @@ describe('AuthController', () => {
   });
 
   it('keeps invalid credentials as generic 401 when not locked', async () => {
-    mockAuthLoginAttemptsService.getLockedState.mockReturnValue({ locked: false });
+    mockAuthLoginAttemptsService.getLockedState.mockReturnValue({
+      locked: false,
+    });
     mockAuthService.signInByAuthUser.mockRejectedValue(
       new AuthFailureError(AuthFailureReason.InvalidUserCredentials),
     );
@@ -161,7 +163,9 @@ describe('AuthController', () => {
   });
 
   it('sanitizes invalid request-id header before passing metadata to auth service', async () => {
-    mockAuthLoginAttemptsService.getLockedState.mockReturnValue({ locked: false });
+    mockAuthLoginAttemptsService.getLockedState.mockReturnValue({
+      locked: false,
+    });
     mockAuthService.signInByAuthUser.mockResolvedValue({ auth_token: 'token' });
 
     const request = {

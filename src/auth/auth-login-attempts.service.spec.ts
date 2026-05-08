@@ -59,7 +59,11 @@ describe('AuthLoginAttemptsService', () => {
     service.registerFailure(sourceIp, login, now + 1000);
 
     // Beyond 15-minute window should reset counter to 1.
-    const result = service.registerFailure(sourceIp, login, now + 16 * 60 * 1000);
+    const result = service.registerFailure(
+      sourceIp,
+      login,
+      now + 16 * 60 * 1000,
+    );
     expect(result.locked).toBe(false);
     expect(service.isLocked(sourceIp, login, now + 16 * 60 * 1000)).toBe(false);
   });
@@ -79,7 +83,11 @@ describe('AuthLoginAttemptsService', () => {
     jest.setSystemTime(base);
 
     const baseMs = base.getTime();
-    service.registerFailure('127.0.0.1', 'expired-user', baseMs - 16 * 60 * 1000);
+    service.registerFailure(
+      '127.0.0.1',
+      'expired-user',
+      baseMs - 16 * 60 * 1000,
+    );
     service.registerFailure('127.0.0.1', 'active-user', baseMs);
 
     service.onModuleInit();

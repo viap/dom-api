@@ -11,7 +11,10 @@ import {
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
-import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
 import {
   safeFindParams,
   validateObjectId,

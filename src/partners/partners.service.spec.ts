@@ -52,11 +52,13 @@ describe('PartnersService', () => {
       save: jest.fn().mockImplementation(() => mockSave(payload)),
     })),
     {
-      find: jest.fn().mockImplementation((query) =>
-        query && query.isPublished === true
-          ? mockPublicListChain
-          : mockAdminListChain,
-      ),
+      find: jest
+        .fn()
+        .mockImplementation((query) =>
+          query && query.isPublished === true
+            ? mockPublicListChain
+            : mockAdminListChain,
+        ),
       findOne: jest.fn().mockReturnValue(mockFindOneChain),
       findById: jest.fn().mockReturnValue(mockFindByIdChain),
     },

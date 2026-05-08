@@ -42,24 +42,26 @@ export const createEventSchema = Joi.object({
 
   priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
   capacity: Joi.number().integer().min(1).optional(),
-}).custom((value, helpers) => {
-  const startAt = new Date(value.startAt).getTime();
-  const endAt = new Date(value.endAt).getTime();
+})
+  .custom((value, helpers) => {
+    const startAt = new Date(value.startAt).getTime();
+    const endAt = new Date(value.endAt).getTime();
 
-  if (endAt <= startAt) {
-    return helpers.error('any.invalid');
-  }
-
-  const registrationDeadline = value.registration?.deadline;
-  if (registrationDeadline) {
-    const deadline = new Date(registrationDeadline).getTime();
-    if (deadline > startAt) {
+    if (endAt <= startAt) {
       return helpers.error('any.invalid');
     }
-  }
 
-  return value;
-}, 'event temporal ordering validation').messages({
-  'any.invalid':
-    'endAt must be after startAt and registration.deadline must be before or equal to startAt',
-});
+    const registrationDeadline = value.registration?.deadline;
+    if (registrationDeadline) {
+      const deadline = new Date(registrationDeadline).getTime();
+      if (deadline > startAt) {
+        return helpers.error('any.invalid');
+      }
+    }
+
+    return value;
+  }, 'event temporal ordering validation')
+  .messages({
+    'any.invalid':
+      'endAt must be after startAt and registration.deadline must be before or equal to startAt',
+  });

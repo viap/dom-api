@@ -28,8 +28,7 @@ export const createProgramSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).required(),
 
-  slug: joiSlugSchema
-    .required(),
+  slug: joiSlugSchema.required(),
 
   startDate: joiUtcIsoDateTime.optional(),
   endDate: joiUtcIsoDateTime.optional(),
@@ -45,27 +44,29 @@ export const createProgramSchema = Joi.object({
   speakerIds: Joi.array().items(joiObjectId).default([]),
   organizerIds: Joi.array().items(joiObjectId).default([]),
   partnerIds: Joi.array().items(joiObjectId).default([]),
-}).custom((value, helpers) => {
-  if (value.startDate && value.endDate) {
-    const startDate = new Date(value.startDate).getTime();
-    const endDate = new Date(value.endDate).getTime();
+})
+  .custom((value, helpers) => {
+    if (value.startDate && value.endDate) {
+      const startDate = new Date(value.startDate).getTime();
+      const endDate = new Date(value.endDate).getTime();
 
-    if (endDate < startDate) {
-      return helpers.error('any.invalid');
+      if (endDate < startDate) {
+        return helpers.error('any.invalid');
+      }
     }
-  }
 
-  if (value.applicationDeadline && value.startDate) {
-    const startDate = new Date(value.startDate).getTime();
-    const applicationDeadline = new Date(value.applicationDeadline).getTime();
+    if (value.applicationDeadline && value.startDate) {
+      const startDate = new Date(value.startDate).getTime();
+      const applicationDeadline = new Date(value.applicationDeadline).getTime();
 
-    if (applicationDeadline > startDate) {
-      return helpers.error('any.invalid');
+      if (applicationDeadline > startDate) {
+        return helpers.error('any.invalid');
+      }
     }
-  }
 
-  return value;
-}, 'program temporal ordering validation').messages({
-  'any.invalid':
-    'endDate must be after or equal to startDate and applicationDeadline must be before or equal to startDate',
-});
+    return value;
+  }, 'program temporal ordering validation')
+  .messages({
+    'any.invalid':
+      'endDate must be after or equal to startDate and applicationDeadline must be before or equal to startDate',
+  });

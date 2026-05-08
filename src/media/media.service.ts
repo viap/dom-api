@@ -16,7 +16,10 @@ import {
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
-import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -184,7 +187,9 @@ export class MediaService {
     return media as MediaDocument;
   }
 
-  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<MediaDocument>> {
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<MediaDocument>> {
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
       return {
@@ -277,7 +282,11 @@ export class MediaService {
       if (format === 'gif') {
         await copyFile(targetPath, thumbnailTargetPath);
       } else {
-        await this.buildThumbnailFromFile(targetPath, thumbnailTargetPath, format);
+        await this.buildThumbnailFromFile(
+          targetPath,
+          thumbnailTargetPath,
+          format,
+        );
       }
       return await media.save();
     } catch (error) {
@@ -342,7 +351,10 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    const media = await this.mediaModel.findByIdAndDelete(validId).lean().exec();
+    const media = await this.mediaModel
+      .findByIdAndDelete(validId)
+      .lean()
+      .exec();
     if (!media) {
       throw new NotFoundException('Media not found');
     }
@@ -612,7 +624,9 @@ export class MediaService {
         return;
       }
       this.logger.warn(
-        `Failed to cleanup media file (mediaId=${mediaId}, path=${path}): ${err?.message || 'unknown error'}`,
+        `Failed to cleanup media file (mediaId=${mediaId}, path=${path}): ${
+          err?.message || 'unknown error'
+        }`,
       );
     }
   }

@@ -193,10 +193,7 @@ export class AuthController {
     normalizedLogin?: string,
     clientName?: string,
   ): AuthRequestMetadata {
-    const sourceIp =
-      request.ip ||
-      request.socket?.remoteAddress ||
-      'unknown';
+    const sourceIp = request.ip || request.socket?.remoteAddress || 'unknown';
 
     const userAgent = this.readHeaderValue(request.headers['user-agent']);
 

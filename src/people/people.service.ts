@@ -7,7 +7,10 @@ import {
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
-import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
 import { MediaService } from '@/media/media.service';
 import { UsersService } from '@/users/users.service';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
@@ -121,7 +124,9 @@ export class PeopleService {
     return person as PersonDocument;
   }
 
-  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<PersonDocument>> {
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PersonDocument>> {
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
       return {

@@ -123,7 +123,9 @@ export class MediaController {
           return;
         }
 
-        reject(new InternalServerErrorException('Failed to stream media content'));
+        reject(
+          new InternalServerErrorException('Failed to stream media content'),
+        );
       });
     });
   }

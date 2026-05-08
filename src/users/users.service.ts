@@ -1,16 +1,15 @@
+import { TelegramUserDto } from '@/auth/dto/telegram.dto';
+import {
+  sanitizeObject,
+  validateObjectId,
+  validateRoles
+} from '@/common/utils/mongo-sanitizer';
+import { normalizeLogin } from '@/common/utils/normalize-login';
+import { Role } from '@/roles/enums/roles.enum';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
-import { TelegramUserDto } from '@/auth/dto/telegram.dto';
-import {
-  SanitizableObject,
-  sanitizeObject,
-  validateObjectId,
-  validateRoles,
-} from '@/common/utils/mongo-sanitizer';
-import { normalizeLogin } from '@/common/utils/normalize-login';
-import { Role } from '@/roles/enums/roles.enum';
 import { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -92,11 +91,9 @@ export class UsersService {
   }
 
   async getByAuthUser(authUser: AuthUserDto): Promise<UserDocument> {
-    const sanitizedAuthUser = sanitizeObject(authUser) as SanitizableObject;
-    const normalizedLogin = normalizeLogin(
-      sanitizedAuthUser.login as string | null | undefined,
-    );
-    const password = sanitizedAuthUser.password as string | null | undefined;
+    const sanitizedAuthUser = sanitizeObject(authUser);
+    const normalizedLogin = normalizeLogin(sanitizedAuthUser.login);
+    const password = sanitizedAuthUser.password;
 
     if (!normalizedLogin || typeof password !== 'string') {
       return null;

@@ -148,5 +148,4 @@ describe('Partner links Joi validation', () => {
       }),
     ).toThrow(BadRequestException);
   });
-
 });

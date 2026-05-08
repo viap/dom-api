@@ -90,6 +90,24 @@ describe('MongoDB Sanitization Utilities', () => {
       expect(result).toEqual({ name: 'John' });
       expect(result.$customOperator).toBeUndefined();
     });
+
+    it('should block prototype pollution keys', () => {
+      const pollutionAttempt = JSON.parse(
+        '{"__proto__":{"admin":true},"constructor":{"name":"hacked"},"prototype":"bad","safe":"value"}',
+      );
+
+      const result = sanitizeObject(pollutionAttempt) as SanitizableObject;
+      expect(result).toEqual({ safe: 'value' });
+      expect(Object.prototype.hasOwnProperty.call(result, '__proto__')).toBe(
+        false,
+      );
+      expect(Object.prototype.hasOwnProperty.call(result, 'constructor')).toBe(
+        false,
+      );
+      expect(Object.prototype.hasOwnProperty.call(result, 'prototype')).toBe(
+        false,
+      );
+    });
   });
 
   describe('validateObjectId', () => {
@@ -109,8 +127,10 @@ describe('MongoDB Sanitization Utilities', () => {
     it('should reject non-string inputs', () => {
       expect(validateObjectId(null)).toBe(null);
       expect(validateObjectId(undefined)).toBe(null);
-      expect(validateObjectId(123 as any)).toBe(null);
-      expect(validateObjectId({} as any)).toBe(null);
+      expect(validateObjectId(123)).toBe(null);
+      expect(validateObjectId({})).toBe(null);
+      expect(validateObjectId([])).toBe(null);
+      expect(validateObjectId(true)).toBe(null);
     });
   });
 
@@ -201,6 +221,11 @@ describe('MongoDB Sanitization Utilities', () => {
 
       const result2 = sanitizeDateRange(null, 2000000000);
       expect(result2).toEqual({ to: 2000000000 });
+    });
+
+    it('should preserve timestamp 0 (epoch) without dropping it as falsy', () => {
+      const result = sanitizeDateRange(0, 1000000000);
+      expect(result).toEqual({ from: 0, to: 1000000000 });
     });
   });
 
