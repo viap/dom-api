@@ -84,7 +84,7 @@ export class AuthService {
     const normalizedLogin = normalizeLogin(authUser?.login);
     const authMetadata = this.buildAuthMetadata(metadata, {
       normalizedLogin: metadata?.normalizedLogin || normalizedLogin,
-      clientName: initClient?.name || metadata?.clientName,
+      clientName: metadata?.clientName || initClient?.name,
     });
 
     if (!this.isAvailableClient(initClient)) {
