@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   const uploadsRoot = join(process.cwd(), 'uploads');
   const corsOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
@@ -30,5 +31,8 @@ async function bootstrap() {
   app.use('/uploads', serveStatic(uploadsRoot));
 
   await app.listen(process.env.PORT ?? 3003);
+  if (process.send) {
+    process.send('ready');
+  }
 }
 bootstrap();

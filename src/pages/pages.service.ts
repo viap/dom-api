@@ -12,7 +12,10 @@ import {
   parsePaginationOffset,
 } from '@/common/utils/pagination';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
-import { prepareBulkIds, toBulkResolveResponse } from '@/common/utils/bulk-resolve';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -164,7 +167,9 @@ export class PagesService {
     return this.toPublicPage(page);
   }
 
-  async findManyByIds(ids: string[]): Promise<BulkResolveResponse<PageDocument>> {
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PageDocument>> {
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
       return {
@@ -173,7 +178,10 @@ export class PagesService {
     }
 
     const pages = await this.pageModel
-      .find({ _id: { $in: preparedIds.validIds }, status: PageStatus.Published })
+      .find({
+        _id: { $in: preparedIds.validIds },
+        status: PageStatus.Published,
+      })
       .lean()
       .exec();
 
@@ -299,13 +307,11 @@ export class PagesService {
       .exec();
   }
 
-  async findAllByDomainIdAdmin(
-    queryParams: {
-      domainId?: string;
-      limit?: string;
-      offset?: string;
-    },
-  ): Promise<PageDocument[]> {
+  async findAllByDomainIdAdmin(queryParams: {
+    domainId?: string;
+    limit?: string;
+    offset?: string;
+  }): Promise<PageDocument[]> {
     const safeParams = safeFindParams(queryParams);
     const domainId =
       typeof safeParams.domainId === 'string' ? safeParams.domainId : null;

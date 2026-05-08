@@ -4,25 +4,27 @@ module.exports = {
       name: 'domApi',
       script: 'dist/main.js',
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
-      env: {
-        NODE_ENV: 'production',
-        PORT: process.env.PORT || 3003,
-        WEBSOCKET_PORT: process.env.WEBSOCKET_PORT || 3004,
-      },
+      env: {},
+      // Restart settings
+      max_restarts: 5,
+      min_uptime: '10s',
+      //logging
       error_file: './logs/domApi-error.log',
       out_file: './logs/domApi-out.log',
       log_file: './logs/domApi.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      time: true,
-      max_restarts: 10,
-      min_uptime: '10s',
-      restart_delay: 4000,
+      // Graceful shutdown
       kill_timeout: 3000,
+      wait_ready: true,
       listen_timeout: 3000,
-      exec_mode: 'fork',
+      restart_delay: 4000,
+      time: true,
+      // Health check
+      health_check_grace_period: 3000,
     },
   ],
   deploy: {

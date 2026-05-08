@@ -175,8 +175,8 @@ The API implements comprehensive protection against NoSQL injection attacks:
 
 ### Authentication Endpoints
 
-- `POST /auth/telegram` - Authenticate via Telegram
-- `POST /auth/user` - Standard user authentication
+- `POST /auth/login/telegram` - Authenticate via Telegram
+- `POST /auth/login/user` - Standard user authentication
 
 ### Core Resources
 
@@ -228,6 +228,9 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - Deploy performs PM2 zero-downtime cutover (`reload` when process exists, `start` otherwise).
 - Health check uses retries (up to 12 attempts with 5-second intervals) against `GET /auth/ping`.
 - Deploy validates `CORS_ORIGINS` format and runs a CORS smoke check for the first configured origin against `OPTIONS` and `POST /auth/login/user`.
+- Deploy runs auth branch smoke checks and verifies structured reasons:
+  - valid API client + bad user => `invalid_user_credentials`
+  - invalid API client => `invalid_api_client`
 - Rollback runs automatically when the deploy job fails for both `push` and `workflow_dispatch` triggers.
 - Deployment shell behavior is centralized in reusable scripts under `scripts/deploy/*`:
   - `scripts/deploy/lib.sh`
@@ -257,6 +260,49 @@ curl -i -X POST "${API_URL}/auth/login/user" \
   -H "Origin: ${ORIGIN}" \
   -H "Content-Type: application/json" \
   --data '{"apiClient":{"name":"probe","password":"probe"},"user":{"login":"probe","password":"probe"}}'
+```
+
+### Auth Operations
+
+- Required auth env vars validated at startup: `JWT_SECRET`, `BOT_CLIENT_NAME`, `BOT_CLIENT_PASSWORD`, `WEB_CLIENT_NAME`, `WEB_CLIENT_PASSWORD`.
+- Source IP lockout keying relies on Express `request.ip` with `trust proxy = 1` (single trusted proxy hop).
+- Login normalization policy: `user.login` is normalized with `trim` + `lowercase` before credential lookup.
+- Telegram lockout key uses normalized `telegram.id`; user lockout key uses normalized `user.login`.
+- Login lockout policy: `5` failed attempts within `15` minutes => lockout for `15` minutes (keyed by source IP + normalized identity).
+- Lockout semantics: the 5th failed credential is recorded and activates lockout; the 6th and later attempts are blocked.
+- External login failures remain generic `401 Unauthorized` unless request is currently locked, in which case API returns `429 Too Many Requests` with `Retry-After` and `retryAfterSeconds`.
+- `dom-web` BFF auth routes strictly allowlist request fields and return `400` for unknown keys.
+- Internal logs classify failures with reason codes (`invalid_api_client`, `invalid_user_credentials`) for incident triage only.
+
+Quick auth triage commands (`401` and lockout `429`):
+
+```bash
+API_URL="http://138.68.101.214:3003"
+
+# 1) Service liveness
+curl -i "${API_URL}/auth/ping"
+
+# 2) Probe: valid apiClient + bad user credentials
+curl -i -X POST "${API_URL}/auth/login/user" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: triage-valid-client-bad-user" \
+  --data '{"apiClient":{"name":"domWeb","password":"<WEB_CLIENT_PASSWORD>"},"user":{"login":"__probe__","password":"__probe__"}}'
+
+# 3) Probe: invalid apiClient
+curl -i -X POST "${API_URL}/auth/login/user" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: triage-invalid-client" \
+  --data '{"apiClient":{"name":"domWeb","password":"__bad__"},"user":{"login":"__probe__","password":"__probe__"}}'
+
+# 4) Inspect structured auth failure reasons (on server)
+pm2 logs domApi --lines 200 --nostream | grep "auth.login.failure"
+```
+
+One-time credential integrity audit:
+
+```bash
+# exits with code 2 when users with invalid/missing password hashes are found
+npm run audit:auth-passwords
 ```
 
 ### Real-time WebSocket Events

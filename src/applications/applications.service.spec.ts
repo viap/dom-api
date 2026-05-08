@@ -41,7 +41,10 @@ describe('ApplicationsService', () => {
     },
   );
 
-  const mockDomainsService = { getActiveById: jest.fn(), getActiveByCode: jest.fn() };
+  const mockDomainsService = {
+    getActiveById: jest.fn(),
+    getActiveByCode: jest.fn(),
+  };
   const mockProgramsService = { exists: jest.fn() };
   const mockEventsService = { exists: jest.fn() };
   const mockPartnersService = { exists: jest.fn() };

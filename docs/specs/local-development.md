@@ -78,3 +78,76 @@ npm run test:cov
   - if deployed frontend uses IP/domain origin, include that exact origin with scheme and port
 - Missing uploaded media in local verification:
   - ensure clients use media endpoints (`/media/:id/content`, `/media/:id/thumbnail`), not raw `/uploads/...` paths
+
+## Production Auth Triage Checklist (`401`/`429`)
+
+1. Verify API health:
+   - `curl -i http://<api-host>:3003/auth/ping`
+   - expected: `200` + `pong`
+2. Verify startup auth env validation passed:
+   - ensure `JWT_SECRET`, `BOT_CLIENT_*`, `WEB_CLIENT_*` are present on process env
+3. Verify trusted-proxy IP resolution assumptions:
+   - API must be behind one trusted reverse proxy hop (`trust proxy = 1`)
+   - direct public access to API should be blocked so clients cannot bypass proxy IP resolution
+4. Run two probes with distinct `X-Request-Id`:
+   - valid `apiClient` + bad user password
+   - invalid `apiClient`
+5. Inspect structured logs:
+   - `pm2 logs domApi --lines 200 --nostream | grep auth.login.failure`
+   - expected reasons: `invalid_user_credentials` and `invalid_api_client`
+6. Check lockout:
+   - the 5th bad attempt records lockout for same IP+login in a 15-minute window
+   - the 6th and later attempts are blocked for 15 minutes
+
+Expected outcomes:
+
+- External client receives generic `401 Unauthorized` for invalid credentials/client.
+- During lockout, external client receives `429 Too Many Requests` with `Retry-After` header and `retryAfterSeconds` in response body.
+- Internal logs include request correlation id, reason, source IP, login fingerprint, and lockout marker.
+
+## Post-Deploy Auth Smoke Tests
+
+Run after each deployment/restart:
+
+```bash
+PORT=3003
+
+# Health check
+curl -sS "http://localhost:${PORT}/auth/ping"
+
+# Probe valid apiClient + bad user creds
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:${PORT}/auth/login/user" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: smoke-valid-client-bad-user" \
+  --data '{"apiClient":{"name":"domWeb","password":"<WEB_CLIENT_PASSWORD>"},"user":{"login":"__probe__","password":"__probe__"}}'
+
+# Probe invalid apiClient
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:${PORT}/auth/login/user" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: smoke-invalid-client" \
+  --data '{"apiClient":{"name":"domWeb","password":"__bad__"},"user":{"login":"__probe__","password":"__probe__"}}'
+
+# Probe Telegram auth lockout branch shape (repeat to trigger lockout)
+curl -i -X POST "http://localhost:${PORT}/auth/login/telegram" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: smoke-telegram-lockout" \
+  --data '{"apiClient":{"name":"domWeb","password":"__bad__"},"telegram":{"id":"__probe_telegram__","username":"probe"}}'
+
+# Expect lockout response body shape:
+# { "message": "Too many failed attempts", "retryAfterSeconds": <seconds> }
+# and Retry-After header in matching seconds.
+
+# Verify internal classification logs
+pm2 logs domApi --lines 200 --nostream | grep auth.login.failure
+```
+
+BFF request-shape enforcement check (`dom-web`):
+
+```bash
+WEB_URL="http://localhost:3006"
+
+# Unknown field must be rejected by BFF with 400
+curl -i -X POST "${WEB_URL}/api/auth/login" \
+  -H "Content-Type: application/json" \
+  --data '{"login":"probe","password":"probe","extra":"blocked"}'
+```

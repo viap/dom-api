@@ -21,7 +21,7 @@ export class JoiValidationPipe implements PipeTransform {
     _metadata?: ArgumentMetadata,
   ): T {
     // First sanitize the input to prevent NoSQL injection
-    const sanitizedValue = sanitizeObject(value) as T;
+    const sanitizedValue = sanitizeObject(value);
 
     // Then validate with Joi schema
     const { error, value: validatedValue } = this.schema.validate(

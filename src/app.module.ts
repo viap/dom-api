@@ -4,6 +4,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TimezoneInterceptor } from './common/interceptors/timezone.interceptor';
 import { UserContextInterceptor } from './common/user-context/user-context.interceptor';
+import { assertRequiredAuthEnv } from './common/utils/required-auth-env';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ApiClientsModule } from './api-clients/api-clients.module';
 import { ApplicationsModule } from './applications/applications.module';
@@ -92,6 +93,10 @@ import { cwd } from 'process';
   ],
 })
 export class AppModule {
+  constructor() {
+    assertRequiredAuthEnv();
+  }
+
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(SanitizationMiddleware)

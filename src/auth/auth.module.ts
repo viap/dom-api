@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ApiClientsModule } from '@/api-clients/api-clients.module';
 import { UsersModule } from '@/users/users.module';
+import { AuthLoginAttemptsService } from './auth-login-attempts.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
@@ -42,7 +43,7 @@ import { AuthService } from './auth.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, AuthLoginAttemptsService],
   exports: [AuthService],
 })
 export class AuthModule {}

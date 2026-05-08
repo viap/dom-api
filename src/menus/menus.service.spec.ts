@@ -117,7 +117,9 @@ describe('MenusService', () => {
 
   it('should create a menu without key and title', async () => {
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
 
     await expect(service.create({ items: [] })).resolves.toMatchObject({
@@ -128,7 +130,9 @@ describe('MenusService', () => {
 
   it('should convert duplicate key db error to conflict', async () => {
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockSave.mockRejectedValue({ code: 11000, keyPattern: { key: 1 } });
 
@@ -139,7 +143,9 @@ describe('MenusService', () => {
 
   it('should convert duplicate page db error to conflict', async () => {
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockSave.mockRejectedValue({ code: 11000, keyPattern: { pageId: 1 } });
 
@@ -150,7 +156,9 @@ describe('MenusService', () => {
 
   it('should reject invalid pageId reference', async () => {
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockPagesService.findReferenceById.mockResolvedValue(null);
 
@@ -197,20 +205,28 @@ describe('MenusService', () => {
 
   it('should return admin menu by pageId', async () => {
     mockMenuModel.findOne.mockReturnValue({
-      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+      lean: jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
     });
 
-    await expect(service.findByPageId(mockGlobalPage._id)).resolves.toMatchObject({
+    await expect(
+      service.findByPageId(mockGlobalPage._id),
+    ).resolves.toMatchObject({
       _id: mockMenu._id,
     });
   });
 
   it('should not wipe items when patch omits items', async () => {
     mockMenuModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+      lean: jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
     });
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     const updated = { ...mockMenu, title: 'Updated' };
     const findByIdAndUpdateExec = jest.fn().mockResolvedValue(updated);
@@ -229,14 +245,22 @@ describe('MenusService', () => {
 
   it('should unset pageId and key when null is provided', async () => {
     mockMenuModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+      lean: jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
     });
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockMenuModel.findByIdAndUpdate.mockReturnValue({
       lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ ...mockMenu, pageId: undefined, key: undefined }),
+        exec: jest.fn().mockResolvedValue({
+          ...mockMenu,
+          pageId: undefined,
+          key: undefined,
+        }),
       }),
     });
 
@@ -251,14 +275,20 @@ describe('MenusService', () => {
 
   it('should convert duplicate conflict from update write', async () => {
     mockMenuModel.findById.mockReturnValue({
-      lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
+      lean: jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(mockMenu) }),
     });
     mockMenuModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      select: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
     });
     mockMenuModel.findByIdAndUpdate.mockReturnValue({
       lean: jest.fn().mockReturnValue({
-        exec: jest.fn().mockRejectedValue({ code: 11000, keyPattern: { key: 1 } }),
+        exec: jest
+          .fn()
+          .mockRejectedValue({ code: 11000, keyPattern: { key: 1 } }),
       }),
     });
 

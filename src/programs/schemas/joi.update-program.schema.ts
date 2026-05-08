@@ -27,8 +27,7 @@ export const updateProgramSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).optional(),
 
-  slug: joiSlugSchema
-    .optional(),
+  slug: joiSlugSchema.optional(),
 
   startDate: joiUtcIsoDateTime.optional(),
   endDate: joiUtcIsoDateTime.optional(),

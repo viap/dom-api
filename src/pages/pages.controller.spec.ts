@@ -103,14 +103,14 @@ describe('PagesController', () => {
   });
 
   it('should constrain id routes to object id regex', () => {
-    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.findOne)).toBe(
-      ':id([0-9a-fA-F]{24})',
-    );
-    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.update)).toBe(
-      ':id([0-9a-fA-F]{24})',
-    );
-    expect(Reflect.getMetadata(PATH_METADATA, PagesController.prototype.remove)).toBe(
-      ':id([0-9a-fA-F]{24})',
-    );
+    expect(
+      Reflect.getMetadata(PATH_METADATA, PagesController.prototype.findOne),
+    ).toBe(':id([0-9a-fA-F]{24})');
+    expect(
+      Reflect.getMetadata(PATH_METADATA, PagesController.prototype.update),
+    ).toBe(':id([0-9a-fA-F]{24})');
+    expect(
+      Reflect.getMetadata(PATH_METADATA, PagesController.prototype.remove),
+    ).toBe(':id([0-9a-fA-F]{24})');
   });
 });

@@ -1,5 +1,8 @@
 import * as Joi from 'joi';
-import { joiObjectId, joiObjectIdWithFallback } from '@/common/schemas/joi.object-id.schema';
+import {
+  joiObjectId,
+  joiObjectIdWithFallback,
+} from '@/common/schemas/joi.object-id.schema';
 import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 
 export const joiCreateTherapySessionSchema = Joi.object({

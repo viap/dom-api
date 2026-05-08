@@ -24,7 +24,9 @@ const blockButtonSchema = Joi.object({
   targetId: Joi.string().trim().max(120).optional(),
   url: Joi.string().trim().uri().optional(),
   openInNewTab: Joi.boolean().default(false).optional(),
-  style: Joi.string().valid('primary', 'secondary', 'ghost', 'outline', 'link').optional(),
+  style: Joi.string()
+    .valid('primary', 'secondary', 'ghost', 'outline', 'link')
+    .optional(),
 })
   .custom((value, helpers) => {
     if (value.type === BlockButtonType.External) {
