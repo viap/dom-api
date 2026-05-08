@@ -56,4 +56,11 @@ if ! cors_smoke_check_all "${PORT}" "${CORS_ORIGINS}"; then
   exit 1
 fi
 
+if ! auth_reason_smoke_check "${PORT}"; then
+  echo "Auth branch smoke check failed."
+  echo "Checking application logs..."
+  pm2 logs domApi --lines 40 --nostream
+  exit 1
+fi
+
 echo "Manual restart completed successfully"

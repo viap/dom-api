@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   const uploadsRoot = join(process.cwd(), 'uploads');
   const corsOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')

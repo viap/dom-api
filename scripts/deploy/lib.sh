@@ -199,6 +199,59 @@ cors_smoke_check_all() {
   fi
 }
 
+assert_auth_reason_in_logs() {
+  local request_id="${1}"
+  local expected_reason="${2}"
+  local logs
+  logs="$(pm2 logs domApi --lines 400 --nostream | tr -d '\r')"
+
+  if echo "${logs}" | grep -F "\"requestId\":\"${request_id}\"" | grep -F "\"reason\":\"${expected_reason}\"" >/dev/null; then
+    return 0
+  fi
+
+  echo "Expected auth reason '${expected_reason}' for requestId '${request_id}' not found in domApi logs" >&2
+  return 1
+}
+
+auth_reason_smoke_check() {
+  local port="${1}"
+  local endpoint="http://localhost:${port}/auth/login/user"
+  local probe_login="__deploy_probe__"
+  local probe_password="__deploy_probe__"
+  local valid_client_request_id
+  local invalid_client_request_id
+  local status_code
+
+  valid_client_request_id="deploy-auth-valid-client-$(date +%s)-$RANDOM"
+  invalid_client_request_id="deploy-auth-invalid-client-$(date +%s)-$RANDOM"
+
+  status_code="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+    -H "Content-Type: application/json" \
+    -H "X-Request-Id: ${valid_client_request_id}" \
+    --data "{\"apiClient\":{\"name\":\"${WEB_CLIENT_NAME}\",\"password\":\"${WEB_CLIENT_PASSWORD}\"},\"user\":{\"login\":\"${probe_login}\",\"password\":\"${probe_password}\"}}")"
+
+  if [ "${status_code}" != "401" ]; then
+    echo "Auth smoke check failed for valid apiClient + bad user probe. Expected 401, got ${status_code}" >&2
+    return 1
+  fi
+
+  status_code="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+    -H "Content-Type: application/json" \
+    -H "X-Request-Id: ${invalid_client_request_id}" \
+    --data "{\"apiClient\":{\"name\":\"${WEB_CLIENT_NAME}\",\"password\":\"__invalid_api_client_password__\"},\"user\":{\"login\":\"${probe_login}\",\"password\":\"${probe_password}\"}}")"
+
+  if [ "${status_code}" != "401" ]; then
+    echo "Auth smoke check failed for invalid apiClient probe. Expected 401, got ${status_code}" >&2
+    return 1
+  fi
+
+  # Give logger a short time to flush structured auth failure records.
+  sleep 1
+
+  assert_auth_reason_in_logs "${valid_client_request_id}" "invalid_user_credentials"
+  assert_auth_reason_in_logs "${invalid_client_request_id}" "invalid_api_client"
+}
+
 pm2_cutover_domapi() {
   echo "Cutting over domApi with PM2..."
   if pm2 describe domApi >/dev/null 2>&1; then

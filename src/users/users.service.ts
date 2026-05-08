@@ -4,10 +4,12 @@ import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
 import { TelegramUserDto } from '@/auth/dto/telegram.dto';
 import {
+  SanitizableObject,
   sanitizeObject,
   validateObjectId,
   validateRoles,
 } from '@/common/utils/mongo-sanitizer';
+import { normalizeLogin } from '@/common/utils/normalize-login';
 import { Role } from '@/roles/enums/roles.enum';
 import { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { SocialNetworks } from '../common/enums/social-networks.enum';
@@ -82,15 +84,27 @@ export class UsersService {
     if (!sanitizedLogin || typeof sanitizedLogin !== 'string') {
       return null;
     }
-    return this.userModel.findOne({ login: sanitizedLogin }).exec();
+    const normalizedLogin = normalizeLogin(sanitizedLogin);
+    if (!normalizedLogin) {
+      return null;
+    }
+    return this.userModel.findOne({ login: normalizedLogin }).exec();
   }
 
   async getByAuthUser(authUser: AuthUserDto): Promise<UserDocument> {
-    const sanitizedAuthUser = sanitizeObject(authUser) as AuthUserDto;
+    const sanitizedAuthUser = sanitizeObject(authUser) as SanitizableObject;
+    const normalizedLogin = normalizeLogin(
+      sanitizedAuthUser.login as string | null | undefined,
+    );
+    const password = sanitizedAuthUser.password as string | null | undefined;
+
+    if (!normalizedLogin || typeof password !== 'string') {
+      return null;
+    }
 
     const user = await this.userModel
       .findOne({
-        login: sanitizedAuthUser.login,
+        login: normalizedLogin,
       })
       .select('+password')
       .exec();
@@ -99,10 +113,7 @@ export class UsersService {
       return null;
     }
 
-    const isPasswordValid = await this.comparePassword(
-      sanitizedAuthUser.password,
-      user.password,
-    );
+    const isPasswordValid = await this.comparePassword(password, user.password);
 
     return isPasswordValid ? user : null;
   }
@@ -158,6 +169,9 @@ export class UsersService {
 
   async create(createData: CreateUserDto): Promise<UserDocument> {
     const userData = { ...createData };
+    if (userData.login) {
+      userData.login = normalizeLogin(userData.login);
+    }
 
     // Validate unique login before creation
     await this.validateUniqueLogin(userData.login);
@@ -201,6 +215,9 @@ export class UsersService {
     }
 
     const userData = { ...updateData };
+    if (userData.login) {
+      userData.login = normalizeLogin(userData.login);
+    }
 
     // Validate unique login before update (excluding current user)
     if (userData.login) {

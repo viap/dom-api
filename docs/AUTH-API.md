@@ -7,6 +7,7 @@ The dom-api authentication system provides secure JWT-based authentication with 
 - **User/Password Authentication**: Traditional username/password authentication
 
 All authentication requires API client validation, providing an additional security layer.
+For web sign-in, use a server-mediated route in `dom-web` so API client secrets stay server-only.
 
 ## Architecture
 
@@ -23,7 +24,10 @@ All authentication requires API client validation, providing an additional secur
 - JWT tokens with HS256 algorithm
 - 24-hour token expiration
 - API client authentication layer
+- Login normalization (`trim` + `lowercase` for `user.login`)
+- Login lockout policy: `5` failed attempts within `15` minutes, lockout for `15` minutes (IP + normalized login)
 - Role-based access control
+- Structured internal auth-failure logging with request correlation IDs
 - Request sanitization middleware
 - Bearer token authorization
 
@@ -69,6 +73,11 @@ All authentication endpoints are prefixed with `/auth`
 - `telegram.last_name`: Optional string
 - `telegram.username`: Optional string
 
+**Runtime Rules**:
+- Telegram login lockout uses the same policy as user login (`5` failed attempts in `15` minutes, then `15` minute lockout).
+- Lockout key for Telegram is source IP + normalized `telegram.id`.
+- Locked attempts return `429 Too Many Requests` with `Retry-After` and `retryAfterSeconds`.
+
 ### 2. User/Password Authentication
 
 **Endpoint**: `POST /auth/login/user`
@@ -101,6 +110,14 @@ All authentication endpoints are prefixed with `/auth`
 - `apiClient.password`: Required string  
 - `user.login`: Required string
 - `user.password`: Required string
+
+**Runtime Rules**:
+- `user.login` is normalized with `trim` + `lowercase` before credential lookup.
+- External error response for invalid credentials/client remains generic (`401 Unauthorized`).
+- Internal failure reasons are logged for operators (`invalid_api_client`, `invalid_user_credentials`).
+- Repeated failures are rate-limited by lockout policy (`5` failures / `15` minutes, lockout `15` minutes).
+- Lockout semantics are explicit: the 5th failed credential is recorded and activates lockout; the 6th and later attempts are blocked during lockout.
+- Locked login attempts return `429 Too Many Requests` with `Retry-After` response header and response body `{ "message": "Too many failed attempts", "retryAfterSeconds": <seconds> }`.
 
 ### 3. Token Validation
 
@@ -248,6 +265,19 @@ Across authenticated modules, any request field that represents a Mongo referenc
 }
 ```
 
+For login endpoints, non-lockout failures stay generic intentionally. Internal logs record failure reason and request correlation details for operations/incident triage.
+
+**429 Too Many Requests** - Login lockout:
+```json
+{
+  "statusCode": 429,
+  "message": "Too many failed attempts",
+  "retryAfterSeconds": 120
+}
+```
+
+`Retry-After` header is returned as seconds remaining in lockout.
+
 **400 Bad Request** - Validation errors:
 ```json
 {
@@ -266,55 +296,45 @@ Across authenticated modules, any request field that represents a Mongo referenc
 - Missing authorization header
 - User not found (username/password auth)
 - Invalid Telegram user data
+- User locked by repeated failed login attempts
 
 ## Integration Guide
 
-### Frontend Integration Example
+### Frontend Integration Example (Server-Mediated Login)
 
 ```typescript
-// Authentication service
-class AuthService {
-  private apiClient = {
-    name: 'web-client',
-    password: process.env.NEXT_PUBLIC_WEB_CLIENT_PASSWORD
-  };
+// Browser/client code (dom-web) calls same-origin route.
+await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    login: 'username',
+    password: 'secret',
+  }),
+});
 
-  async loginWithTelegram(telegramUser: TelegramUser) {
-    const response = await fetch('/auth/login/telegram', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiClient: this.apiClient,
-        telegram: telegramUser
-      })
-    });
-    
-    const { auth_token } = await response.json();
-    localStorage.setItem('token', auth_token);
-    return auth_token;
-  }
+// Server route in dom-web injects API client credentials from server env:
+// API_CLIENT_NAME, API_CLIENT_PASSWORD
+// and forwards to dom-api POST /auth/login/user.
+```
 
-  async loginWithCredentials(login: string, password: string) {
-    const response = await fetch('/auth/login/user', {
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiClient: this.apiClient,
-        user: { login, password }
-      })
-    });
-    
-    const { auth_token } = await response.json();
-    localStorage.setItem('token', auth_token);
-    return auth_token;
-  }
+### Structured Auth Failure Logs (Internal)
 
-  getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
+Example structured log payload from `dom-api`:
+
+```json
+{
+  "event": "auth.login.failure",
+  "reason": "invalid_user_credentials",
+  "requestId": "f1de2d4a-...",
+  "sourceIp": "203.0.113.15",
+  "clientName": "domWeb",
+  "loginFingerprint": "b58e4a0f62f8f6bc",
+  "locked": false
 }
 ```
+
+`reason` is internal-only telemetry for operations and must not be exposed in client-facing error responses.
 
 ### Axios Interceptor Setup
 
