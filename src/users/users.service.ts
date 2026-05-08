@@ -99,12 +99,29 @@ export class UsersService {
       return null;
     }
 
-    const user = await this.userModel
-      .findOne({
-        login: normalizedLogin,
-      })
+    let user = await this.userModel
+      .findOne({ login: normalizedLogin })
       .select('+password')
       .exec();
+
+    // Fallback: find by Telegram username (case-insensitive) if no login match
+    if (!user) {
+      user = await this.userModel
+        .findOne({
+          'contacts.username': { $regex: new RegExp(`^${normalizedLogin}$`, 'i') },
+          'contacts.network': SocialNetworks.Telegram,
+        })
+        .select('+password')
+        .exec();
+
+      // Auto-assign login from Telegram username if not yet set
+      // validateUniqueLogin throws ConflictException (409) if already taken
+      if (user && !user.login) {
+        await this.validateUniqueLogin(normalizedLogin);
+        await this.userModel.findByIdAndUpdate(user._id, { login: normalizedLogin });
+        user.login = normalizedLogin;
+      }
+    }
 
     if (!user || !user.password) {
       return null;
