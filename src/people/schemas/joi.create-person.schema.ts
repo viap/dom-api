@@ -3,7 +3,14 @@ import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
+import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 import { PersonRole } from '../enums/person-role.enum';
+import { WorkFormat } from '../enums/work-format.enum';
+
+const personServiceSchema = Joi.object({
+  title: Joi.string().trim().min(1).max(100).required(),
+  prices: Joi.array().items(joiPriceSchema).min(1).max(5).required(),
+}).unknown(false);
 
 export const createPersonSchema = Joi.object({
   userId: joiObjectId.optional(),
@@ -29,6 +36,21 @@ export const createPersonSchema = Joi.object({
   bio: Joi.string().trim().max(2000).allow('').optional().messages({
     'string.max': 'Bio cannot exceed 2000 characters',
   }),
+
+  education: Joi.string().trim().max(2000).allow('').default('').optional(),
+
+  experience: Joi.string().trim().max(2000).allow('').default('').optional(),
+
+  services: Joi.array().items(personServiceSchema).max(10).default([]),
+
+  workFormat: Joi.array()
+    .items(
+      Joi.string()
+        .trim()
+        .valid(...Object.values(WorkFormat)),
+    )
+    .unique()
+    .default([]),
 
   photoId: joiObjectId.optional(),
 
