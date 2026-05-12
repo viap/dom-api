@@ -1,5 +1,16 @@
 # Release Notes
 
+## 2026-05-12
+
+- `people` now supports `languages` with canonical values: `ru`, `en`, `ka`.
+- `POST /people` defaults `languages` to `['ru']` when omitted.
+- `POST /people` and `PATCH /people/:id` now validate `languages` as a non-empty unique array when provided.
+- Added one-time migration script:
+  - `node scripts/migrate_12052026_people_languages.js`
+  - backfills missing/empty `languages` to `['ru']`
+  - maps legacy aliases `eng -> en`, `ge -> ka`
+  - removes unknown values and deduplicates entries.
+
 ## 2026-05-05
 
 - New public bulk-read routes were added for content collections:

@@ -6,6 +6,7 @@ import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { joiPriceSchema } from '@/common/schemas/joi.price.schema';
 import { PersonRole } from '../enums/person-role.enum';
 import { WorkFormat } from '../enums/work-format.enum';
+import { Languages } from '../enums/languages.enum';
 
 const personServiceSchema = Joi.object({
   title: Joi.string().trim().min(1).max(100).required(),
@@ -51,6 +52,17 @@ export const createPersonSchema = Joi.object({
     )
     .unique()
     .default([]),
+
+  languages: Joi.array()
+    .items(
+      Joi.string()
+        .trim()
+        .valid(...Object.values(Languages)),
+    )
+    .unique()
+    .min(1)
+    .default([Languages.Ru])
+    .optional(),
 
   photoId: joiObjectId.optional(),
 

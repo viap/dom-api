@@ -8,6 +8,7 @@ import {
 } from './person-social-link.schema';
 import { PersonRole } from '../enums/person-role.enum';
 import { WorkFormat } from '../enums/work-format.enum';
+import { Languages } from '../enums/languages.enum';
 import { PersonService, personServiceSchema } from './person-service.schema';
 
 export type PersonDocument = Person &
@@ -41,6 +42,13 @@ export class Person {
 
   @Prop({ type: [String], enum: Object.values(WorkFormat), default: [] })
   workFormat: WorkFormat[];
+
+  @Prop({
+    type: [String],
+    enum: Object.values(Languages),
+    default: [Languages.Ru],
+  })
+  languages: Languages[];
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media' })
   photoId?: mongoose.Schema.Types.ObjectId;

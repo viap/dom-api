@@ -1056,6 +1056,7 @@ Response:
       }
     ],
     "workFormat": ["in person", "online"],
+    "languages": ["ru", "en"],
     "photoId": "661100000000000000000001",
     "contacts": [
       {
@@ -1103,6 +1104,7 @@ Response:
     }
   ],
   "workFormat": ["in person", "online"],
+  "languages": ["ru", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1148,6 +1150,7 @@ Request:
     }
   ],
   "workFormat": ["online"],
+  "languages": ["ka", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1186,6 +1189,7 @@ Response:
     }
   ],
   "workFormat": ["online"],
+  "languages": ["ka", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1223,7 +1227,8 @@ Request:
       "prices": [{ "currency": "eur", "value": 95 }]
     }
   ],
-  "workFormat": ["online"]
+  "workFormat": ["online"],
+  "languages": ["ru"]
 }
 ```
 
@@ -1246,6 +1251,7 @@ Response:
     }
   ],
   "workFormat": ["online"],
+  "languages": ["ru"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {

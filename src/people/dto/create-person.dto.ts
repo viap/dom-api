@@ -3,6 +3,7 @@ import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { Price } from '@/common/schemas/price.schema';
 import { PersonRole } from '../enums/person-role.enum';
 import { WorkFormat } from '../enums/work-format.enum';
+import { Languages } from '../enums/languages.enum';
 
 export interface CreatePersonDto {
   userId?: string;
@@ -17,6 +18,7 @@ export interface CreatePersonDto {
     prices: Array<Price>;
   }>;
   workFormat?: WorkFormat[];
+  languages?: Languages[];
   photoId?: string;
   contacts?: Array<Contact>;
   socialLinks?: Array<{
