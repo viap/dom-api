@@ -87,7 +87,7 @@ export interface GalleryBlockItem {
 
 export interface GalleryBlock extends PageBlockBase {
   type: PageBlockType.Gallery;
-  layout?: 'grid' | 'masonry' | 'slider';
+  layout?: 'grid' | 'carousel' | 'slider';
   items: GalleryBlockItem[];
 }
 

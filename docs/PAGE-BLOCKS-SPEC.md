@@ -299,7 +299,7 @@ type ApplicationFormBlock = PageBlockBase & {
 ```ts
 type GalleryBlock = PageBlockBase & {
   type: 'gallery';
-  layout?: 'grid' | 'masonry' | 'slider';
+  layout?: 'grid' | 'carousel' | 'slider';
   items: Array<{
     mediaId: string;
     title?: string;
