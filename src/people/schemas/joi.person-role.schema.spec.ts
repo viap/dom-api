@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { PersonRole } from '../enums/person-role.enum';
+import { WorkFormat } from '../enums/work-format.enum';
+import { Languages } from '../enums/languages.enum';
 import { createPersonSchema } from './joi.create-person.schema';
 import { personQuerySchema } from './joi.person-query.schema';
 import { personSlugParamsSchema } from './joi.person-slug.params.schema';
@@ -104,5 +106,87 @@ describe('Person role Joi validation', () => {
       expect(updatePersonSchema.validate({ slug }).error).toBeDefined();
       expect(personSlugParamsSchema.validate({ slug }).error).toBeDefined();
     });
+  });
+
+  it('accepts valid work formats on create and update', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        workFormat: [WorkFormat.InPerson, WorkFormat.Online],
+      }).error,
+    ).toBeUndefined();
+
+    expect(
+      updatePersonSchema.validate({
+        workFormat: [WorkFormat.Online],
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it('rejects invalid work formats', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        workFormat: ['hybrid'],
+      }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({
+        workFormat: ['in-person'],
+      }).error,
+    ).toBeDefined();
+  });
+
+  it('accepts valid languages on create and update', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        languages: [Languages.Ru, Languages.En],
+      }).error,
+    ).toBeUndefined();
+
+    expect(
+      updatePersonSchema.validate({
+        languages: [Languages.Ka],
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it('defaults languages to [ru] on create when omitted', () => {
+    const { error, value } = createPersonSchema.validate({
+      slug: 'jane-doe',
+      fullName: 'Jane Doe',
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.languages).toEqual([Languages.Ru]);
+  });
+
+  it('rejects invalid or duplicate languages and empty languages arrays', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        languages: ['eng'],
+      }).error,
+    ).toBeDefined();
+
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        languages: [Languages.Ru, Languages.Ru],
+      }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({
+        languages: [],
+      }).error,
+    ).toBeDefined();
   });
 });

@@ -10,7 +10,7 @@ const spacingValues = ['none', 'sm', 'md', 'lg', 'xl'];
 const variantValues = ['section', 'block', 'element'];
 const buttonStyleValues = ['primary', 'secondary', 'ghost', 'outline', 'link'];
 const mediaPositionValues = ['left', 'right', 'top', 'bottom'];
-const galleryLayoutValues = ['grid', 'masonry', 'slider'];
+const galleryLayoutValues = ['grid', 'carousel', 'slider'];
 
 export const blockButtonSchema = new mongoose.Schema(
   {

@@ -2,7 +2,7 @@ import { TelegramUserDto } from '@/auth/dto/telegram.dto';
 import {
   sanitizeObject,
   validateObjectId,
-  validateRoles
+  validateRoles,
 } from '@/common/utils/mongo-sanitizer';
 import { normalizeLogin } from '@/common/utils/normalize-login';
 import { Role } from '@/roles/enums/roles.enum';
@@ -108,7 +108,9 @@ export class UsersService {
     if (!user) {
       user = await this.userModel
         .findOne({
-          'contacts.username': { $regex: new RegExp(`^${normalizedLogin}$`, 'i') },
+          'contacts.username': {
+            $regex: new RegExp(`^${normalizedLogin}$`, 'i'),
+          },
           'contacts.network': SocialNetworks.Telegram,
         })
         .select('+password')
@@ -118,7 +120,9 @@ export class UsersService {
       // validateUniqueLogin throws ConflictException (409) if already taken
       if (user && !user.login) {
         await this.validateUniqueLogin(normalizedLogin);
-        await this.userModel.findByIdAndUpdate(user._id, { login: normalizedLogin });
+        await this.userModel.findByIdAndUpdate(user._id, {
+          login: normalizedLogin,
+        });
         user.login = normalizedLogin;
       }
     }

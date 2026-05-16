@@ -1047,6 +1047,16 @@ Response:
     "fullName": "Olga Chkheidze",
     "roles": ["speaker", "community"],
     "bio": "Psychotherapist and lecturer.",
+    "education": "MA in Clinical Psychology",
+    "experience": "10 years of private practice",
+    "services": [
+      {
+        "title": "Individual therapy",
+        "prices": [{ "currency": "gel", "value": 120 }]
+      }
+    ],
+    "workFormat": ["in person", "online"],
+    "languages": ["ru", "en"],
     "photoId": "661100000000000000000001",
     "contacts": [
       {
@@ -1085,6 +1095,16 @@ Response:
   "fullName": "Olga Chkheidze",
   "roles": ["speaker", "community"],
   "bio": "Psychotherapist and lecturer.",
+  "education": "MA in Clinical Psychology",
+  "experience": "10 years of private practice",
+  "services": [
+    {
+      "title": "Individual therapy",
+      "prices": [{ "currency": "gel", "value": 120 }]
+    }
+  ],
+  "workFormat": ["in person", "online"],
+  "languages": ["ru", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1121,6 +1141,16 @@ Request:
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator and event host.",
+  "education": "BA in Psychology",
+  "experience": "5 years of facilitation",
+  "services": [
+    {
+      "title": "Facilitated support group",
+      "prices": [{ "currency": "usd", "value": 80 }]
+    }
+  ],
+  "workFormat": ["online"],
+  "languages": ["ka", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1150,6 +1180,16 @@ Response:
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator and event host.",
+  "education": "BA in Psychology",
+  "experience": "5 years of facilitation",
+  "services": [
+    {
+      "title": "Facilitated support group",
+      "prices": [{ "currency": "usd", "value": 80 }]
+    }
+  ],
+  "workFormat": ["online"],
+  "languages": ["ka", "en"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {
@@ -1179,7 +1219,16 @@ Request:
 ```json
 {
   "slug": "nino-m-curator",
-  "bio": "Community moderator, speaker, and curator."
+  "bio": "Community moderator, speaker, and curator.",
+  "experience": "6 years of facilitation",
+  "services": [
+    {
+      "title": "Curator consultation",
+      "prices": [{ "currency": "eur", "value": 95 }]
+    }
+  ],
+  "workFormat": ["online"],
+  "languages": ["ru"]
 }
 ```
 
@@ -1193,6 +1242,16 @@ Response:
   "fullName": "Nino M.",
   "roles": ["team", "speaker"],
   "bio": "Community moderator, speaker, and curator.",
+  "education": "BA in Psychology",
+  "experience": "6 years of facilitation",
+  "services": [
+    {
+      "title": "Curator consultation",
+      "prices": [{ "currency": "eur", "value": 95 }]
+    }
+  ],
+  "workFormat": ["online"],
+  "languages": ["ru"],
   "photoId": "661100000000000000000001",
   "contacts": [
     {

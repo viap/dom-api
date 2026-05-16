@@ -7,6 +7,9 @@ import {
   personSocialLinkSchema,
 } from './person-social-link.schema';
 import { PersonRole } from '../enums/person-role.enum';
+import { WorkFormat } from '../enums/work-format.enum';
+import { Languages } from '../enums/languages.enum';
+import { PersonService, personServiceSchema } from './person-service.schema';
 
 export type PersonDocument = Person &
   Document & { createdAt: Date; updatedAt: Date };
@@ -27,6 +30,25 @@ export class Person {
 
   @Prop({ default: '' })
   bio: string;
+
+  @Prop({ required: true, trim: true, default: '' })
+  education: string;
+
+  @Prop({ required: true, trim: true, default: '' })
+  experience: string;
+
+  @Prop({ required: true, type: [personServiceSchema], default: [] })
+  services: Array<PersonService>;
+
+  @Prop({ type: [String], enum: Object.values(WorkFormat), default: [] })
+  workFormat: WorkFormat[];
+
+  @Prop({
+    type: [String],
+    enum: Object.values(Languages),
+    default: [Languages.Ru],
+  })
+  languages: Languages[];
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media' })
   photoId?: mongoose.Schema.Types.ObjectId;

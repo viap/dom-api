@@ -151,7 +151,7 @@ const ctaBlockSchema = Joi.object({
 const galleryBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Gallery).required(),
-  layout: Joi.string().valid('grid', 'masonry', 'slider').optional(),
+  layout: Joi.string().valid('grid', 'carousel', 'slider').optional(),
   items: Joi.array()
     .items(
       Joi.object({

@@ -512,6 +512,17 @@ Public `GET` routes return only published people.
 - `organizer`
 - `community`
 
+### Allowed work formats
+
+- `in person`
+- `online`
+
+### Allowed languages
+
+- `ru`
+- `en`
+- `ka`
+
 ### Shape
 
 ```ts
@@ -522,6 +533,17 @@ Public `GET` routes return only published people.
   fullName: string;
   roles: Array<'founder' | 'team' | 'speaker' | 'organizer' | 'community'>;
   bio: string;
+  education: string; // max 2000
+  experience: string; // max 2000
+  services: Array<{
+    title: string; // required, max 100
+    prices: Array<{
+      currency: 'gel' | 'rub' | 'usd' | 'eur';
+      value: number;
+    }>; // min 1, max 5
+  }>; // max 10
+  workFormat: Array<'in person' | 'online'>;
+  languages: Array<'ru' | 'en' | 'ka'>; // default ['ru']
   photoId?: string; // Media._id
   contacts: Array<{
     id?: string;
@@ -548,6 +570,17 @@ Public `GET` routes return only published people.
 ```
 
 Social links rule: each `socialLinks[]` item must include at least one of `url` or `value` (or both).
+
+Languages rules:
+
+- create: defaults to `['ru']` when omitted
+- create/update: must be a non-empty unique array when provided
+- only `ru`, `en`, `ka` are allowed
+
+Services rules:
+
+- use lowercase `services[].prices` key only
+- uppercase `services[].Prices` is rejected
 
 ### Frontend use
 
