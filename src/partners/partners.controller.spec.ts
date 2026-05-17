@@ -13,6 +13,7 @@ describe('PartnersController', () => {
       findAll: jest.fn(),
       findManyByIds: jest.fn(),
       findOne: jest.fn(),
+      findOneBySlug: jest.fn(),
       findAllAdmin: jest.fn(),
       findOneAdmin: jest.fn(),
       create: jest.fn(),
@@ -27,6 +28,12 @@ describe('PartnersController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PartnersController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        PartnersController.prototype.findOneBySlug,
+      ),
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, PartnersController.prototype.findMany),

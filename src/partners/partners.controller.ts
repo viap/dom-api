@@ -23,6 +23,7 @@ import { UpdatePartnerDto } from './dto/update-partner.dto';
 import { PartnersService } from './partners.service';
 import { createPartnerSchema } from './schemas/joi.create-partner.schema';
 import { partnerQuerySchema } from './schemas/joi.partner-query.schema';
+import { partnerSlugParamsSchema } from './schemas/joi.partner-slug.params.schema';
 import { updatePartnerSchema } from './schemas/joi.update-partner.schema';
 import { PartnerQueryParams } from './types/query-params.interface';
 
@@ -54,7 +55,19 @@ export class PartnersController {
     return this.partnersService.findOneAdmin(id);
   }
 
-  @Get(':id')
+  // Keep this specific slug route above the ObjectId route below.
+  @Get('slug/:slug')
+  @Public()
+  findOneBySlug(
+    @Param(new JoiValidationPipe(partnerSlugParamsSchema))
+    params: {
+      slug: string;
+    },
+  ) {
+    return this.partnersService.findOneBySlug(params.slug);
+  }
+
+  @Get(':id([0-9a-fA-F]{24})')
   @Public()
   findOne(@Param('id') id: string) {
     return this.partnersService.findOne(id);
@@ -78,7 +91,7 @@ export class PartnersController {
     return this.partnersService.create(createPartnerDto);
   }
 
-  @Patch(':id')
+  @Patch(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   update(
     @Param('id') id: string,
@@ -88,7 +101,7 @@ export class PartnersController {
     return this.partnersService.update(id, updatePartnerDto);
   }
 
-  @Delete(':id')
+  @Delete(':id([0-9a-fA-F]{24})')
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {

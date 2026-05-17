@@ -597,13 +597,14 @@ Public partner organizations.
 ### Routes
 
 - `GET /partners` public
-- `GET /partners/:id` public
+- `GET /partners/slug/:slug` public
+- `GET /partners/:id` public (ObjectId only)
 - `POST /partners/bulk` public
 - `GET /partners/admin` admin/editor
 - `GET /partners/admin/:id` admin/editor
 - `POST /partners` admin/editor
-- `PATCH /partners/:id` admin/editor
-- `DELETE /partners/:id` admin/editor
+- `PATCH /partners/:id` admin/editor (ObjectId only)
+- `DELETE /partners/:id` admin/editor (ObjectId only)
 
 ### Public read behavior
 
@@ -621,6 +622,7 @@ Public `GET` routes return only published partners and never include `contacts`.
 ```ts
 {
   _id: string;
+  slug: string;
   title: string;
   type: 'sponsor' | 'media' | 'education' | 'tech' | 'other';
   description: string;
@@ -651,6 +653,7 @@ Public `GET` routes return only published partners and never include `contacts`.
 
 Link rule: each `links[]` item must include at least one of `url` or `value` (or both).
 Contacts rule: only admin/editor routes (`/partners/admin*`) expose `contacts`.
+Slug rule: `slug` is required on create and must be globally unique in `partners`.
 
 ### Frontend use
 

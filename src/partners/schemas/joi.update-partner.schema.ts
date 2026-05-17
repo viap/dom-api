@@ -2,9 +2,14 @@ import * as Joi from 'joi';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { joiContactSchema } from '@/common/schemas/joi.contacts.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { PartnerType } from '../enums/partner-type.enum';
 
 export const updatePartnerSchema = Joi.object({
+  slug: joiSlugSchema.optional().messages({
+    'string.empty': 'Slug cannot be empty',
+  }),
+
   title: Joi.string().trim().min(1).max(150).optional().messages({
     'string.empty': 'Title cannot be empty',
     'string.max': 'Title cannot exceed 150 characters',

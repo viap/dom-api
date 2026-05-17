@@ -1294,6 +1294,7 @@ Response:
 [
   {
     "_id": "661400000000000000000001",
+    "slug": "mindful-co",
     "title": "Mindful Co",
     "type": "sponsor",
     "description": "Annual conference partner.",
@@ -1313,6 +1314,32 @@ Response:
 ]
 ```
 
+### `GET /partners/slug/mindful-co`
+
+Response:
+
+```json
+{
+  "_id": "661400000000000000000001",
+  "slug": "mindful-co",
+  "title": "Mindful Co",
+  "type": "sponsor",
+  "description": "Annual conference partner.",
+  "logoId": "661100000000000000000020",
+  "links": [
+    {
+      "platform": "instagram",
+      "url": "https://instagram.com/mindful",
+      "value": "@mindful"
+    }
+  ],
+  "isPublished": true,
+  "schemaVersion": 1,
+  "createdAt": "2026-04-10T10:00:00.000Z",
+  "updatedAt": "2026-04-10T10:00:00.000Z"
+}
+```
+
 ### `GET /partners/admin?type=sponsor`
 
 Response:
@@ -1321,6 +1348,7 @@ Response:
 [
   {
     "_id": "661400000000000000000001",
+    "slug": "mindful-co",
     "title": "Mindful Co",
     "type": "sponsor",
     "description": "Annual conference partner.",
@@ -1353,6 +1381,7 @@ Request:
 
 ```json
 {
+  "slug": "education-hub",
   "title": "Education Hub",
   "type": "education",
   "description": "Training partner for the academy track.",
@@ -1383,6 +1412,7 @@ Response:
 ```json
 {
   "_id": "661400000000000000000002",
+  "slug": "education-hub",
   "title": "Education Hub",
   "type": "education",
   "description": "Training partner for the academy track.",
@@ -1417,6 +1447,7 @@ Request:
 
 ```json
 {
+  "slug": "education-hub",
   "description": "Training and scholarship partner."
 }
 ```
@@ -1426,6 +1457,7 @@ Response:
 ```json
 {
   "_id": "661400000000000000000002",
+  "slug": "education-hub",
   "title": "Education Hub",
   "type": "education",
   "description": "Training and scholarship partner.",

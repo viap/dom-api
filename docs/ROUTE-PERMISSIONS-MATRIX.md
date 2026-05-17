@@ -157,6 +157,7 @@ Notes:
 | Method   | Route                 | Access        | Intended UI        |
 | -------- | --------------------- | ------------- | ------------------ |
 | `GET`    | `/partners`           | Public        | Public site, admin |
+| `GET`    | `/partners/slug/:slug`| Public        | Public site, admin |
 | `GET`    | `/partners/:id`       | Public        | Public site, admin |
 | `POST`   | `/partners/bulk`      | Public        | Public site, admin |
 | `GET`    | `/partners/admin`     | Admin, Editor | Admin only         |
@@ -169,6 +170,7 @@ Notes:
 
 - public reads only expose published records
 - partner contacts are only exposed on `/partners/admin` and `/partners/admin/:id`
+- `:id` routes in runtime accept ObjectId values only
 
 ---
 

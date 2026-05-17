@@ -6,6 +6,7 @@ import { updatePartnerSchema } from './joi.update-partner.schema';
 describe('Partner links Joi validation', () => {
   it('accepts valid url-only links on create', () => {
     const { error, value } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
       links: [{ platform: 'instagram', url: 'https://instagram.com/dom' }],
@@ -17,6 +18,7 @@ describe('Partner links Joi validation', () => {
 
   it('defaults links to empty array on create', () => {
     const { error, value } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
     });
@@ -28,6 +30,7 @@ describe('Partner links Joi validation', () => {
 
   it('accepts valid contacts on create', () => {
     const { error } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
       contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
@@ -54,6 +57,7 @@ describe('Partner links Joi validation', () => {
 
   it('accepts valid value-only links on create', () => {
     const { error } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
       links: [{ platform: 'telegram', value: '@dom' }],
@@ -78,6 +82,7 @@ describe('Partner links Joi validation', () => {
 
   it('rejects link entries without url and value', () => {
     const { error } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
       links: [{ platform: 'instagram' }],
@@ -88,6 +93,7 @@ describe('Partner links Joi validation', () => {
 
   it('rejects invalid links platform', () => {
     const { error } = createPartnerSchema.validate({
+      slug: 'dom',
       title: 'DOM',
       type: 'media',
       links: [{ platform: 'facebook', url: 'https://facebook.com/dom' }],
@@ -142,10 +148,38 @@ describe('Partner links Joi validation', () => {
 
     expect(() =>
       pipe.transform({
+        slug: 'dom',
         title: 'DOM',
         type: 'media',
         unexpectedField: 'not-allowed',
       }),
     ).toThrow(BadRequestException);
+  });
+
+  it('requires slug on create', () => {
+    const { error } = createPartnerSchema.validate({
+      title: 'DOM',
+      type: 'media',
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('rejects invalid slug on create', () => {
+    const { error } = createPartnerSchema.validate({
+      slug: 'DOM !!!',
+      title: 'DOM',
+      type: 'media',
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('accepts valid slug on update', () => {
+    const { error } = updatePartnerSchema.validate({
+      slug: 'dom-media',
+    });
+
+    expect(error).toBeUndefined();
   });
 });
