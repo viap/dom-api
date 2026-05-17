@@ -1,10 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -25,6 +26,13 @@ import { UpdatePartnerDto } from './dto/update-partner.dto';
 import { PartnerQueryParams } from './types/query-params.interface';
 import { Partner, PartnerDocument } from './schemas/partner.schema';
 
+type MongoDuplicateSlugError = {
+  code: number;
+  keyPattern?: {
+    slug?: number;
+  };
+};
+
 @Injectable()
 export class PartnersService {
   constructor(
@@ -34,9 +42,17 @@ export class PartnersService {
 
   async create(createPartnerDto: CreatePartnerDto): Promise<PartnerDocument> {
     await this.validateLogo(createPartnerDto.logoId);
+    await this.ensureUniqueSlug(createPartnerDto.slug);
 
     const partner = new this.partnerModel(createPartnerDto);
-    return partner.save();
+    try {
+      return await partner.save();
+    } catch (error) {
+      if (this.isMongoDuplicateSlugError(error)) {
+        throw new ConflictException('Partner with this slug already exists');
+      }
+      throw error;
+    }
   }
 
   async findAll(
@@ -73,6 +89,19 @@ export class PartnersService {
 
     const partner = await this.partnerModel
       .findOne({ _id: validId, isPublished: true })
+      .select({ contacts: 0 })
+      .lean()
+      .exec();
+    if (!partner) {
+      throw new NotFoundException('Partner not found');
+    }
+
+    return partner as PartnerDocument;
+  }
+
+  async findOneBySlug(slug: string): Promise<PartnerDocument> {
+    const partner = await this.partnerModel
+      .findOne({ slug, isPublished: true })
       .select({ contacts: 0 })
       .lean()
       .exec();
@@ -156,15 +185,36 @@ export class PartnersService {
 
     await this.validateLogo(updatePartnerDto.logoId);
 
-    const partner = await this.partnerModel
-      .findByIdAndUpdate(validId, updatePartnerDto, { new: true })
-      .lean()
-      .exec();
-    if (!partner) {
-      throw new NotFoundException('Partner not found');
+    if (updatePartnerDto.slug !== undefined) {
+      const existingPartner = await this.partnerModel
+        .findById(validId)
+        .lean()
+        .exec();
+      if (!existingPartner) {
+        throw new NotFoundException('Partner not found');
+      }
+
+      if (updatePartnerDto.slug !== existingPartner.slug) {
+        await this.ensureUniqueSlug(updatePartnerDto.slug, validId);
+      }
     }
 
-    return partner as PartnerDocument;
+    try {
+      const partner = await this.partnerModel
+        .findByIdAndUpdate(validId, updatePartnerDto, { new: true })
+        .lean()
+        .exec();
+      if (!partner) {
+        throw new NotFoundException('Partner not found');
+      }
+
+      return partner as PartnerDocument;
+    } catch (error) {
+      if (this.isMongoDuplicateSlugError(error)) {
+        throw new ConflictException('Partner with this slug already exists');
+      }
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<boolean> {
@@ -204,5 +254,39 @@ export class PartnersService {
     if (!mediaExists) {
       throw new BadRequestException('Referenced published media not found');
     }
+  }
+
+  private async ensureUniqueSlug(
+    slug?: string,
+    excludeId?: string,
+  ): Promise<void> {
+    if (!slug) {
+      return;
+    }
+
+    const query: FilterQuery<PartnerDocument> = { slug };
+    if (excludeId) {
+      query._id = { $ne: new Types.ObjectId(excludeId) };
+    }
+
+    const existing = await this.partnerModel.findOne(query).lean().exec();
+    if (existing) {
+      throw new ConflictException('Partner with this slug already exists');
+    }
+  }
+
+  private isMongoDuplicateSlugError(
+    error: unknown,
+  ): error is MongoDuplicateSlugError {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    if (!('code' in error) || !('keyPattern' in error)) {
+      return false;
+    }
+
+    const mongoError = error as MongoDuplicateSlugError;
+    return mongoError.code === 11000 && !!mongoError.keyPattern?.slug;
   }
 }

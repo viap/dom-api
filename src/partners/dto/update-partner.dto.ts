@@ -3,6 +3,7 @@ import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { Contact } from '@/common/schemas/contact.schema';
 
 export interface UpdatePartnerDto {
+  slug?: string;
   title?: string;
   type?: PartnerType;
   description?: string;

@@ -335,6 +335,8 @@ Actions:
 
 ### Form fields
 
+- `slug`
+  UI: text input (auto-generated from `title`, editable manually)
 - `title`
   UI: text input
 - `address`

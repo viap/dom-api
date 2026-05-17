@@ -1,5 +1,16 @@
 # Release Notes
 
+## 2026-05-17
+
+- `partners` now require `slug` on create payloads.
+- Added new public read route: `GET /partners/slug/:slug`.
+- `partners` id read/write routes now accept ObjectId-form IDs only.
+- Added migration script:
+  - `node scripts/migrate_17052026_partners_slug.js`
+  - backfills missing/invalid partner slugs
+  - resolves duplicate slugs with deterministic numeric suffixes
+- Partners slug uniqueness is enforced globally in the `partners` collection.
+
 ## 2026-05-12
 
 - `people` now supports `languages` with canonical values: `ru`, `en`, `ka`.

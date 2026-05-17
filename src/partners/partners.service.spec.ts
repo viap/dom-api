@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MediaService } from '@/media/media.service';
@@ -39,11 +39,22 @@ describe('PartnersService', () => {
   const mockFindByIdExec = jest.fn().mockResolvedValue({
     _id: '507f1f77bcf86cd799439041',
     title: 'DOM',
+    slug: 'dom',
     contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
   });
   const mockFindByIdChain = {
     lean: jest.fn().mockReturnThis(),
     exec: mockFindByIdExec,
+  };
+  const mockFindByIdAndUpdateExec = jest.fn().mockResolvedValue({
+    _id: '507f1f77bcf86cd799439041',
+    title: 'DOM',
+    slug: 'dom',
+    contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
+  });
+  const mockFindByIdAndUpdateChain = {
+    lean: jest.fn().mockReturnThis(),
+    exec: mockFindByIdAndUpdateExec,
   };
 
   const mockPartnerModel = Object.assign(
@@ -61,6 +72,7 @@ describe('PartnersService', () => {
         ),
       findOne: jest.fn().mockReturnValue(mockFindOneChain),
       findById: jest.fn().mockReturnValue(mockFindByIdChain),
+      findByIdAndUpdate: jest.fn().mockReturnValue(mockFindByIdAndUpdateChain),
     },
   );
   const mockMediaService = {
@@ -86,6 +98,13 @@ describe('PartnersService', () => {
     mockFindByIdExec.mockResolvedValue({
       _id: '507f1f77bcf86cd799439041',
       title: 'DOM',
+      slug: 'dom',
+      contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
+    });
+    mockFindByIdAndUpdateExec.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439041',
+      title: 'DOM',
+      slug: 'dom',
       contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
     });
   });
@@ -95,6 +114,7 @@ describe('PartnersService', () => {
 
     await expect(
       service.create({
+        slug: 'dom',
         title: 'DOM',
         type: PartnerType.Media,
         logoId: '507f1f77bcf86cd799439041',
@@ -114,6 +134,12 @@ describe('PartnersService', () => {
     expect(mockFindOneChain.select).toHaveBeenCalledWith({ contacts: 0 });
   });
 
+  it('should exclude contacts from public partner slug detail', async () => {
+    await service.findOneBySlug('dom');
+
+    expect(mockFindOneChain.select).toHaveBeenCalledWith({ contacts: 0 });
+  });
+
   it('should include contacts for admin partner list', async () => {
     await service.findAllAdmin({});
 
@@ -124,5 +150,39 @@ describe('PartnersService', () => {
     const partner = await service.findOneAdmin('507f1f77bcf86cd799439041');
 
     expect(partner.contacts).toBeDefined();
+  });
+
+  it('should reject duplicate slug on create', async () => {
+    mockFindOneExec.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439042',
+      slug: 'dom',
+    });
+
+    await expect(
+      service.create({
+        slug: 'dom',
+        title: 'DOM',
+        type: PartnerType.Media,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate slug on update when slug changes', async () => {
+    mockFindByIdExec.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439041',
+      title: 'DOM',
+      slug: 'old-dom',
+      contacts: [{ network: 'telegram', username: '@dom', hidden: false }],
+    });
+    mockFindOneExec.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439042',
+      slug: 'dom',
+    });
+
+    await expect(
+      service.update('507f1f77bcf86cd799439041', {
+        slug: 'dom',
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 });

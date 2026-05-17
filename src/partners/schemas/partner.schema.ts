@@ -10,6 +10,9 @@ export type PartnerDocument = Partner &
 @Schema({ timestamps: true })
 export class Partner {
   @Prop({ required: true, trim: true })
+  slug: string;
+
+  @Prop({ required: true, trim: true })
   title: string;
 
   @Prop({ required: true, enum: Object.values(PartnerType) })
@@ -37,3 +40,4 @@ export class Partner {
 export const partnerSchema = SchemaFactory.createForClass(Partner);
 partnerSchema.index({ isPublished: 1, type: 1 });
 partnerSchema.index({ title: 1 });
+partnerSchema.index({ slug: 1 }, { unique: true });
