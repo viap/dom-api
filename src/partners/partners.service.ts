@@ -20,18 +20,12 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
+import { isMongoDuplicateSlugError } from '@/common/utils/mongo-duplicate-slug-error';
 import { MediaService } from '@/media/media.service';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
 import { PartnerQueryParams } from './types/query-params.interface';
 import { Partner, PartnerDocument } from './schemas/partner.schema';
-
-type MongoDuplicateSlugError = {
-  code: number;
-  keyPattern?: {
-    slug?: number;
-  };
-};
 
 @Injectable()
 export class PartnersService {
@@ -48,7 +42,7 @@ export class PartnersService {
     try {
       return await partner.save();
     } catch (error) {
-      if (this.isMongoDuplicateSlugError(error)) {
+      if (isMongoDuplicateSlugError(error)) {
         throw new ConflictException('Partner with this slug already exists');
       }
       throw error;
@@ -210,7 +204,7 @@ export class PartnersService {
 
       return partner as PartnerDocument;
     } catch (error) {
-      if (this.isMongoDuplicateSlugError(error)) {
+      if (isMongoDuplicateSlugError(error)) {
         throw new ConflictException('Partner with this slug already exists');
       }
       throw error;
@@ -273,20 +267,5 @@ export class PartnersService {
     if (existing) {
       throw new ConflictException('Partner with this slug already exists');
     }
-  }
-
-  private isMongoDuplicateSlugError(
-    error: unknown,
-  ): error is MongoDuplicateSlugError {
-    if (!error || typeof error !== 'object') {
-      return false;
-    }
-
-    if (!('code' in error) || !('keyPattern' in error)) {
-      return false;
-    }
-
-    const mongoError = error as MongoDuplicateSlugError;
-    return mongoError.code === 11000 && !!mongoError.keyPattern?.slug;
   }
 }
