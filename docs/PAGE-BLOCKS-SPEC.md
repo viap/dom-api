@@ -266,7 +266,6 @@ type CtaBlock = PageBlockBase & {
 type HeroBlock = PageBlockBase & {
   type: 'hero';
   backgroundMedia?: MediaRef;
-  overlayStyle?: string;
   buttons?: BlockButton[];
   items?: Array<{
     icon?: string;

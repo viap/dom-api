@@ -138,7 +138,6 @@ const heroBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Hero).required(),
   backgroundMedia: mediaRefSchema.optional(),
-  overlayStyle: Joi.string().trim().max(120).optional(),
   items: Joi.array().items(heroItemSchema).optional(),
 });
 

@@ -126,7 +126,6 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
 export const heroBlockSchema = new mongoose.Schema(
   {
     backgroundMedia: { type: mediaRefSchema },
-    overlayStyle: { type: String },
     items: { type: [heroItemSchema], default: [] },
   },
   { _id: false, id: false, strict: 'throw' },
