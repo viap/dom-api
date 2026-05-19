@@ -112,6 +112,8 @@ type MediaRef = {
 };
 ```
 
+When a referenced media item is deleted, the API automatically cleans up block references within a MongoDB transaction: RichText `media` and Hero `backgroundMedia` fields are unset, and Gallery items referencing the deleted media are removed (empty galleries are removed entirely).
+
 ### 3.3 Entity Selection
 
 ```ts

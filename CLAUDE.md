@@ -92,6 +92,14 @@ All entities use Mongoose schemas with two types:
 - `ws/`: WebSocket gateway for real-time communication
 - `roles/`: Role-based access control with decorators and guards
 
+### Media Reference Cleanup
+
+When a media item is deleted, `MediaService.remove()` cleans up all references inside a MongoDB transaction. MediaModule imports the foreign schemas directly (Page, DomainEvent, Person, Partner) to avoid circular module dependencies.
+
+**Key file:** `src/media/media.service.ts` — contains `cleanupPageReferences`, `cleanupEventReferences`, `cleanupPeopleReferences`, `cleanupPartnerReferences`.
+
+When adding a new entity that references media, add a new cleanup method in `MediaService` and register the entity's schema in `MediaModule`.
+
 ### Global Providers
 
 These are registered once in `AppModule` and apply to every route automatically. Never add them to individual controllers.

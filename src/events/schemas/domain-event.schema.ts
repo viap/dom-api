@@ -91,6 +91,7 @@ export class DomainEvent {
 }
 
 export const domainEventSchema = SchemaFactory.createForClass(DomainEvent);
+domainEventSchema.index({ mediaId: 1 }, { sparse: true });
 domainEventSchema.index({ domainId: 1, slug: 1 }, { unique: true });
 domainEventSchema.index({ domainId: 1, status: 1, startAt: 1 });
 domainEventSchema.index(

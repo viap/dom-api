@@ -4,6 +4,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { imageSize } from 'image-size';
 import { copyFile, mkdir, unlink, writeFile } from 'fs/promises';
 import sharp from 'sharp';
+import { DomainEvent } from '@/events/schemas/domain-event.schema';
+import { PageBlockType } from '@/pages/enums/page-block-type.enum';
+import { Page } from '@/pages/schemas/page.schema';
+import { Partner } from '@/partners/schemas/partner.schema';
+import { Person } from '@/people/schemas/person.schema';
 import { MediaKind } from './enums/media-kind.enum';
 import { MediaService } from './media.service';
 import { Media } from './schemas/media.schema';
@@ -74,6 +79,12 @@ describe('MediaService', () => {
     exec: jest.fn().mockResolvedValue(result),
   });
 
+  const createLeanChain = (result: unknown) => ({
+    select: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockResolvedValue(result),
+  });
+
   const mockMediaModel = Object.assign(
     jest.fn().mockImplementation((payload) => {
       const instance = {
@@ -95,6 +106,26 @@ describe('MediaService', () => {
     },
   );
 
+  const mockPageModel = {
+    find: jest.fn(),
+    updateOne: jest.fn(),
+  };
+
+  const mockDomainEventModel = {
+    find: jest.fn(),
+    updateMany: jest.fn(),
+  };
+
+  const mockPersonModel = {
+    find: jest.fn(),
+    updateMany: jest.fn(),
+  };
+
+  const mockPartnerModel = {
+    find: jest.fn(),
+    updateMany: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -102,6 +133,22 @@ describe('MediaService', () => {
         {
           provide: getModelToken(Media.name),
           useValue: mockMediaModel,
+        },
+        {
+          provide: getModelToken(Page.name),
+          useValue: mockPageModel,
+        },
+        {
+          provide: getModelToken(DomainEvent.name),
+          useValue: mockDomainEventModel,
+        },
+        {
+          provide: getModelToken(Person.name),
+          useValue: mockPersonModel,
+        },
+        {
+          provide: getModelToken(Partner.name),
+          useValue: mockPartnerModel,
         },
       ],
     }).compile();
@@ -116,6 +163,26 @@ describe('MediaService', () => {
       width: 1200,
       height: 800,
       type: 'png',
+    });
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    });
+    mockPageModel.updateOne.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+    });
+    mockDomainEventModel.find.mockReturnValue(createLeanChain([]));
+    mockPersonModel.find.mockReturnValue(createLeanChain([]));
+    mockPartnerModel.find.mockReturnValue(createLeanChain([]));
+    mockDomainEventModel.updateMany.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+    });
+    mockPersonModel.updateMany.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+    });
+    mockPartnerModel.updateMany.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     });
   });
 
@@ -439,6 +506,10 @@ describe('MediaService', () => {
   });
 
   it('should delete uploaded files after removing the record', async () => {
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
     mockMediaModel.findByIdAndDelete.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(uploadedMedia),
@@ -454,6 +525,10 @@ describe('MediaService', () => {
   });
 
   it('should tolerate missing thumbnail files during delete', async () => {
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
     mockMediaModel.findByIdAndDelete.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(uploadedMedia),
@@ -466,6 +541,10 @@ describe('MediaService', () => {
   });
 
   it('should warn and continue when non-ENOENT cleanup fails', async () => {
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
     mockMediaModel.findByIdAndDelete.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(uploadedMedia),
@@ -485,8 +564,119 @@ describe('MediaService', () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  it('should throw not found if media is missing in delete', async () => {
+  it('should cleanup page/event/people/partner references on delete', async () => {
+    const pageDoc = {
+      _id: '507f1f77bcf86cd799439211',
+      blocks: [
+        {
+          id: 'r1',
+          type: PageBlockType.RichText,
+          media: { mediaId: uploadedMediaId, alt: 'alt' },
+        },
+        {
+          id: 'h1',
+          type: PageBlockType.Hero,
+          backgroundMedia: { mediaId: uploadedMediaId },
+        },
+        {
+          id: 'g1',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: uploadedMediaId }],
+        },
+        {
+          id: 'g2',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: uploadedMediaId }, { mediaId: 'other-media' }],
+        },
+      ],
+    };
+
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
     mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([pageDoc]),
+    });
+
+    mockDomainEventModel.find.mockReturnValue(
+      createLeanChain([{ _id: '507f1f77bcf86cd799439311' }]),
+    );
+    mockPersonModel.find.mockReturnValue(
+      createLeanChain([{ _id: '507f1f77bcf86cd799439322' }]),
+    );
+    mockPartnerModel.find.mockReturnValue(
+      createLeanChain([{ _id: '507f1f77bcf86cd799439333' }]),
+    );
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+
+    expect(mockPageModel.updateOne).toHaveBeenCalledWith(
+      { _id: pageDoc._id },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          blocks: expect.any(Array),
+        }),
+      }),
+      expect.objectContaining({ runValidators: true }),
+    );
+    const updatedBlocks = mockPageModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, unknown>>;
+    expect(updatedBlocks.some((block) => block.id === 'g1')).toBe(false);
+    const remainingGallery = updatedBlocks.find((block) => block.id === 'g2');
+    expect(remainingGallery.items).toEqual([{ mediaId: 'other-media' }]);
+
+    expect(mockDomainEventModel.updateMany).toHaveBeenCalledWith(
+      { mediaId: uploadedMediaId },
+      { $unset: { mediaId: '' } },
+    );
+    expect(mockPersonModel.updateMany).toHaveBeenCalledWith(
+      { photoId: uploadedMediaId },
+      { $unset: { photoId: '' } },
+    );
+    expect(mockPartnerModel.updateMany).toHaveBeenCalledWith(
+      { logoId: uploadedMediaId },
+      { $unset: { logoId: '' } },
+    );
+  });
+
+  it('should not delete media when cleanup fails', async () => {
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([{
+        _id: '507f1f77bcf86cd799439411',
+        blocks: [{
+          id: 'g1',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: uploadedMediaId }],
+        }],
+      }]),
+    });
+    mockPageModel.updateOne.mockReturnValue({
+      exec: jest.fn().mockRejectedValue(new Error('page update failed')),
+    });
+
+    await expect(service.remove(uploadedMediaId)).rejects.toThrow(
+      'page update failed',
+    );
+    expect(mockMediaModel.findByIdAndDelete).not.toHaveBeenCalled();
+    expect(unlink).not.toHaveBeenCalled();
+  });
+
+  it('should throw not found if media is missing in delete', async () => {
+    mockMediaModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
       }),
@@ -540,6 +730,65 @@ describe('MediaService', () => {
     expect(mockMediaModel.find).toHaveBeenCalledWith({
       folder: 'events',
     });
+  });
+
+  it('should filter admin media reads by publication status when provided', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAllAdmin({
+      isPublished: 'true',
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+    });
+
+    await service.findAllAdmin({
+      isPublished: 'false',
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenLastCalledWith({
+      isPublished: false,
+    });
+  });
+
+  it('should filter admin media reads by boolean publication status', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAllAdmin({
+      isPublished: true,
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+    });
+
+    await service.findAllAdmin({
+      isPublished: false,
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenLastCalledWith({
+      isPublished: false,
+    });
+  });
+
+  it('should keep admin media reads unfiltered by publication status when omitted', async () => {
+    mockMediaModel.find.mockReturnValue(createFindChain([uploadedMedia]));
+
+    await service.findAllAdmin({
+      limit: '10',
+      offset: '0',
+    });
+
+    expect(mockMediaModel.find).toHaveBeenCalledWith({});
   });
 
   it('should return sorted non-empty admin folders', async () => {

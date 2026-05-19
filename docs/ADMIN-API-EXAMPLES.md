@@ -918,6 +918,27 @@ Content-Type: application/json
 {"message":"Media thumbnail not found","error":"Not Found","statusCode":404}
 ```
 
+### `GET /media/admin?isPublished=true`
+
+Response:
+
+```json
+[
+  {
+    "_id": "682a...",
+    "kind": "image",
+    "url": "/media/682a.../content",
+    "title": "Hero",
+    "isPublished": true
+  }
+]
+```
+
+Notes:
+
+- `isPublished=true` returns published media only; `isPublished=false` returns unpublished only; omitting shows all
+- combinable with other filters (`kind`, `search`, `folder`, `createdFrom`, `createdTo`)
+
 ### `DELETE /media/:id`
 
 Response:
@@ -925,6 +946,11 @@ Response:
 ```http
 204 No Content
 ```
+
+Notes:
+
+- deletion runs inside a MongoDB transaction that cleans up references in Pages (block media), Events (`mediaId`), People (`photoId`), and Partners (`logoId`)
+- file cleanup (original + thumbnail) is best-effort after the transaction commits
 
 ---
 

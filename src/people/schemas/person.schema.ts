@@ -76,5 +76,6 @@ personSchema.index(
     },
   },
 );
+personSchema.index({ photoId: 1 }, { sparse: true });
 personSchema.index({ isPublished: 1, fullName: 1 });
 personSchema.index({ userId: 1 }, { sparse: true });

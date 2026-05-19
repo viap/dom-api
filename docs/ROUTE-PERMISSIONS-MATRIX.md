@@ -70,6 +70,8 @@ Related docs:
 Notes:
 
 - public reads only expose published records
+- `GET /media/admin` supports `isPublished` boolean filter
+- `DELETE /media/:id` uses a transaction to clean up references in Pages, Events, People, and Partners
 
 ---
 

@@ -38,6 +38,7 @@ export class Partner {
 }
 
 export const partnerSchema = SchemaFactory.createForClass(Partner);
+partnerSchema.index({ logoId: 1 }, { sparse: true });
 partnerSchema.index({ isPublished: 1, type: 1 });
 partnerSchema.index({ title: 1 });
 partnerSchema.index({ slug: 1 }, { unique: true });

@@ -364,6 +364,7 @@ Admin:
 
 - `limit`
 - `offset`
+- `isPublished` boolean filter (`true` = published only, `false` = unpublished only, omitted = all)
 - `kind`
 - `search` partial match on `title`
 - `folder` exact match
@@ -424,6 +425,17 @@ Admin:
 - image references for `people`, `partners`, and page blocks
 - uploaded asset rendering through the stored `url`, `GET /media/:id/content`, or `GET /media/:id/thumbnail`
 - frontend apps such as `dom-web` may proxy uploaded media through their own same-origin route while still consuming the stored `url`
+
+### Deletion behavior
+
+- `DELETE /media/:id` uses a MongoDB transaction to atomically:
+  1. Clean up references in Pages (removes media from RichText, Hero, and Gallery blocks; removes empty Gallery blocks entirely)
+  2. Unset `mediaId` on matching Events
+  3. Unset `photoId` on matching People
+  4. Unset `logoId` on matching Partners
+  5. Delete the media record
+- File cleanup (original + thumbnail) happens after the transaction commits on a best-effort basis
+- Requires MongoDB replica set or mongos; returns `500` if transactions are unavailable
 
 ### Selection guidance
 
