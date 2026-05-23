@@ -65,6 +65,88 @@ describe('DomainsService', () => {
     expect(result).toEqual(domain);
   });
 
+  it('throws BadRequestException for invalid slug format in getActiveBySlug', async () => {
+    await expect(service.getActiveBySlug('Invalid Slug')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.getActiveBySlug('Invalid Slug')).rejects.toThrow(
+      'Invalid domain slug format',
+    );
+    expect(mockDomainModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('throws BadRequestException for slug with leading/trailing hyphens', async () => {
+    await expect(service.getActiveBySlug('-academy')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.getActiveBySlug('academy-')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.getActiveBySlug('academy--test')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(mockDomainModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('throws BadRequestException for slug exceeding 120 characters', async () => {
+    const longSlug = 'a'.repeat(121);
+    await expect(service.getActiveBySlug(longSlug)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(mockDomainModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('trims whitespace from slug before validation', async () => {
+    const domain = {
+      _id: '507f1f77bcf86cd799439042',
+      slug: 'academy',
+      isActive: true,
+    };
+    mockDomainModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(domain),
+    });
+
+    const result = await service.getActiveBySlug('  academy  ');
+
+    expect(mockDomainModel.findOne).toHaveBeenCalledWith({
+      slug: 'academy',
+      isActive: true,
+    });
+    expect(result).toEqual(domain);
+  });
+
+  it('throws NotFoundException when getActiveBySlug does not find an active domain', async () => {
+    mockDomainModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(service.getActiveBySlug('academy')).rejects.toThrow(
+      'Active domain not found',
+    );
+  });
+
+  it('returns active domain by slug', async () => {
+    const domain = {
+      _id: '507f1f77bcf86cd799439042',
+      slug: 'academy',
+      isActive: true,
+    };
+    mockDomainModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(domain),
+    });
+
+    const result = await service.getActiveBySlug('academy');
+
+    expect(mockDomainModel.findOne).toHaveBeenCalledWith({
+      slug: 'academy',
+      isActive: true,
+    });
+    expect(result).toEqual(domain);
+  });
+
   it('findOne queries active domains only for public access', async () => {
     const domain = {
       _id: '507f1f77bcf86cd799439041',
