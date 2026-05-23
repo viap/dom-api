@@ -135,6 +135,7 @@ Reference taxonomy for the four main domains.
 ### Routes
 
 - `GET /domains` public
+- `GET /domains/slug/:slug` public
 - `GET /domains/:id` public
 - `POST /domains/bulk` public
 - `POST /domains` admin only
@@ -161,10 +162,12 @@ Reference taxonomy for the four main domains.
 
 - populate domain switchers
 - validate domain ownership for `programs`, `events`, `applications`
+- resolve domain SEO for public metadata generation by domain slug
 
 Public read behavior:
 
 - `GET /domains/:id` returns only active domains
+- `GET /domains/slug/:slug` returns only active domains and responds with `404` when slug format is invalid or active domain is missing
 - `POST /domains/bulk` returns only active domains
 
 ---

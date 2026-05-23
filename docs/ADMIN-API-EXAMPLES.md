@@ -110,6 +110,38 @@ Response:
 ]
 ```
 
+### `GET /domains/slug/academy`
+
+Response:
+
+```json
+{
+  "_id": "661000000000000000000003",
+  "code": "academy",
+  "title": "Academy",
+  "slug": "academy",
+  "isActive": true,
+  "order": 3,
+  "seo": {
+    "title": "Academy",
+    "description": "Educational direction"
+  },
+  "createdAt": "2026-04-10T10:15:00.000Z",
+  "updatedAt": "2026-04-10T10:20:00.000Z"
+}
+```
+
+### `GET /domains/slug/unknown-domain`
+
+Response:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Active domain not found"
+}
+```
+
 ### `POST /domains`
 
 Request:

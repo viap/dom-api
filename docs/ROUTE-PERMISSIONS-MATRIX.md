@@ -48,6 +48,7 @@ Related docs:
 | Method   | Route          | Access | Intended UI        |
 | -------- | -------------- | ------ | ------------------ |
 | `GET`    | `/domains`     | Public | Public site, admin |
+| `GET`    | `/domains/slug/:slug` | Public | Public site, admin |
 | `GET`    | `/domains/:id` | Public | Public site, admin |
 | `POST`   | `/domains/bulk`| Public | Public site, admin |
 | `POST`   | `/domains`     | Admin  | Admin only         |
