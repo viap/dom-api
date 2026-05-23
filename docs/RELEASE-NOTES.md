@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2026-05-23
+
+- `pages` now include `isTitleVisible` with default `true`.
+- `POST /pages` now defaults `isTitleVisible=true` when omitted.
+- `PATCH /pages/:id` accepts optional `isTitleVisible` as a partial update field.
+- Added one-time migration script:
+  - `node scripts/migrate_23052026_pages_isTitleVisible.js`
+  - backfills missing `pages.isTitleVisible` to `true`
+- API responses temporarily keep a compatibility fallback and return `isTitleVisible: true` when legacy documents still miss the field.
+
 ## 2026-05-18
 
 - `DELETE /media/:id` now uses MongoDB transactions to atomically clean up references across Pages (block media refs), Events (`mediaId`), People (`photoId`), and Partners (`logoId`).

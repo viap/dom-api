@@ -36,6 +36,9 @@ export class Page {
   @Prop({ required: true, default: false })
   isHomepage: boolean;
 
+  @Prop({ required: true, default: true })
+  isTitleVisible: boolean;
+
   @Prop({ type: mongoose.Schema.Types.Mixed })
   seo?: Record<string, string>;
 

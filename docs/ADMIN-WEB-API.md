@@ -207,6 +207,7 @@ Public page responses:
 - include `blocks`
 - omit blocks where `isVisible === false`
 - may omit unresolved `richText.relatedPeople` entries instead of failing the page
+- always include `isTitleVisible` (`true` when not explicitly set on legacy records)
 
 ### Query params
 
@@ -224,6 +225,7 @@ Public page responses:
   title: string;
   status: 'draft' | 'published';
   isHomepage: boolean;
+  isTitleVisible: boolean;
   seo?: Record<string, string>;
   blocks: PageBlock[];
   schemaVersion: number;

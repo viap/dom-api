@@ -236,6 +236,27 @@ describe('createPageSchema', () => {
     expect(error).toBeUndefined();
   });
 
+  it('should default isTitleVisible to true on create', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Home',
+      slug: 'home',
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.isTitleVisible).toBe(true);
+  });
+
+  it('should allow explicit isTitleVisible false on create', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Home',
+      slug: 'home',
+      isTitleVisible: false,
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.isTitleVisible).toBe(false);
+  });
+
   it('should allow empty blocks on update', () => {
     const { error } = updatePageSchema.validate({
       blocks: [],
@@ -247,6 +268,14 @@ describe('createPageSchema', () => {
   it('should reject invalid isHomepage type on update', () => {
     const { error } = updatePageSchema.validate({
       isHomepage: 'yes',
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject invalid isTitleVisible type on update', () => {
+    const { error } = updatePageSchema.validate({
+      isTitleVisible: 'yes',
     });
 
     expect(error).toBeDefined();

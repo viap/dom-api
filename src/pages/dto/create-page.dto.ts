@@ -7,6 +7,7 @@ export interface CreatePageDto {
   title: string;
   status?: PageStatus;
   isHomepage?: boolean;
+  isTitleVisible?: boolean;
   seo?: Record<string, string>;
   blocks?: PageBlock[];
 }

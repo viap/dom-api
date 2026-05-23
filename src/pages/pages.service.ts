@@ -82,6 +82,7 @@ export class PagesService {
     }
     const status = createPageDto.status || PageStatus.Draft;
     const isHomepage = createPageDto.isHomepage === true;
+    const isTitleVisible = createPageDto.isTitleVisible !== false;
 
     this.ensurePublishedHomepage(status, isHomepage);
     await this.ensureUniqueSlug(createPageDto.slug);
@@ -95,6 +96,7 @@ export class PagesService {
 
     const page = new this.pageModel({
       ...createPageDto,
+      isTitleVisible,
       blocks: normalizedBlocks,
     });
     return page.save();
@@ -277,7 +279,7 @@ export class PagesService {
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
 
-    return this.pageModel
+    const pages = await this.pageModel
       .find({
         domainId: { $exists: false },
       })
@@ -286,6 +288,10 @@ export class PagesService {
       .limit(limit)
       .lean()
       .exec();
+
+    return pages.map((page) =>
+      this.normalizePageTitleVisibility(page as Record<string, unknown>),
+    );
   }
 
   async findAllAdmin(
@@ -298,13 +304,17 @@ export class PagesService {
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
 
-    return this.pageModel
+    const pages = await this.pageModel
       .find({})
       .sort({ updatedAt: -1, title: 1 })
       .skip(offset)
       .limit(limit)
       .lean()
       .exec();
+
+    return pages.map((page) =>
+      this.normalizePageTitleVisibility(page as Record<string, unknown>),
+    );
   }
 
   async findAllByDomainIdAdmin(queryParams: {
@@ -327,13 +337,17 @@ export class PagesService {
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
 
-    return this.pageModel
+    const pages = await this.pageModel
       .find(filter)
       .sort({ updatedAt: -1, title: 1 })
       .skip(offset)
       .limit(limit)
       .lean()
       .exec();
+
+    return pages.map((page) =>
+      this.normalizePageTitleVisibility(page as Record<string, unknown>),
+    );
   }
 
   async findAdminOne(id: string): Promise<PageDocument> {
@@ -347,7 +361,7 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return page as PageDocument;
+    return this.normalizePageTitleVisibility(page as Record<string, unknown>);
   }
 
   async update(
@@ -380,6 +394,10 @@ export class PagesService {
     const isHomepage = hasIsHomepageField
       ? updatePageDto.isHomepage === true
       : existingPage.isHomepage === true;
+    const hasIsTitleVisibleField = Object.prototype.hasOwnProperty.call(
+      updatePageDto,
+      'isTitleVisible',
+    );
 
     this.ensurePublishedHomepage(status, isHomepage);
 
@@ -408,6 +426,9 @@ export class PagesService {
     if (hasIsHomepageField) {
       updateData.isHomepage = isHomepage;
     }
+    if (hasIsTitleVisibleField) {
+      updateData.isTitleVisible = updatePageDto.isTitleVisible !== false;
+    }
     if (updatePageDto.seo !== undefined) {
       updateData.seo = updatePageDto.seo;
     }
@@ -429,7 +450,7 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return page as PageDocument;
+    return this.normalizePageTitleVisibility(page as Record<string, unknown>);
   }
 
   async remove(id: string): Promise<boolean> {
@@ -791,10 +812,19 @@ export class PagesService {
       publicBlocks.push(typedBlock);
     }
 
-    return {
+    return this.normalizePageTitleVisibility({
       ...(page as unknown as PageDocument),
       blocks: publicBlocks as mongoose.Types.Array<PageBlock>,
-    } as unknown as PageDocument;
+    } as unknown as Record<string, unknown>);
+  }
+
+  private normalizePageTitleVisibility(
+    page: Record<string, unknown>,
+  ): PageDocument {
+    return {
+      ...(page as unknown as PageDocument),
+      isTitleVisible: page.isTitleVisible === false ? false : true,
+    } as PageDocument;
   }
 
   private async toPublicRichTextBlock(

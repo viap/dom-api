@@ -231,6 +231,8 @@ Response:
   "slug": "privacy-policy",
   "title": "Privacy Policy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -254,6 +256,8 @@ Response:
     "slug": "about-academy",
     "title": "About Academy",
     "status": "published",
+    "isHomepage": false,
+    "isTitleVisible": true,
     "seo": {
       "title": "About Academy",
       "description": "Learn about our academy."
@@ -278,6 +282,7 @@ Response:
   "title": "About Academy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -299,6 +304,7 @@ Request:
   "slug": "about-academy",
   "title": "About Academy",
   "status": "published",
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -327,6 +333,8 @@ Response:
   "slug": "about-academy",
   "title": "About Academy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -359,6 +367,7 @@ Request:
   "title": "About",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {},
   "blocks": []
 }
@@ -373,6 +382,7 @@ Response:
   "title": "About",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {},
   "blocks": [],
   "schemaVersion": 1,
@@ -393,6 +403,7 @@ Response:
   "title": "About Academy",
   "status": "draft",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -436,6 +447,7 @@ Response:
     "title": "Privacy Policy",
     "status": "published",
     "isHomepage": false,
+    "isTitleVisible": true,
     "seo": {
       "title": "Privacy Policy",
       "description": "Privacy and data handling."
@@ -458,6 +470,7 @@ Request:
   "title": "Privacy Policy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -473,6 +486,8 @@ Response:
   "slug": "privacy-policy",
   "title": "Privacy Policy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -503,6 +518,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -520,7 +536,8 @@ Request:
 ```json
 {
   "status": "published",
-  "isHomepage": true
+  "isHomepage": true,
+  "isTitleVisible": true
 }
 ```
 
@@ -534,6 +551,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "schemaVersion": 1,
   "createdAt": "2026-04-11T09:00:00.000Z",
   "updatedAt": "2026-04-11T10:00:00.000Z"
@@ -552,6 +570,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "blocks": [],
   "schemaVersion": 1,
   "createdAt": "2026-04-11T09:00:00.000Z",
@@ -570,6 +589,7 @@ Response:
   "title": "Privacy Policy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "blocks": [],
   "schemaVersion": 1,
   "createdAt": "2026-04-11T08:00:00.000Z",
