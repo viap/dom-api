@@ -58,6 +58,21 @@ describe('ProgramsService', () => {
   const mockPartnersService = {
     exists: jest.fn(),
   };
+  const createFindQueryMock = (result: unknown[] = []) => {
+    const exec = jest.fn().mockResolvedValue(result);
+    const lean = jest.fn().mockReturnValue({ exec });
+    const limit = jest.fn().mockReturnValue({ lean });
+    const skip = jest.fn().mockReturnValue({ limit });
+    const sort = jest.fn().mockReturnValue({ skip });
+
+    return {
+      sort,
+      skip,
+      limit,
+      lean,
+      exec,
+    };
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -88,6 +103,61 @@ describe('ProgramsService', () => {
 
   it('should require domainId for public list queries', async () => {
     await expect(service.findAll({})).rejects.toThrow(BadRequestException);
+  });
+
+  it('should filter public list by allowed statuses', async () => {
+    const findQuery = createFindQueryMock([mockProgram]);
+    mockProgramModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAll({ domainId: mockProgram.domainId });
+
+    expect(mockDomainsService.getActiveById).toHaveBeenCalledWith(
+      mockProgram.domainId,
+    );
+    expect(mockProgramModel.find).toHaveBeenCalledWith({
+      domainId: mockProgram.domainId,
+      status: {
+        $in: ['upcoming', 'active', 'completed', 'cancelled'],
+      },
+    });
+    expect(findQuery.sort).toHaveBeenCalledWith({ startDate: 1, title: 1 });
+    expect(findQuery.skip).toHaveBeenCalledWith(0);
+    expect(findQuery.limit).toHaveBeenCalledWith(20);
+    expect(result).toEqual([mockProgram]);
+  });
+
+  it('should return admin list without public status filtering', async () => {
+    const findQuery = createFindQueryMock([mockProgram]);
+    mockProgramModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAllAdmin({
+      domainId: mockProgram.domainId,
+    });
+
+    expect(mockDomainsService.getActiveById).toHaveBeenCalledWith(
+      mockProgram.domainId,
+    );
+    expect(mockProgramModel.find).toHaveBeenCalledWith({
+      domainId: mockProgram.domainId,
+    });
+    expect(findQuery.sort).toHaveBeenCalledWith({ startDate: 1, title: 1 });
+    expect(findQuery.skip).toHaveBeenCalledWith(0);
+    expect(findQuery.limit).toHaveBeenCalledWith(20);
+    expect(result).toEqual([mockProgram]);
+  });
+
+  it('should return cross-domain admin list when domainId is missing', async () => {
+    const findQuery = createFindQueryMock([mockProgram]);
+    mockProgramModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAllAdmin({});
+
+    expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+    expect(mockProgramModel.find).toHaveBeenCalledWith({});
+    expect(findQuery.sort).toHaveBeenCalledWith({ startDate: 1, title: 1 });
+    expect(findQuery.skip).toHaveBeenCalledWith(0);
+    expect(findQuery.limit).toHaveBeenCalledWith(20);
+    expect(result).toEqual([mockProgram]);
   });
 
   it('should reject duplicate slug within the same domain', async () => {

@@ -48,6 +48,7 @@ Related docs:
 | Method   | Route          | Access | Intended UI        |
 | -------- | -------------- | ------ | ------------------ |
 | `GET`    | `/domains`     | Public | Public site, admin |
+| `GET`    | `/domains/slug/:slug` | Public | Public site, admin |
 | `GET`    | `/domains/:id` | Public | Public site, admin |
 | `POST`   | `/domains/bulk`| Public | Public site, admin |
 | `POST`   | `/domains`     | Admin  | Admin only         |
@@ -70,6 +71,8 @@ Related docs:
 Notes:
 
 - public reads only expose published records
+- `GET /media/admin` supports `isPublished` boolean filter
+- `DELETE /media/:id` uses a transaction to clean up references in Pages, Events, People, and Partners
 
 ---
 
@@ -179,6 +182,7 @@ Notes:
 | Method   | Route           | Access        | Intended UI        |
 | -------- | --------------- | ------------- | ------------------ |
 | `GET`    | `/programs`     | Public        | Public site, admin |
+| `GET`    | `/programs/admin` | Admin, Editor | Admin only       |
 | `GET`    | `/programs/:id` | Public        | Public site, admin |
 | `POST`   | `/programs/bulk`| Public        | Public site, admin |
 | `POST`   | `/programs`     | Admin, Editor | Admin only         |
@@ -187,8 +191,9 @@ Notes:
 
 Notes:
 
-- list endpoint requires `domainId`
+- public list endpoint requires `domainId`; admin list accepts optional `domainId`
 - public reads allow only `upcoming`, `active`, `completed`, `cancelled`
+- admin list reads include all statuses, including `draft`
 
 ---
 
@@ -410,5 +415,5 @@ Primarily:
   - `media` only published
   - `people` only published
   - `partners` only published
-  - `programs` no `draft`
+  - `programs` public routes no `draft`
   - `events` no `draft`

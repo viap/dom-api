@@ -21,6 +21,7 @@ import { Role } from '@/roles/enums/roles.enum';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { ProgramsService } from './programs.service';
+import { programAdminQuerySchema } from './schemas/joi.program-admin-query.schema';
 import { createProgramSchema } from './schemas/joi.create-program.schema';
 import { programQuerySchema } from './schemas/joi.program-query.schema';
 import { updateProgramSchema } from './schemas/joi.update-program.schema';
@@ -37,6 +38,15 @@ export class ProgramsController {
     query: ProgramQueryParams,
   ) {
     return this.programsService.findAll(query);
+  }
+
+  @Get('admin')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdmin(
+    @Query(new JoiValidationPipe(programAdminQuerySchema))
+    query: ProgramQueryParams,
+  ) {
+    return this.programsService.findAllAdmin(query);
   }
 
   @Get(':id')

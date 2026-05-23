@@ -135,6 +135,7 @@ Reference taxonomy for the four main domains.
 ### Routes
 
 - `GET /domains` public
+- `GET /domains/slug/:slug` public
 - `GET /domains/:id` public
 - `POST /domains/bulk` public
 - `POST /domains` admin only
@@ -161,10 +162,12 @@ Reference taxonomy for the four main domains.
 
 - populate domain switchers
 - validate domain ownership for `programs`, `events`, `applications`
+- resolve domain SEO for public metadata generation by domain slug
 
 Public read behavior:
 
 - `GET /domains/:id` returns only active domains
+- `GET /domains/slug/:slug` returns only active domains and responds with `404` when slug format is invalid or active domain is missing
 - `POST /domains/bulk` returns only active domains
 
 ---
@@ -204,6 +207,7 @@ Public page responses:
 - include `blocks`
 - omit blocks where `isVisible === false`
 - may omit unresolved `richText.relatedPeople` entries instead of failing the page
+- always include `isTitleVisible` (`true` when not explicitly set on legacy records)
 
 ### Query params
 
@@ -221,6 +225,7 @@ Public page responses:
   title: string;
   status: 'draft' | 'published';
   isHomepage: boolean;
+  isTitleVisible: boolean;
   seo?: Record<string, string>;
   blocks: PageBlock[];
   schemaVersion: number;
@@ -364,6 +369,7 @@ Admin:
 
 - `limit`
 - `offset`
+- `isPublished` boolean filter (`true` = published only, `false` = unpublished only, omitted = all)
 - `kind`
 - `search` partial match on `title`
 - `folder` exact match
@@ -424,6 +430,17 @@ Admin:
 - image references for `people`, `partners`, and page blocks
 - uploaded asset rendering through the stored `url`, `GET /media/:id/content`, or `GET /media/:id/thumbnail`
 - frontend apps such as `dom-web` may proxy uploaded media through their own same-origin route while still consuming the stored `url`
+
+### Deletion behavior
+
+- `DELETE /media/:id` uses a MongoDB transaction to atomically:
+  1. Clean up references in Pages (removes media from RichText, Hero, and Gallery blocks; removes empty Gallery blocks entirely)
+  2. Unset `mediaId` on matching Events
+  3. Unset `photoId` on matching People
+  4. Unset `logoId` on matching Partners
+  5. Delete the media record
+- File cleanup (original + thumbnail) happens after the transaction commits on a best-effort basis
+- Requires MongoDB replica set or mongos; returns `500` if transactions are unavailable
 
 ### Selection guidance
 
@@ -669,6 +686,7 @@ Domain-owned public education/program records.
 ### Routes
 
 - `GET /programs` public
+- `GET /programs/admin` admin/editor
 - `GET /programs/:id` public
 - `POST /programs/bulk` public
 - `POST /programs` admin/editor
@@ -684,9 +702,12 @@ Public reads allow only statuses:
 - `completed`
 - `cancelled`
 
+Admin list reads via `GET /programs/admin` include all statuses, including `draft`.
+
 ### Query params
 
-- `domainId` required on list
+- `domainId` required on public list (`GET /programs`)
+- `domainId` optional on admin list (`GET /programs/admin`); when omitted, all domains are returned
 - `limit`
 - `offset`
 
@@ -1164,7 +1185,8 @@ These are useful to know before frontend work starts:
 - `people` uses two different contact-related shapes:
   - `contacts[]` reuse the existing internal contact model
   - `socialLinks[]` are URL-based links
-- `programs` and `events` require `domainId` for list reads
+- `programs` public list reads require `domainId`; `programs/admin` allows cross-domain reads when `domainId` is omitted
+- `events` list reads remain domain-filterable by `domainId`
 - `applications` has no delete route in the current implementation
 - `pages` support global pages with no `domainId`, read publicly under `/pages/global/:pageSlug`
 - `pages` also support domain-scoped reads under `/pages/domain/:domainSlug/:pageSlug`

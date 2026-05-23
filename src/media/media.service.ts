@@ -25,6 +25,11 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
+import { DomainEvent, DomainEventDocument } from '@/events/schemas/domain-event.schema';
+import { Page, PageDocument } from '@/pages/schemas/page.schema';
+import { PageBlockType } from '@/pages/enums/page-block-type.enum';
+import { Partner, PartnerDocument } from '@/partners/schemas/partner.schema';
+import { Person, PersonDocument } from '@/people/schemas/person.schema';
 import { CreateMediaDto } from './dto/create-media.dto';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { UploadMediaDto } from './dto/upload-media.dto';
@@ -58,6 +63,23 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   '.gif': 'image/gif',
 };
 
+type CleanupCollectionSummary = {
+  count: number;
+  recordIds: string[];
+  paths: string[];
+};
+
+type MediaReferenceCleanupSummary = {
+  event: 'media_reference_cleanup';
+  mediaId: string;
+  timestamp: string;
+  actor: string | null;
+  pages: CleanupCollectionSummary;
+  events: CleanupCollectionSummary;
+  people: CleanupCollectionSummary;
+  partners: CleanupCollectionSummary;
+};
+
 @Injectable()
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
@@ -73,6 +95,11 @@ export class MediaService {
 
   constructor(
     @InjectModel(Media.name) private mediaModel: Model<MediaDocument>,
+    @InjectModel(Page.name) private pageModel: Model<PageDocument>,
+    @InjectModel(DomainEvent.name)
+    private domainEventModel: Model<DomainEventDocument>,
+    @InjectModel(Person.name) private personModel: Model<PersonDocument>,
+    @InjectModel(Partner.name) private partnerModel: Model<PartnerDocument>,
   ) {}
 
   async create(createMediaDto: CreateMediaDto): Promise<MediaDocument> {
@@ -130,6 +157,16 @@ export class MediaService {
     const limit = parsePaginationLimit(safeParams.limit);
     const offset = parsePaginationOffset(safeParams.offset);
     const query: Record<string, unknown> = {};
+
+    if (typeof safeParams.isPublished === 'boolean') {
+      query.isPublished = safeParams.isPublished;
+    } else if (typeof safeParams.isPublished === 'string') {
+      if (safeParams.isPublished === 'true') {
+        query.isPublished = true;
+      } else if (safeParams.isPublished === 'false') {
+        query.isPublished = false;
+      }
+    }
 
     if (typeof safeParams.kind === 'string') {
       query.kind = safeParams.kind;
@@ -351,21 +388,33 @@ export class MediaService {
       throw new NotFoundException('Invalid media ID format');
     }
 
-    const media = await this.mediaModel
-      .findByIdAndDelete(validId)
-      .lean()
-      .exec();
+    const cleanupSummary = this.createCleanupSummary(validId);
+
+    const media = await this.mediaModel.findById(validId).lean().exec();
     if (!media) {
       throw new NotFoundException('Media not found');
     }
 
-    if (this.isUploadedMedia(media)) {
-      const path = this.resolveUploadedFilePath(media.storageKey);
-      const thumbnailPath = this.resolveThumbnailFilePath(media.storageKey);
-      const mediaId = media._id.toString();
+    await this.cleanupMediaReferences(validId, cleanupSummary);
+
+    const removed = await this.mediaModel
+      .findByIdAndDelete(validId)
+      .lean()
+      .exec();
+
+    if (!removed) {
+      throw new NotFoundException('Media not found');
+    }
+
+    if (this.isUploadedMedia(removed)) {
+      const path = this.resolveUploadedFilePath(removed.storageKey);
+      const thumbnailPath = this.resolveThumbnailFilePath(removed.storageKey);
+      const mediaId = removed._id.toString();
       await this.removeFileBestEffort(path, mediaId);
       await this.removeFileBestEffort(thumbnailPath, mediaId);
     }
+
+    this.logger.log(JSON.stringify(cleanupSummary));
 
     return true;
   }
@@ -424,6 +473,210 @@ export class MediaService {
           typeof folder === 'string' && folder.trim().length > 0,
       )
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  private createCleanupSummary(mediaId: string): MediaReferenceCleanupSummary {
+    return {
+      event: 'media_reference_cleanup',
+      mediaId,
+      timestamp: new Date().toISOString(),
+      actor: null,
+      pages: { count: 0, recordIds: [], paths: [] },
+      events: { count: 0, recordIds: [], paths: [] },
+      people: { count: 0, recordIds: [], paths: [] },
+      partners: { count: 0, recordIds: [], paths: [] },
+    };
+  }
+
+  private addPath(target: CleanupCollectionSummary, path: string): void {
+    if (!target.paths.includes(path)) {
+      target.paths.push(path);
+    }
+  }
+
+  private async cleanupMediaReferences(
+    mediaId: string,
+    summary: MediaReferenceCleanupSummary,
+  ): Promise<void> {
+    await this.cleanupPageReferences(mediaId, summary);
+    await this.cleanupEventReferences(mediaId, summary);
+    await this.cleanupPeopleReferences(mediaId, summary);
+    await this.cleanupPartnerReferences(mediaId, summary);
+  }
+
+  private async cleanupPageReferences(
+    mediaId: string,
+    summary: MediaReferenceCleanupSummary,
+  ): Promise<void> {
+    const pages = await this.pageModel
+      .find({
+        $or: [
+          { 'blocks.media.mediaId': mediaId },
+          { 'blocks.backgroundMedia.mediaId': mediaId },
+          { 'blocks.items.mediaId': mediaId },
+        ],
+      })
+      .select({ _id: 1, blocks: 1 })
+      .lean()
+      .exec();
+
+    for (const page of pages as Array<{ _id: unknown; blocks?: unknown[] }>) {
+      const blocks = Array.isArray(page.blocks) ? [...page.blocks] : [];
+      const nextBlocks: unknown[] = [];
+      const pagePaths = new Set<string>();
+      let changed = false;
+
+      for (const rawBlock of blocks) {
+        if (!rawBlock || typeof rawBlock !== 'object') {
+          nextBlocks.push(rawBlock);
+          continue;
+        }
+
+        const block = rawBlock as Record<string, unknown>;
+        const blockType = block.type;
+        const nextBlock: Record<string, unknown> = { ...block };
+
+        if (
+          blockType === PageBlockType.RichText &&
+          this.matchesMediaRef(nextBlock.media, mediaId)
+        ) {
+          delete nextBlock.media;
+          changed = true;
+          pagePaths.add('blocks.media.mediaId');
+        }
+
+        if (
+          blockType === PageBlockType.Hero &&
+          this.matchesMediaRef(nextBlock.backgroundMedia, mediaId)
+        ) {
+          delete nextBlock.backgroundMedia;
+          changed = true;
+          pagePaths.add('blocks.backgroundMedia.mediaId');
+        }
+
+        if (blockType === PageBlockType.Gallery && Array.isArray(block.items)) {
+          const originalItems = block.items;
+          const filteredItems = originalItems.filter(
+            (item) =>
+              !(
+                item &&
+                typeof item === 'object' &&
+                (item as Record<string, unknown>).mediaId === mediaId
+              ),
+          );
+
+          if (filteredItems.length !== originalItems.length) {
+            changed = true;
+            pagePaths.add('blocks.items.mediaId');
+          }
+
+          if (!filteredItems.length) {
+            changed = true;
+            pagePaths.add('blocks.gallery');
+            continue;
+          }
+
+          nextBlock.items = filteredItems;
+        }
+
+        nextBlocks.push(nextBlock);
+      }
+
+      if (!changed) {
+        continue;
+      }
+
+      await this.pageModel
+        .updateOne(
+          { _id: page._id },
+          { $set: { blocks: nextBlocks } },
+          { runValidators: true },
+        )
+        .exec();
+
+      summary.pages.count += 1;
+      summary.pages.recordIds.push(String(page._id));
+      for (const path of pagePaths) {
+        this.addPath(summary.pages, path);
+      }
+    }
+  }
+
+  private async cleanupEventReferences(
+    mediaId: string,
+    summary: MediaReferenceCleanupSummary,
+  ): Promise<void> {
+    const events = await this.domainEventModel
+      .find({ mediaId })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+
+    if (!events.length) {
+      return;
+    }
+
+    await this.domainEventModel
+      .updateMany({ mediaId }, { $unset: { mediaId: '' } })
+      .exec();
+
+    summary.events.count = events.length;
+    summary.events.recordIds = events.map((item) => item._id.toString());
+    this.addPath(summary.events, 'mediaId');
+  }
+
+  private async cleanupPeopleReferences(
+    mediaId: string,
+    summary: MediaReferenceCleanupSummary,
+  ): Promise<void> {
+    const people = await this.personModel
+      .find({ photoId: mediaId })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+
+    if (!people.length) {
+      return;
+    }
+
+    await this.personModel
+      .updateMany({ photoId: mediaId }, { $unset: { photoId: '' } })
+      .exec();
+
+    summary.people.count = people.length;
+    summary.people.recordIds = people.map((item) => item._id.toString());
+    this.addPath(summary.people, 'photoId');
+  }
+
+  private async cleanupPartnerReferences(
+    mediaId: string,
+    summary: MediaReferenceCleanupSummary,
+  ): Promise<void> {
+    const partners = await this.partnerModel
+      .find({ logoId: mediaId })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+
+    if (!partners.length) {
+      return;
+    }
+
+    await this.partnerModel
+      .updateMany({ logoId: mediaId }, { $unset: { logoId: '' } })
+      .exec();
+
+    summary.partners.count = partners.length;
+    summary.partners.recordIds = partners.map((item) => item._id.toString());
+    this.addPath(summary.partners, 'logoId');
+  }
+
+  private matchesMediaRef(value: unknown, mediaId: string): boolean {
+    return Boolean(
+      value &&
+        typeof value === 'object' &&
+        (value as Record<string, unknown>).mediaId === mediaId,
+    );
   }
 
   private detectImageFormat(file: UploadedMediaFile): SupportedImageFormat {

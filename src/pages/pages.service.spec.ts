@@ -29,6 +29,7 @@ describe('PagesService', () => {
     title: 'About Us',
     status: PageStatus.Published,
     isHomepage: false,
+    isTitleVisible: true,
     seo: { title: 'About Us' },
     blocks: [],
     schemaVersion: 1,
@@ -41,6 +42,7 @@ describe('PagesService', () => {
     title: 'Privacy Policy',
     status: PageStatus.Published,
     isHomepage: false,
+    isTitleVisible: true,
     seo: { title: 'Privacy Policy' },
     blocks: [],
     schemaVersion: 1,
@@ -183,6 +185,21 @@ describe('PagesService', () => {
       }),
     ).resolves.toEqual(mockPage);
     expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+  });
+
+  it('should default isTitleVisible to true when omitted on create', async () => {
+    mockPageModel.findOne.mockResolvedValueOnce(null);
+
+    await service.create({
+      title: 'Privacy Policy',
+      slug: 'privacy-policy',
+    });
+
+    expect(mockPageModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isTitleVisible: true,
+      }),
+    );
   });
 
   it('should allow setting homepage for a published domain page', async () => {
@@ -480,6 +497,31 @@ describe('PagesService', () => {
     ).resolves.toEqual([mockPage]);
   });
 
+  it('should return isTitleVisible=true fallback in public domain listings', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([
+                {
+                  ...mockPage,
+                  isTitleVisible: undefined,
+                },
+              ]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(
+      service.findAll({
+        domainId: mockPage.domainId,
+      }),
+    ).resolves.toEqual([expect.objectContaining({ isTitleVisible: true })]);
+  });
+
   it('should throw NotFoundException for invalid public item ids', async () => {
     await expect(service.findOne('invalid-id')).rejects.toThrow(
       NotFoundException,
@@ -582,6 +624,29 @@ describe('PagesService', () => {
     });
 
     await expect(service.findAllGlobal()).resolves.toEqual([mockGlobalPage]);
+  });
+
+  it('should return isTitleVisible=true fallback in admin global listings', async () => {
+    mockPageModel.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        skip: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue([
+                {
+                  ...mockGlobalPage,
+                  isTitleVisible: undefined,
+                },
+              ]),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    await expect(service.findAllGlobal()).resolves.toEqual([
+      expect.objectContaining({ isTitleVisible: true }),
+    ]);
   });
 
   it('should return raw draft pages for admin global listing', async () => {
@@ -948,8 +1013,71 @@ describe('PagesService', () => {
 
     expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
       mockPage._id,
-      expect.not.objectContaining({ blocks: expect.anything() }),
+      expect.not.objectContaining({
+        blocks: expect.anything(),
+        isTitleVisible: expect.anything(),
+      }),
       { new: true },
+    );
+  });
+
+  it('should patch isTitleVisible when explicitly provided', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          isTitleVisible: true,
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          isTitleVisible: false,
+        }),
+      }),
+    });
+
+    await service.update(mockPage._id, { isTitleVisible: false });
+
+    expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockPage._id,
+      expect.objectContaining({
+        isTitleVisible: false,
+      }),
+      { new: true },
+    );
+  });
+
+  it('should return isTitleVisible=true fallback for legacy public pages', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockGlobalPage,
+          isTitleVisible: undefined,
+        }),
+      }),
+    });
+
+    await expect(
+      service.findOneGlobalBySlug('privacy-policy'),
+    ).resolves.toEqual(expect.objectContaining({ isTitleVisible: true }));
+  });
+
+  it('should return isTitleVisible=true fallback for legacy admin page reads', async () => {
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          isTitleVisible: undefined,
+        }),
+      }),
+    });
+
+    await expect(service.findAdminOne(mockPage._id)).resolves.toEqual(
+      expect.objectContaining({ isTitleVisible: true }),
     );
   });
 
@@ -1039,4 +1167,5 @@ describe('PagesService', () => {
       service.update(mockPage._id, { title: 'Updated' }),
     ).rejects.toThrow(NotFoundException);
   });
+
 });

@@ -151,8 +151,12 @@ export class DomainsService {
 
   async getActiveBySlug(slug: string): Promise<DomainDocument> {
     const trimmedSlug = slug?.trim();
-    if (!trimmedSlug || !/^[a-z0-9-]+$/.test(trimmedSlug)) {
-      throw new NotFoundException('Invalid domain slug format');
+    if (
+      !trimmedSlug ||
+      trimmedSlug.length > 120 ||
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(trimmedSlug)
+    ) {
+      throw new BadRequestException('Invalid domain slug format');
     }
 
     const domain = await this.domainModel

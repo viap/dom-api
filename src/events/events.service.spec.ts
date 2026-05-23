@@ -220,4 +220,5 @@ describe('EventsService', () => {
       NotFoundException,
     );
   });
+
 });

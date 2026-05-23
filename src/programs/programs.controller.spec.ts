@@ -11,6 +11,7 @@ describe('ProgramsController', () => {
   beforeEach(() => {
     controller = new ProgramsController({
       findAll: jest.fn(),
+      findAllAdmin: jest.fn(),
       findOne: jest.fn(),
       findManyByIds: jest.fn(),
       create: jest.fn(),
@@ -32,6 +33,9 @@ describe('ProgramsController', () => {
   });
 
   it('should restrict writes to admin/editor', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, ProgramsController.prototype.findAllAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, ProgramsController.prototype.create),
     ).toEqual([Role.Admin, Role.Editor]);

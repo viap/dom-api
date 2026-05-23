@@ -258,6 +258,7 @@ Actions:
 
 - kind
 - name/title search
+- published status (published / unpublished / all)
 - created date range
 
 Selection behavior:
@@ -302,6 +303,7 @@ Selection behavior:
 - `POST /media` is for external media only and should not expose local-storage fields in the form.
 - Public media routes still expose published records only.
 - Page-block media picker should expose published media only.
+- Deleting a media item automatically removes all references to it in Pages, Events, People, and Partners within a transaction.
 
 ---
 

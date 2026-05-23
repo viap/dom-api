@@ -36,6 +36,9 @@ export class Page {
   @Prop({ required: true, default: false })
   isHomepage: boolean;
 
+  @Prop({ required: true, default: true })
+  isTitleVisible: boolean;
+
   @Prop({ type: mongoose.Schema.Types.Mixed })
   seo?: Record<string, string>;
 
@@ -64,6 +67,9 @@ blocksPath.discriminator(
   applicationFormBlockSchema,
 );
 
+pageSchema.index({ 'blocks.media.mediaId': 1 }, { sparse: true });
+pageSchema.index({ 'blocks.backgroundMedia.mediaId': 1 }, { sparse: true });
+pageSchema.index({ 'blocks.items.mediaId': 1 }, { sparse: true });
 pageSchema.index({ slug: 1 }, { unique: true });
 pageSchema.index({ domainId: 1, status: 1, updatedAt: -1 });
 pageSchema.index(

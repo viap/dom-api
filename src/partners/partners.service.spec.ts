@@ -185,4 +185,5 @@ describe('PartnersService', () => {
       }),
     ).rejects.toThrow(ConflictException);
   });
+
 });

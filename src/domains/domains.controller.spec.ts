@@ -11,6 +11,7 @@ describe('DomainsController', () => {
   beforeEach(() => {
     controller = new DomainsController({
       findAll: jest.fn(),
+      getActiveBySlug: jest.fn(),
       findOne: jest.fn(),
       findManyByIds: jest.fn(),
       create: jest.fn(),
@@ -25,6 +26,12 @@ describe('DomainsController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, DomainsController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        DomainsController.prototype.findOneBySlug,
+      ),
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, DomainsController.prototype.findMany),

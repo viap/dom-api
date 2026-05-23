@@ -301,4 +301,5 @@ describe('PeopleService', () => {
       NotFoundException,
     );
   });
+
 });

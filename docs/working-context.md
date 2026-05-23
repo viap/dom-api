@@ -73,6 +73,7 @@ Verification commands:
 
 - `dom-web` depends on backend API docs in this folder for content/admin flows; keep those docs updated when routes or payloads change.
 - For CMS/public routing behavior, backend pages/menus/media contracts are authoritative and should be versioned through active docs before frontend changes are considered complete.
+- Public CMS metadata flow in `dom-web` now depends on `GET /domains/slug/:slug` for domain SEO resolution on domain-slug routes (including domains without homepage pages).
 - When changing access semantics (public/auth/admin) for existing routes, update both:
   - [ROUTE-PERMISSIONS-MATRIX.md](./ROUTE-PERMISSIONS-MATRIX.md)
   - [ADMIN-WEB-API.md](./ADMIN-WEB-API.md)

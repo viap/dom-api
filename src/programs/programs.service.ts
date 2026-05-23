@@ -58,23 +58,36 @@ export class ProgramsService {
   async findAll(
     queryParams: ProgramQueryParams = {},
   ): Promise<ProgramDocument[]> {
-    const safeParams = safeFindParams(queryParams);
-    const domainId =
-      typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
-    if (!domainId) {
-      throw new BadRequestException('domainId is required');
-    }
-
-    await this.domainsService.getActiveById(domainId);
-
-    const limit = parsePaginationLimit(safeParams.limit);
-    const offset = parsePaginationOffset(safeParams.offset);
+    const { domainId, limit, offset } = await this.resolvePublicListQuery(
+      queryParams,
+    );
 
     return this.programModel
       .find({
         domainId,
         status: { $in: PUBLIC_PROGRAM_STATUSES },
       })
+      .sort({ startDate: 1, title: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async findAllAdmin(
+    queryParams: ProgramQueryParams = {},
+  ): Promise<ProgramDocument[]> {
+    const { domainId, limit, offset } = await this.resolveAdminListQuery(
+      queryParams,
+    );
+    const query: Record<string, unknown> = {};
+
+    if (domainId) {
+      query.domainId = domainId;
+    }
+
+    return this.programModel
+      .find(query)
       .sort({ startDate: 1, title: 1 })
       .skip(offset)
       .limit(limit)
@@ -189,6 +202,49 @@ export class ProgramsService {
 
     const count = await this.programModel.countDocuments({ _id: validId });
     return count > 0;
+  }
+
+  private async resolvePublicListQuery(
+    queryParams: ProgramQueryParams,
+  ): Promise<{
+    domainId: string;
+    limit: number;
+    offset: number;
+  }> {
+    const safeParams = safeFindParams(queryParams);
+    const domainId =
+      typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
+    if (!domainId) {
+      throw new BadRequestException('domainId is required');
+    }
+
+    await this.domainsService.getActiveById(domainId);
+
+    return {
+      domainId,
+      limit: parsePaginationLimit(safeParams.limit),
+      offset: parsePaginationOffset(safeParams.offset),
+    };
+  }
+
+  private async resolveAdminListQuery(queryParams: ProgramQueryParams): Promise<{
+    domainId: string | null;
+    limit: number;
+    offset: number;
+  }> {
+    const safeParams = safeFindParams(queryParams);
+    const domainId =
+      typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
+
+    if (domainId) {
+      await this.domainsService.getActiveById(domainId);
+    }
+
+    return {
+      domainId,
+      limit: parsePaginationLimit(safeParams.limit),
+      offset: parsePaginationOffset(safeParams.offset),
+    };
   }
 
   private async validateDomainAndRefs(data: {

@@ -110,6 +110,38 @@ Response:
 ]
 ```
 
+### `GET /domains/slug/academy`
+
+Response:
+
+```json
+{
+  "_id": "661000000000000000000003",
+  "code": "academy",
+  "title": "Academy",
+  "slug": "academy",
+  "isActive": true,
+  "order": 3,
+  "seo": {
+    "title": "Academy",
+    "description": "Educational direction"
+  },
+  "createdAt": "2026-04-10T10:15:00.000Z",
+  "updatedAt": "2026-04-10T10:20:00.000Z"
+}
+```
+
+### `GET /domains/slug/unknown-domain`
+
+Response:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Active domain not found"
+}
+```
+
 ### `POST /domains`
 
 Request:
@@ -199,6 +231,8 @@ Response:
   "slug": "privacy-policy",
   "title": "Privacy Policy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -222,6 +256,8 @@ Response:
     "slug": "about-academy",
     "title": "About Academy",
     "status": "published",
+    "isHomepage": false,
+    "isTitleVisible": true,
     "seo": {
       "title": "About Academy",
       "description": "Learn about our academy."
@@ -246,6 +282,7 @@ Response:
   "title": "About Academy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -267,6 +304,7 @@ Request:
   "slug": "about-academy",
   "title": "About Academy",
   "status": "published",
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -295,6 +333,8 @@ Response:
   "slug": "about-academy",
   "title": "About Academy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -327,6 +367,7 @@ Request:
   "title": "About",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {},
   "blocks": []
 }
@@ -341,6 +382,7 @@ Response:
   "title": "About",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {},
   "blocks": [],
   "schemaVersion": 1,
@@ -361,6 +403,7 @@ Response:
   "title": "About Academy",
   "status": "draft",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -404,6 +447,7 @@ Response:
     "title": "Privacy Policy",
     "status": "published",
     "isHomepage": false,
+    "isTitleVisible": true,
     "seo": {
       "title": "Privacy Policy",
       "description": "Privacy and data handling."
@@ -426,6 +470,7 @@ Request:
   "title": "Privacy Policy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -441,6 +486,8 @@ Response:
   "slug": "privacy-policy",
   "title": "Privacy Policy",
   "status": "published",
+  "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "Privacy Policy",
     "description": "Privacy and data handling."
@@ -471,6 +518,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": false,
+  "isTitleVisible": true,
   "seo": {
     "title": "About Academy",
     "description": "Learn about our academy."
@@ -488,7 +536,8 @@ Request:
 ```json
 {
   "status": "published",
-  "isHomepage": true
+  "isHomepage": true,
+  "isTitleVisible": true
 }
 ```
 
@@ -502,6 +551,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "schemaVersion": 1,
   "createdAt": "2026-04-11T09:00:00.000Z",
   "updatedAt": "2026-04-11T10:00:00.000Z"
@@ -520,6 +570,7 @@ Response:
   "title": "About the Academy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "blocks": [],
   "schemaVersion": 1,
   "createdAt": "2026-04-11T09:00:00.000Z",
@@ -538,6 +589,7 @@ Response:
   "title": "Privacy Policy",
   "status": "published",
   "isHomepage": true,
+  "isTitleVisible": true,
   "blocks": [],
   "schemaVersion": 1,
   "createdAt": "2026-04-11T08:00:00.000Z",
@@ -918,6 +970,27 @@ Content-Type: application/json
 {"message":"Media thumbnail not found","error":"Not Found","statusCode":404}
 ```
 
+### `GET /media/admin?isPublished=true`
+
+Response:
+
+```json
+[
+  {
+    "_id": "682a...",
+    "kind": "image",
+    "url": "/media/682a.../content",
+    "title": "Hero",
+    "isPublished": true
+  }
+]
+```
+
+Notes:
+
+- `isPublished=true` returns published media only; `isPublished=false` returns unpublished only; omitting shows all
+- combinable with other filters (`kind`, `search`, `folder`, `createdFrom`, `createdTo`)
+
 ### `DELETE /media/:id`
 
 Response:
@@ -925,6 +998,11 @@ Response:
 ```http
 204 No Content
 ```
+
+Notes:
+
+- deletion runs inside a MongoDB transaction that cleans up references in Pages (block media), Events (`mediaId`), People (`photoId`), and Partners (`logoId`)
+- file cleanup (original + thumbnail) is best-effort after the transaction commits
 
 ---
 

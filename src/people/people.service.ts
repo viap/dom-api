@@ -11,6 +11,7 @@ import {
   prepareBulkIds,
   toBulkResolveResponse,
 } from '@/common/utils/bulk-resolve';
+import { isMongoDuplicateSlugError } from '@/common/utils/mongo-duplicate-slug-error';
 import { MediaService } from '@/media/media.service';
 import { UsersService } from '@/users/users.service';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
@@ -26,13 +27,6 @@ import { CreatePersonDto } from './dto/create-person.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import { Person, PersonDocument } from './schemas/person.schema';
 import { PersonQueryParams } from './types/query-params.interface';
-
-type MongoDuplicateSlugError = {
-  code: number;
-  keyPattern?: {
-    slug?: number;
-  };
-};
 
 @Injectable()
 export class PeopleService {
@@ -50,7 +44,7 @@ export class PeopleService {
     try {
       return await person.save();
     } catch (error) {
-      if (this.isMongoDuplicateSlugError(error)) {
+      if (isMongoDuplicateSlugError(error)) {
         throw new ConflictException('Person with this slug already exists');
       }
       throw error;
@@ -208,7 +202,7 @@ export class PeopleService {
 
       return person as PersonDocument;
     } catch (error) {
-      if (this.isMongoDuplicateSlugError(error)) {
+      if (isMongoDuplicateSlugError(error)) {
         throw new ConflictException('Person with this slug already exists');
       }
       throw error;
@@ -299,20 +293,5 @@ export class PeopleService {
     if (existing) {
       throw new ConflictException('Person with this slug already exists');
     }
-  }
-
-  private isMongoDuplicateSlugError(
-    error: unknown,
-  ): error is MongoDuplicateSlugError {
-    if (!error || typeof error !== 'object') {
-      return false;
-    }
-
-    if (!('code' in error) || !('keyPattern' in error)) {
-      return false;
-    }
-
-    const mongoError = error as MongoDuplicateSlugError;
-    return mongoError.code === 11000 && !!mongoError.keyPattern?.slug;
   }
 }
