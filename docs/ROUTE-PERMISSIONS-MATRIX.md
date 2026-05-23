@@ -182,6 +182,7 @@ Notes:
 | Method   | Route           | Access        | Intended UI        |
 | -------- | --------------- | ------------- | ------------------ |
 | `GET`    | `/programs`     | Public        | Public site, admin |
+| `GET`    | `/programs/admin` | Admin, Editor | Admin only       |
 | `GET`    | `/programs/:id` | Public        | Public site, admin |
 | `POST`   | `/programs/bulk`| Public        | Public site, admin |
 | `POST`   | `/programs`     | Admin, Editor | Admin only         |
@@ -190,8 +191,9 @@ Notes:
 
 Notes:
 
-- list endpoint requires `domainId`
+- public list endpoint requires `domainId`; admin list accepts optional `domainId`
 - public reads allow only `upcoming`, `active`, `completed`, `cancelled`
+- admin list reads include all statuses, including `draft`
 
 ---
 
@@ -413,5 +415,5 @@ Primarily:
   - `media` only published
   - `people` only published
   - `partners` only published
-  - `programs` no `draft`
+  - `programs` public routes no `draft`
   - `events` no `draft`

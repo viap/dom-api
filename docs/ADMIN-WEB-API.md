@@ -686,6 +686,7 @@ Domain-owned public education/program records.
 ### Routes
 
 - `GET /programs` public
+- `GET /programs/admin` admin/editor
 - `GET /programs/:id` public
 - `POST /programs/bulk` public
 - `POST /programs` admin/editor
@@ -701,9 +702,12 @@ Public reads allow only statuses:
 - `completed`
 - `cancelled`
 
+Admin list reads via `GET /programs/admin` include all statuses, including `draft`.
+
 ### Query params
 
-- `domainId` required on list
+- `domainId` required on public list (`GET /programs`)
+- `domainId` optional on admin list (`GET /programs/admin`); when omitted, all domains are returned
 - `limit`
 - `offset`
 
@@ -1181,7 +1185,8 @@ These are useful to know before frontend work starts:
 - `people` uses two different contact-related shapes:
   - `contacts[]` reuse the existing internal contact model
   - `socialLinks[]` are URL-based links
-- `programs` and `events` require `domainId` for list reads
+- `programs` public list reads require `domainId`; `programs/admin` allows cross-domain reads when `domainId` is omitted
+- `events` list reads remain domain-filterable by `domainId`
 - `applications` has no delete route in the current implementation
 - `pages` support global pages with no `domainId`, read publicly under `/pages/global/:pageSlug`
 - `pages` also support domain-scoped reads under `/pages/domain/:domainSlug/:pageSlug`
