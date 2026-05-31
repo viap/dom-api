@@ -174,6 +174,16 @@ const applicationFormBlockSchema = Joi.object({
   buttonLabel: Joi.string().trim().min(1).max(150).optional(),
 });
 
+const htmlBlockSchema = Joi.object({
+  ...pageBlockBaseSchema,
+  type: Joi.string().valid(PageBlockType.Html).required(),
+  template: Joi.string()
+    .valid('vertical', 'horizontal-left', 'horizontal-right')
+    .default('vertical')
+    .optional(),
+  content: Joi.string().trim().min(1).max(50000).required(),
+});
+
 export const pageBlockSchema = Joi.alternatives().try(
   richTextBlockSchema,
   entityCollectionBlockSchema,
@@ -181,6 +191,7 @@ export const pageBlockSchema = Joi.alternatives().try(
   ctaBlockSchema,
   galleryBlockSchema,
   applicationFormBlockSchema,
+  htmlBlockSchema,
 );
 
 export const pageBlocksSchema = Joi.array().items(pageBlockSchema).max(20);

@@ -43,7 +43,10 @@ import {
   PageBlock,
   RichTextBlock,
 } from './types/page-block.interface';
-import { sanitizeRichTextHtml } from './utils/html-sanitizer';
+import {
+  sanitizeHtmlBlockContent,
+  sanitizeRichTextHtml,
+} from './utils/html-sanitizer';
 
 type PageReference = {
   _id: mongoose.Types.ObjectId | string;
@@ -530,6 +533,19 @@ export class PagesService {
     await this.validateBlocks(blocks);
 
     return blocks.map((block) => {
+      if (block.type === PageBlockType.Html) {
+        const sanitizedContent = sanitizeHtmlBlockContent(block.content);
+        if (!sanitizedContent) {
+          throw new BadRequestException(
+            `HTML block "${block.id}" content is empty after sanitization`,
+          );
+        }
+        return {
+          ...block,
+          content: sanitizedContent,
+        };
+      }
+
       if (block.type !== PageBlockType.RichText) {
         return block;
       }
@@ -581,6 +597,8 @@ export class PagesService {
           break;
         case PageBlockType.ApplicationForm:
           this.validateApplicationFormType(block.applicationType);
+          break;
+        case PageBlockType.Html:
           break;
         default:
           throw new BadRequestException('Unsupported page block type');

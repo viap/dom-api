@@ -97,10 +97,22 @@ export interface ApplicationFormBlock extends PageBlockBase {
   buttonLabel?: string;
 }
 
+export type HtmlBlockTemplate =
+  | 'vertical'
+  | 'horizontal-left'
+  | 'horizontal-right';
+
+export interface HtmlBlock extends PageBlockBase {
+  type: PageBlockType.Html;
+  template: HtmlBlockTemplate;
+  content: string;
+}
+
 export type PageBlock =
   | RichTextBlock
   | EntityCollectionBlock
   | HeroBlock
   | CtaBlock
   | GalleryBlock
-  | ApplicationFormBlock;
+  | ApplicationFormBlock
+  | HtmlBlock;

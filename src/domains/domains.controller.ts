@@ -41,7 +41,9 @@ export class DomainsController {
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   findOneBySlug(
     @Param(new JoiValidationPipe(domainSlugParamsSchema))
-    params: { slug: string },
+    params: {
+      slug: string;
+    },
   ) {
     return this.domainsService.getActiveBySlug(params.slug);
   }

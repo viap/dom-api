@@ -31,3 +31,49 @@ export function sanitizeRichTextHtml(html: string): string {
     enforceHtmlBoundary: true,
   }).trim();
 }
+
+const DANGEROUS_TAGS = new Set([
+  'script',
+  'iframe',
+  'object',
+  'embed',
+  'noscript',
+  'template',
+  'link',
+  'meta',
+  'base',
+]);
+
+function stripEventHandlers(
+  _tagName: string,
+  attribs: sanitizeHtml.Attributes,
+): sanitizeHtml.Tag {
+  const cleaned: sanitizeHtml.Attributes = {};
+  for (const [key, value] of Object.entries(attribs)) {
+    if (!key.toLowerCase().startsWith('on')) {
+      cleaned[key] = value;
+    }
+  }
+  return { tagName: _tagName, attribs: cleaned };
+}
+
+export function sanitizeHtmlBlockContent(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: false,
+    allowVulnerableTags: true,
+    allowedAttributes: false,
+    allowedSchemes: ['http', 'https', 'mailto', 'tel', 'data'],
+    allowedSchemesByTag: {
+      a: ['http', 'https', 'mailto', 'tel'],
+    },
+    disallowedTagsMode: 'discard',
+    allowProtocolRelative: false,
+    enforceHtmlBoundary: true,
+    exclusiveFilter(frame) {
+      return DANGEROUS_TAGS.has(frame.tag);
+    },
+    transformTags: {
+      '*': stripEventHandlers,
+    },
+  }).trim();
+}

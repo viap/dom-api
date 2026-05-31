@@ -158,3 +158,21 @@ export const applicationFormBlockSchema = new mongoose.Schema(
   },
   { _id: false, id: false, strict: 'throw' },
 );
+
+const htmlBlockTemplateValues = [
+  'vertical',
+  'horizontal-left',
+  'horizontal-right',
+];
+
+export const htmlBlockSchema = new mongoose.Schema(
+  {
+    template: {
+      type: String,
+      enum: htmlBlockTemplateValues,
+      default: 'vertical',
+    },
+    content: { type: String, required: true },
+  },
+  { _id: false, id: false, strict: 'throw' },
+);
