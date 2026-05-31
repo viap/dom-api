@@ -25,7 +25,10 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
-import { DomainEvent, DomainEventDocument } from '@/events/schemas/domain-event.schema';
+import {
+  DomainEvent,
+  DomainEventDocument,
+} from '@/events/schemas/domain-event.schema';
 import { Page, PageDocument } from '@/pages/schemas/page.schema';
 import { PageBlockType } from '@/pages/enums/page-block-type.enum';
 import { Partner, PartnerDocument } from '@/partners/schemas/partner.schema';

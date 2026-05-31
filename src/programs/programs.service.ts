@@ -227,7 +227,9 @@ export class ProgramsService {
     };
   }
 
-  private async resolveAdminListQuery(queryParams: ProgramQueryParams): Promise<{
+  private async resolveAdminListQuery(
+    queryParams: ProgramQueryParams,
+  ): Promise<{
     domainId: string | null;
     limit: number;
     offset: number;

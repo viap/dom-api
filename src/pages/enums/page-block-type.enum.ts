@@ -5,4 +5,5 @@ export enum PageBlockType {
   Cta = 'cta',
   Gallery = 'gallery',
   ApplicationForm = 'applicationForm',
+  Html = 'html',
 }

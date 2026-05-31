@@ -7,6 +7,7 @@ import {
   entityCollectionBlockSchema,
   galleryBlockSchema,
   heroBlockSchema,
+  htmlBlockSchema,
   pageBlockBaseSchema,
   richTextBlockSchema,
 } from './page-block.schema';
@@ -66,6 +67,7 @@ blocksPath.discriminator(
   PageBlockType.ApplicationForm,
   applicationFormBlockSchema,
 );
+blocksPath.discriminator(PageBlockType.Html, htmlBlockSchema);
 
 pageSchema.index({ 'blocks.media.mediaId': 1 }, { sparse: true });
 pageSchema.index({ 'blocks.backgroundMedia.mediaId': 1 }, { sparse: true });

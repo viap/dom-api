@@ -655,14 +655,18 @@ describe('MediaService', () => {
     mockPageModel.find.mockReturnValue({
       select: jest.fn().mockReturnThis(),
       lean: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([{
-        _id: '507f1f77bcf86cd799439411',
-        blocks: [{
-          id: 'g1',
-          type: PageBlockType.Gallery,
-          items: [{ mediaId: uploadedMediaId }],
-        }],
-      }]),
+      exec: jest.fn().mockResolvedValue([
+        {
+          _id: '507f1f77bcf86cd799439411',
+          blocks: [
+            {
+              id: 'g1',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }],
+            },
+          ],
+        },
+      ]),
     });
     mockPageModel.updateOne.mockReturnValue({
       exec: jest.fn().mockRejectedValue(new Error('page update failed')),

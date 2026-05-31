@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { DomainEvent, domainEventSchema } from '@/events/schemas/domain-event.schema';
+import {
+  DomainEvent,
+  domainEventSchema,
+} from '@/events/schemas/domain-event.schema';
 import { Page, pageSchema } from '@/pages/schemas/page.schema';
 import { Partner, partnerSchema } from '@/partners/schemas/partner.schema';
 import { Person, personSchema } from '@/people/schemas/person.schema';

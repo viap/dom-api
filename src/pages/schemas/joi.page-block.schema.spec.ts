@@ -280,4 +280,124 @@ describe('createPageSchema', () => {
 
     expect(error).toBeDefined();
   });
+
+  it('should accept a valid HTML block with all fields', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          title: 'Section Title',
+          subtitle: 'Subtitle',
+          description: 'Desc',
+          padding: 'md',
+          background: 'cream',
+          template: 'horizontal-left',
+          content: '<p>Hello world</p>',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should accept HTML block with template defaulting to vertical', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          content: '<p>Hello</p>',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].template).toBe('vertical');
+  });
+
+  it('should reject HTML block with missing content', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          template: 'vertical',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject HTML block with empty content', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          content: '   ',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject HTML block with invalid template', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          template: 'diagonal',
+          content: '<p>Hello</p>',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject HTML block with content exceeding max length', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          content: 'a'.repeat(50001),
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should accept HTML block with minimal fields', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Test',
+      slug: 'test',
+      blocks: [
+        {
+          id: 'html-1',
+          type: 'html',
+          content: '<div>Minimal</div>',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
 });

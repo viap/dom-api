@@ -1167,5 +1167,4 @@ describe('PagesService', () => {
       service.update(mockPage._id, { title: 'Updated' }),
     ).rejects.toThrow(NotFoundException);
   });
-
 });
