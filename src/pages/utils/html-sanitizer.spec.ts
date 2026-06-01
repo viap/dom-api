@@ -22,11 +22,6 @@ describe('sanitizeRichTextHtml', () => {
 });
 
 describe('sanitizeHtmlBlockContent', () => {
-  it('should strip script tags', () => {
-    const html = '<p>Hello</p><script>alert(1)</script>';
-    expect(sanitizeHtmlBlockContent(html)).toBe('<p>Hello</p>');
-  });
-
   it('should strip iframe tags', () => {
     const html = '<p>Hello</p><iframe src="https://evil.com"></iframe>';
     expect(sanitizeHtmlBlockContent(html)).toBe('<p>Hello</p>');

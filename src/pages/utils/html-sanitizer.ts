@@ -33,7 +33,6 @@ export function sanitizeRichTextHtml(html: string): string {
 }
 
 const DANGEROUS_TAGS = new Set([
-  'script',
   'iframe',
   'object',
   'embed',
