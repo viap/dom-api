@@ -13,6 +13,8 @@ export interface BlockButton {
   label: string;
   type: BlockButtonType;
   targetId?: string;
+  applicationProgramId?: string;
+  applicationEventId?: string;
   url?: string;
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
