@@ -66,6 +66,85 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should allow application buttons with required entity targets', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Enroll',
+              type: 'application',
+              targetId: 'program_enrollment',
+              applicationProgramId: '507f1f77bcf86cd799439221',
+            },
+            {
+              label: 'Register',
+              type: 'application',
+              targetId: 'event_registration',
+              applicationEventId: '507f1f77bcf86cd799439222',
+            },
+            {
+              label: 'Partner',
+              type: 'application',
+              targetId: 'partnership',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject application buttons with missing entity targets', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Enroll',
+              type: 'application',
+              targetId: 'program_enrollment',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject stale application entity target fields', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Partner',
+              type: 'application',
+              targetId: 'partnership',
+              applicationEventId: '507f1f77bcf86cd799439222',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('should reject top-level hero buttons at the joi layer', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

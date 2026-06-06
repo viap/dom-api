@@ -21,6 +21,8 @@ export const blockButtonSchema = new mongoose.Schema(
       enum: Object.values(BlockButtonType),
     },
     targetId: { type: String },
+    applicationProgramId: { type: String },
+    applicationEventId: { type: String },
     url: { type: String, trim: true },
     openInNewTab: { type: Boolean, default: false },
     style: { type: String, enum: buttonStyleValues },

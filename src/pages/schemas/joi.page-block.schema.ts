@@ -22,6 +22,8 @@ const blockButtonSchema = Joi.object({
     .valid(...Object.values(BlockButtonType))
     .required(),
   targetId: Joi.string().trim().max(120).optional(),
+  applicationProgramId: joiObjectId.optional(),
+  applicationEventId: joiObjectId.optional(),
   url: Joi.string().trim().uri().optional(),
   openInNewTab: Joi.boolean().default(false).optional(),
   style: Joi.string()
@@ -29,6 +31,15 @@ const blockButtonSchema = Joi.object({
     .optional(),
 })
   .custom((value, helpers) => {
+    if (value.type !== BlockButtonType.Application) {
+      if (value.applicationProgramId || value.applicationEventId) {
+        return helpers.error('any.custom', {
+          message:
+            'Application entity target fields are only allowed on application buttons',
+        });
+      }
+    }
+
     if (value.type === BlockButtonType.External) {
       if (!value.url) {
         return helpers.error('any.custom', {
@@ -65,6 +76,59 @@ const blockButtonSchema = Joi.object({
         return helpers.error('any.custom', {
           message: `${value.type} buttons require a valid ObjectId targetId`,
         });
+      }
+
+      if (value.type === BlockButtonType.Application) {
+        if (
+          !Object.values(ApplicationFormType).includes(
+            value.targetId as ApplicationFormType,
+          )
+        ) {
+          return helpers.error('any.custom', {
+            message:
+              'Application buttons require a valid application type targetId',
+          });
+        }
+
+        if (
+          value.targetId === ApplicationFormType.ProgramEnrollment &&
+          !value.applicationProgramId
+        ) {
+          return helpers.error('any.custom', {
+            message:
+              'Program enrollment application buttons require applicationProgramId',
+          });
+        }
+
+        if (
+          value.targetId === ApplicationFormType.EventRegistration &&
+          !value.applicationEventId
+        ) {
+          return helpers.error('any.custom', {
+            message:
+              'Event registration application buttons require applicationEventId',
+          });
+        }
+
+        if (
+          value.targetId !== ApplicationFormType.ProgramEnrollment &&
+          value.applicationProgramId
+        ) {
+          return helpers.error('any.custom', {
+            message:
+              'applicationProgramId is only allowed for program enrollment application buttons',
+          });
+        }
+
+        if (
+          value.targetId !== ApplicationFormType.EventRegistration &&
+          value.applicationEventId
+        ) {
+          return helpers.error('any.custom', {
+            message:
+              'applicationEventId is only allowed for event registration application buttons',
+          });
+        }
       }
     }
 

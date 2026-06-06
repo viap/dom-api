@@ -90,6 +90,8 @@ type BlockButton = {
   label: string;
   type: 'page' | 'domain' | 'external' | 'application';
   targetId?: string;
+  applicationProgramId?: string;
+  applicationEventId?: string;
   url?: string;
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
@@ -101,6 +103,10 @@ Rules:
 - `external` requires `url`
 - internal button types require `targetId`
 - do not store both internal `targetId` and external `url`
+- for `application` buttons, `targetId` stores the application form type
+- `program_enrollment` application buttons require `applicationProgramId`
+- `event_registration` application buttons require `applicationEventId`
+- application entity target fields are rejected for unrelated button types or unrelated application form types
 
 ### 3.2 Media Reference
 
