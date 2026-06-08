@@ -304,7 +304,25 @@ type ApplicationFormBlock = PageBlockBase & {
 };
 ```
 
-## 4.6 `gallery`
+## 4.6 `html`
+
+```ts
+type HtmlBlock = PageBlockBase & {
+  type: 'html';
+  template?: 'vertical' | 'horizontal-left' | 'horizontal-right';
+  content: string;
+};
+```
+
+Public rendering rules:
+
+- render sanitized HTML directly in the public page DOM so site typography, font variables, theme variables, and utility classes can apply
+- wrap rendered content in the public HTML block style scope for default element styling
+- preserve `<script>` and `<style>` tags for imported HTML that needs embedded behavior or styling
+- preserve class attributes and inline style attributes for imported content that needs layout or utility classes
+- preserve normal HTML structures such as tables, figures, lists, details, and forms unless explicitly blocked by sanitization
+
+## 4.7 `gallery`
 
 ```ts
 type GalleryBlock = PageBlockBase & {
@@ -318,7 +336,7 @@ type GalleryBlock = PageBlockBase & {
 };
 ```
 
-## 4.7 `linkGroup`
+## 4.8 `linkGroup`
 
 ```ts
 type LinkGroupBlock = PageBlockBase & {
@@ -328,7 +346,7 @@ type LinkGroupBlock = PageBlockBase & {
 };
 ```
 
-## 4.8 `statGroup`
+## 4.9 `statGroup`
 
 ```ts
 type StatGroupBlock = PageBlockBase & {
