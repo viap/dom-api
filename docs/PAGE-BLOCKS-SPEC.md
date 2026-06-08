@@ -69,6 +69,7 @@ type PageBlockBase = {
   theme?: string;
   background?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  fullWidth?: boolean;
 };
 ```
 
@@ -78,6 +79,8 @@ Notes:
 - `variant` is block-specific and should not replace `type`
 - `theme` should stay token-based, not raw design values, where possible
 - `background` is an optional shared string field for any block and should stay within 300 characters
+- `fullWidth: true` removes the standard public content max-width while preserving section background, vertical padding, and responsive horizontal gutters
+- omitted or false `fullWidth` values keep the current constrained public layout
 
 ---
 

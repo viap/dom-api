@@ -88,6 +88,7 @@ export const pageBlockBaseSchema = new mongoose.Schema(
     theme: { type: String },
     background: { type: String, trim: true, maxlength: 300 },
     padding: { type: String, enum: spacingValues },
+    fullWidth: { type: Boolean, default: false },
   },
   {
     _id: false,
