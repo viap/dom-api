@@ -304,7 +304,28 @@ type ApplicationFormBlock = PageBlockBase & {
 };
 ```
 
-## 4.6 `gallery`
+## 4.6 `html`
+
+```ts
+type HtmlBlock = PageBlockBase & {
+  type: 'html';
+  template?: 'vertical' | 'horizontal-left' | 'horizontal-right';
+  content: string;
+};
+```
+
+Public rendering rules:
+
+- render sanitized HTML inside a Shadow DOM host so imported styles and scripts stay isolated from the main page
+- inject the public HTML block base styles into the shadow root before the imported content
+- consume inherited site font variables, design tokens, and `--block-text-*` colors from the shadow host where available, with safe fallbacks
+- do not rely on main-page utility classes applying inside the shadow root; imported content must include its own styles or inline styles when it needs custom utility-like layout
+- preserve `<script>` and `<style>` tags for imported HTML that needs embedded behavior or styling
+- preserve class attributes and inline style attributes for imported content that needs layout or utility classes
+- preserve normal HTML structures such as tables, figures, lists, details, and forms unless explicitly blocked by sanitization
+- admin editor preview mode reuses the public `HtmlBlock` renderer so wrapper layout, width constraints, typography, background tokens, Shadow DOM isolation, and embedded script behavior stay aligned with public pages
+
+## 4.7 `gallery`
 
 ```ts
 type GalleryBlock = PageBlockBase & {
@@ -318,7 +339,7 @@ type GalleryBlock = PageBlockBase & {
 };
 ```
 
-## 4.7 `linkGroup`
+## 4.8 `linkGroup`
 
 ```ts
 type LinkGroupBlock = PageBlockBase & {
@@ -328,7 +349,7 @@ type LinkGroupBlock = PageBlockBase & {
 };
 ```
 
-## 4.8 `statGroup`
+## 4.9 `statGroup`
 
 ```ts
 type StatGroupBlock = PageBlockBase & {

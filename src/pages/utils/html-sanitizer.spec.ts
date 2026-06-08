@@ -43,7 +43,17 @@ describe('sanitizeHtmlBlockContent', () => {
     expect(result).not.toContain('javascript:');
   });
 
-  it('should preserve style tags', () => {
+  it('should preserve script and style tags', () => {
+    const html =
+      '<script>window.x = 1</script><style>.foo { color: red; }</style><p>Hello</p>';
+    expect(sanitizeHtmlBlockContent(html)).toContain('<script>');
+    expect(sanitizeHtmlBlockContent(html)).toContain('<style>');
+    expect(sanitizeHtmlBlockContent(html)).toContain('window.x');
+    expect(sanitizeHtmlBlockContent(html)).toContain('color: red');
+    expect(sanitizeHtmlBlockContent(html)).toContain('<p>Hello</p>');
+  });
+
+  it('should preserve style tags with safe sibling content', () => {
     const html = '<style>.foo { color: red; }</style><p>Hello</p>';
     expect(sanitizeHtmlBlockContent(html)).toContain('<style>');
     expect(sanitizeHtmlBlockContent(html)).toContain('<p>Hello</p>');
@@ -100,6 +110,14 @@ describe('sanitizeHtmlBlockContent', () => {
     const html =
       '<a href="mailto:test@example.com">email</a> <a href="tel:+1234567890">call</a>';
     expect(sanitizeHtmlBlockContent(html)).toBe(html);
+  });
+
+  it('should append noopener noreferrer to blank target links', () => {
+    const html =
+      '<a href="https://example.com" target="_blank" rel="nofollow">link</a>';
+    expect(sanitizeHtmlBlockContent(html)).toContain(
+      'rel="nofollow noopener noreferrer"',
+    );
   });
 
   it('should return empty string for whitespace-only input', () => {

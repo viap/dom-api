@@ -53,6 +53,17 @@ function stripEventHandlers(
       cleaned[key] = value;
     }
   }
+  if (_tagName === 'a' && cleaned.target === '_blank') {
+    const relParts = new Set(
+      String(cleaned.rel || '')
+        .split(/\s+/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
+    relParts.add('noopener');
+    relParts.add('noreferrer');
+    cleaned.rel = Array.from(relParts).join(' ');
+  }
   return { tagName: _tagName, attribs: cleaned };
 }
 
