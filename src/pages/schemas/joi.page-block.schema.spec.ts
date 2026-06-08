@@ -1,6 +1,8 @@
 import { createPageSchema } from './joi.create-page.schema';
 import { updatePageSchema } from './joi.update-page.schema';
 
+const objectId = '507f1f77bcf86cd799439221';
+
 describe('createPageSchema', () => {
   it('should allow empty blocks on create', () => {
     const { error } = createPageSchema.validate({
@@ -263,6 +265,89 @@ describe('createPageSchema', () => {
     });
 
     expect(error).toBeUndefined();
+  });
+
+  it('should allow fullWidth true on all supported block types', () => {
+    const minimalBlocks = [
+      { id: 'rich-text', type: 'richText' },
+      {
+        id: 'entity-collection',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        items: [objectId],
+      },
+      { id: 'hero', type: 'hero' },
+      {
+        id: 'cta',
+        type: 'cta',
+        buttons: [
+          {
+            label: 'Open',
+            type: 'external',
+            url: 'https://example.com',
+          },
+        ],
+      },
+      {
+        id: 'gallery',
+        type: 'gallery',
+        items: [{ mediaId: objectId }],
+      },
+      {
+        id: 'application-form',
+        type: 'applicationForm',
+        applicationType: 'general',
+      },
+      {
+        id: 'html',
+        type: 'html',
+        content: '<p>Hello</p>',
+      },
+    ];
+
+    for (const block of minimalBlocks) {
+      const { error, value } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [{ ...block, fullWidth: true }],
+      });
+
+      expect(error).toBeUndefined();
+      expect(value.blocks[0].fullWidth).toBe(true);
+    }
+  });
+
+  it('should reject non-boolean fullWidth values', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          fullWidth: 'wide',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should default omitted fullWidth to false', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].fullWidth).toBe(false);
   });
 
   it('should reject background values longer than 300 characters', () => {

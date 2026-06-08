@@ -44,6 +44,7 @@ export interface PageBlockBase {
   theme?: string;
   background?: string;
   padding?: BlockSpacing;
+  fullWidth?: boolean;
 }
 
 export interface RichTextBlock extends PageBlockBase {

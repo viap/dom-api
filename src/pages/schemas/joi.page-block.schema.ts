@@ -165,6 +165,7 @@ const pageBlockBaseSchema = {
   theme: attributeTokenSchema.optional(),
   background: Joi.string().trim().max(300).optional(),
   padding: spacingSchema.optional(),
+  fullWidth: Joi.boolean().default(false).optional(),
 };
 
 const richTextBlockSchema = Joi.object({
