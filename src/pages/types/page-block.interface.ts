@@ -7,6 +7,7 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 
 export type BlockSpacing = 'none' | 'sm' | 'md' | 'lg' | 'xl';
 export type BlockVariant = 'section' | 'block' | 'element';
+export type BlockTextAlign = 'left' | 'center' | 'right';
 export type MediaPosition = 'left' | 'right' | 'top' | 'bottom';
 
 export interface BlockButton {
@@ -45,6 +46,7 @@ export interface PageBlockBase {
   background?: string;
   padding?: BlockSpacing;
   fullWidth?: boolean;
+  textAlign?: BlockTextAlign;
 }
 
 export interface RichTextBlock extends PageBlockBase {

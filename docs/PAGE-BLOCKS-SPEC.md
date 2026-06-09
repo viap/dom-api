@@ -70,6 +70,7 @@ type PageBlockBase = {
   background?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   fullWidth?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
 };
 ```
 
@@ -81,6 +82,10 @@ Notes:
 - `background` is an optional shared string field for any block and should stay within 300 characters
 - `fullWidth: true` removes the standard public content max-width while preserving section background, vertical padding, and responsive horizontal gutters
 - omitted or false `fullWidth` values keep the current constrained public layout
+- `textAlign` controls only block-level `title`, `subtitle`, and `description` text
+- omitted `textAlign` values default to `center`, preserving existing public block heading behavior without a migration
+- `textAlign` must not affect nested cards, gallery captions, hero items, buttons, forms, media, sliders, carousels, or isolated imported HTML content
+- admin editors should show the `textAlign` control in the common block content section near Title, Subtitle, and Description
 
 ---
 
@@ -373,6 +378,7 @@ Main refinements:
 - `Event list` becomes a specific use of `entityCollection` with `entityType='events'`
 - `Text Block` becomes `richText`
 - `richText` now supports `relatedPeople` with a title like `Authors`
+- shared block text alignment is represented by `textAlign`, defaulting to `center`
 - “linked entities” are not mixed into `richText` beyond this compact people-attribution use case
 
 This keeps `richText` useful for editorial content without turning it into a second generic collection block.
