@@ -10,6 +10,7 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 const stringSchema = Joi.string().trim().max(5000);
 const spacingSchema = Joi.string().valid('none', 'sm', 'md', 'lg', 'xl');
 const variantSchema = Joi.string().valid('section', 'block', 'element');
+const textAlignSchema = Joi.string().valid('left', 'center', 'right');
 const attributeTokenSchema = Joi.string()
   .trim()
   .min(1)
@@ -166,6 +167,7 @@ const pageBlockBaseSchema = {
   background: Joi.string().trim().max(300).optional(),
   padding: spacingSchema.optional(),
   fullWidth: Joi.boolean().default(false).optional(),
+  textAlign: textAlignSchema.optional(),
 };
 
 const richTextBlockSchema = Joi.object({

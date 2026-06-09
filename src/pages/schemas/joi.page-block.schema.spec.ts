@@ -350,6 +350,89 @@ describe('createPageSchema', () => {
     expect(value.blocks[0].fullWidth).toBe(false);
   });
 
+  it('should allow textAlign on all supported block types', () => {
+    const minimalBlocks = [
+      { id: 'rich-text', type: 'richText' },
+      {
+        id: 'entity-collection',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        items: [objectId],
+      },
+      { id: 'hero', type: 'hero' },
+      {
+        id: 'cta',
+        type: 'cta',
+        buttons: [
+          {
+            label: 'Open',
+            type: 'external',
+            url: 'https://example.com',
+          },
+        ],
+      },
+      {
+        id: 'gallery',
+        type: 'gallery',
+        items: [{ mediaId: objectId }],
+      },
+      {
+        id: 'application-form',
+        type: 'applicationForm',
+        applicationType: 'general',
+      },
+      {
+        id: 'html',
+        type: 'html',
+        content: '<p>Hello</p>',
+      },
+    ];
+
+    for (const block of minimalBlocks) {
+      const { error, value } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [{ ...block, textAlign: 'right' }],
+      });
+
+      expect(error).toBeUndefined();
+      expect(value.blocks[0].textAlign).toBe('right');
+    }
+  });
+
+  it('should reject invalid textAlign values', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          textAlign: 'justify',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should leave omitted textAlign as undefined', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].textAlign).toBeUndefined();
+  });
+
   it('should reject background values longer than 300 characters', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

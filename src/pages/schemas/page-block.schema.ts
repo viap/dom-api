@@ -11,6 +11,7 @@ const variantValues = ['section', 'block', 'element'];
 const buttonStyleValues = ['primary', 'secondary', 'ghost', 'outline', 'link'];
 const mediaPositionValues = ['left', 'right', 'top', 'bottom'];
 const galleryLayoutValues = ['grid', 'carousel', 'slider'];
+const textAlignValues = ['left', 'center', 'right'];
 
 export const blockButtonSchema = new mongoose.Schema(
   {
@@ -89,6 +90,7 @@ export const pageBlockBaseSchema = new mongoose.Schema(
     background: { type: String, trim: true, maxlength: 300 },
     padding: { type: String, enum: spacingValues },
     fullWidth: { type: Boolean, default: false },
+    textAlign: { type: String, enum: textAlignValues },
   },
   {
     _id: false,
