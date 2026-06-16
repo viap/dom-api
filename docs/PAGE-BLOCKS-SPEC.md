@@ -322,9 +322,12 @@ type HtmlBlock = PageBlockBase & {
 Public rendering rules:
 
 - render sanitized HTML inside a Shadow DOM host so imported styles and scripts stay isolated from the main page
-- inject the public HTML block base styles into the shadow root before the imported content
-- consume inherited site font variables, design tokens, and `--block-text-*` colors from the shadow host where available, with safe fallbacks
+- inject neutral public HTML block base styles into the shadow root before the imported content
+- consume inherited site font variables and `--block-text-*` body colors from the shadow host where available, with safe fallbacks
+- keep base styles limited to neutral host defaults; do not style common placed HTML tags such as headings, paragraphs, links, tables, lists, blockquotes, figures, or images by tag name
+- apply built-in Insert Template styling through explicit `dom-html-snippet*` classes only
 - do not rely on main-page utility classes applying inside the shadow root; imported content must include its own styles or inline styles when it needs custom utility-like layout
+- custom placed HTML should include its own CSS through class attributes, inline styles, or embedded `<style>` tags when it needs custom presentation
 - preserve `<script>` and `<style>` tags for imported HTML that needs embedded behavior or styling
 - preserve class attributes and inline style attributes for imported content that needs layout or utility classes
 - preserve normal HTML structures such as tables, figures, lists, details, and forms unless explicitly blocked by sanitization
