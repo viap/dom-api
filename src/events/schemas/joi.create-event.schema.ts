@@ -20,6 +20,8 @@ export const createEventSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).required(),
 
+  description: Joi.string().trim().max(2000).allow('').optional(),
+
   slug: joiSlugSchema.required(),
 
   startAt: joiUtcIsoDateTime.required(),

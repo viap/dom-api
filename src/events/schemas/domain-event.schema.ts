@@ -28,6 +28,9 @@ export class DomainEvent {
   @Prop({ required: true, trim: true })
   title: string;
 
+  @Prop({ trim: true })
+  description?: string;
+
   @Prop({ required: true, trim: true })
   slug: string;
 

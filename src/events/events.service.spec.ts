@@ -22,6 +22,7 @@ describe('EventsService', () => {
     type: 'seminar',
     status: 'planned',
     title: 'Event',
+    description: 'Event description',
     slug: 'event',
     startAt: '2026-04-20T10:00:00.000Z',
     endAt: '2026-04-20T11:00:00.000Z',
@@ -145,6 +146,54 @@ describe('EventsService', () => {
         ],
       },
     });
+  });
+
+  it('passes optional description into the created event document', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await service.create({
+      domainId: mockEvent.domainId,
+      type: 'seminar' as any,
+      title: 'Event',
+      description: 'Event description',
+      slug: 'event',
+      startAt: '2026-04-20T10:00:00.000Z',
+      endAt: '2026-04-20T11:00:00.000Z',
+    });
+
+    expect(mockEventModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Event description',
+      }),
+    );
+  });
+
+  it('passes optional description into event updates', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockEvent,
+          description: '',
+        }),
+      }),
+    });
+
+    const result = await service.update(mockEvent._id, {
+      description: '',
+    });
+
+    expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockEvent._id,
+      { description: '' },
+      { new: true },
+    );
+    expect(result.description).toBe('');
   });
 
   it('should reject duplicate slug within the same domain', async () => {

@@ -7,6 +7,7 @@ export interface CreateEventDto {
   type: EventType;
   status?: EventStatus;
   title: string;
+  description?: string;
   slug: string;
   startAt: string;
   endAt: string;

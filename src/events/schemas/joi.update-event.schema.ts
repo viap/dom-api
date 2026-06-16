@@ -19,6 +19,8 @@ export const updateEventSchema = Joi.object({
 
   title: Joi.string().trim().min(1).max(150).optional(),
 
+  description: Joi.string().trim().max(2000).allow('').optional(),
+
   slug: joiSlugSchema.optional(),
 
   startAt: joiUtcIsoDateTime.optional(),

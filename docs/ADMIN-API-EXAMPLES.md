@@ -1786,6 +1786,7 @@ Response:
     "type": "workshop",
     "status": "planned",
     "title": "Trauma-Informed Practice Workshop",
+    "description": "Hands-on workshop for trauma-informed group practice.",
     "slug": "trauma-informed-practice-workshop",
     "startAt": "2026-04-13T00:00:00.000Z",
     "endAt": "2026-04-13T03:00:00.000Z",
@@ -1827,6 +1828,7 @@ Request:
   "type": "seminar",
   "status": "registration_open",
   "title": "Open Seminar on Burnout",
+  "description": "Introductory seminar with practical burnout prevention tools.",
   "slug": "open-seminar-on-burnout",
   "startAt": "2026-04-13T00:00:00.000Z",
   "endAt": "2026-04-13T02:00:00.000Z",
@@ -1863,6 +1865,7 @@ Response:
   "type": "seminar",
   "status": "registration_open",
   "title": "Open Seminar on Burnout",
+  "description": "Introductory seminar with practical burnout prevention tools.",
   "slug": "open-seminar-on-burnout",
   "startAt": "2026-04-13T00:00:00.000Z",
   "endAt": "2026-04-13T02:00:00.000Z",
@@ -1900,6 +1903,7 @@ Request:
 ```json
 {
   "status": "ongoing",
+  "description": "Updated seminar agenda and follow-up resources.",
   "mediaId": "661500000000000000000003",
   "registration": {
     "isOpen": false,
@@ -1928,6 +1932,7 @@ Response:
   "type": "seminar",
   "status": "ongoing",
   "title": "Open Seminar on Burnout",
+  "description": "Updated seminar agenda and follow-up resources.",
   "slug": "open-seminar-on-burnout",
   "startAt": "2026-04-13T00:00:00.000Z",
   "endAt": "2026-04-13T02:00:00.000Z",

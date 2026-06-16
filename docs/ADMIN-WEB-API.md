@@ -802,6 +802,7 @@ Public reads allow only statuses:
   type: 'seminar' | 'workshop' | 'community_meetup' | 'training' | 'webinar';
   status: 'draft' | 'planned' | 'registration_open' | 'ongoing' | 'completed' | 'cancelled';
   title: string;
+  description?: string;
   slug: string;
   startAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
   endAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
@@ -833,6 +834,8 @@ Public reads allow only statuses:
 ### Frontend use
 
 - public events listing
+- admin create/edit event form
+- public entity collection event cards
 - admin event management
 - source entity for applications
 

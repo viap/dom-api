@@ -266,6 +266,7 @@ Reason:
 
 - those differ mostly by layout, not by content model
 - dynamic query-driven collections are explicitly deferred
+- event collections render event date/time plus optional event `description` when the resolved event provides one
 
 ## 4.3 `cta`
 
