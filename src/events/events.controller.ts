@@ -22,6 +22,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
 import { createEventSchema } from './schemas/joi.create-event.schema';
+import { eventDomainEventParamsSchema } from './schemas/joi.event-params.schema';
 import { eventQuerySchema } from './schemas/joi.event-query.schema';
 import { updateEventSchema } from './schemas/joi.update-event.schema';
 import { EventQueryParams } from './types/query-params.interface';
@@ -39,7 +40,22 @@ export class EventsController {
     return this.eventsService.findAll(query);
   }
 
-  @Get(':id')
+  @Get('domain/:domainSlug/:eventSlug')
+  @Public()
+  findOneByDomainSlugAndEventSlug(
+    @Param(new JoiValidationPipe(eventDomainEventParamsSchema))
+    params: {
+      domainSlug: string;
+      eventSlug: string;
+    },
+  ) {
+    return this.eventsService.findOneByDomainSlugAndEventSlug(
+      params.domainSlug,
+      params.eventSlug,
+    );
+  }
+
+  @Get(':id([0-9a-fA-F]{24})')
   @Public()
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);

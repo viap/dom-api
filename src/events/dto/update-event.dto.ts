@@ -1,4 +1,5 @@
 import { Price } from '@/common/schemas/price.schema';
+import { PageBlock } from '@/pages/types/page-block.interface';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 
@@ -27,4 +28,6 @@ export interface UpdateEventDto {
     price: Price;
   }>;
   capacity?: number;
+  seo?: Record<string, string>;
+  blocks?: PageBlock[];
 }

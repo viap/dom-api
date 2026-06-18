@@ -2,9 +2,11 @@ import * as Joi from 'joi';
 import { joiUtcIsoDateTime } from '@/common/schemas/joi.datetime.schema';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiPriceGroupSchema } from '@/common/schemas/joi.price-group.schema';
+import { joiSeoSchema } from '@/common/schemas/joi.seo.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
+import { pageBlocksSchema } from '@/pages/schemas/joi.page-block.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
-import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 
 export const updateEventSchema = Joi.object({
   domainId: joiObjectId.optional(),
@@ -39,8 +41,27 @@ export const updateEventSchema = Joi.object({
     deadline: joiUtcIsoDateTime.optional(),
   }).optional(),
 
+  program: Joi.array()
+    .items(
+      Joi.object({
+        time: Joi.string().trim().max(20).required(),
+        title: Joi.string().trim().min(1).max(200).required(),
+        note: Joi.string().trim().max(500).allow('').optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
+
+  learnings: Joi.array()
+    .items(Joi.string().trim().min(1).max(300))
+    .max(50)
+    .optional(),
+
   priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
   capacity: Joi.number().integer().min(1).optional(),
+
+  seo: joiSeoSchema.optional(),
+  blocks: pageBlocksSchema.optional(),
 })
   .custom((value, helpers) => {
     if (value.startAt && value.endAt) {

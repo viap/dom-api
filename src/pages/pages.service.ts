@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -28,25 +27,15 @@ import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
-import { BlockButtonType } from './enums/block-button-type.enum';
-import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
-import { PageBlockType } from './enums/page-block-type.enum';
 import { PageStatus } from './enums/page-status.enum';
-import { RelatedPeopleDisplay } from './enums/related-people-display.enum';
 import { PageQueryParams } from './types/query-params.interface';
 import { Page, PageDocument } from './schemas/page.schema';
+import { PageBlock } from './types/page-block.interface';
 import {
-  CtaBlock,
-  EntityCollectionBlock,
-  GalleryBlock,
-  HeroBlock,
-  PageBlock,
-  RichTextBlock,
-} from './types/page-block.interface';
-import {
-  sanitizeHtmlBlockContent,
-  sanitizeRichTextHtml,
-} from './utils/html-sanitizer';
+  BlockValidationServices,
+  prepareBlocksForWrite,
+  toPublicBlocks,
+} from './utils/block-validation';
 
 type PageReference = {
   _id: mongoose.Types.ObjectId | string;
@@ -58,15 +47,6 @@ type PageReference = {
 type PublicPageSource = {
   blocks?: Array<PageBlock | Record<string, unknown>>;
 } & Record<string, unknown>;
-
-type ValidationRefs = {
-  peopleIds: Set<string>;
-  partnerIds: Set<string>;
-  eventIds: Set<string>;
-  mediaIds: Set<string>;
-  pageIds: Set<string>;
-  domainIds: Set<string>;
-};
 
 @Injectable()
 export class PagesService {
@@ -93,8 +73,9 @@ export class PagesService {
       await this.ensureUniqueHomepage(createPageDto.domainId);
     }
 
-    const normalizedBlocks = await this.prepareBlocksForWrite(
+    const normalizedBlocks = await prepareBlocksForWrite(
       createPageDto.blocks || [],
+      this.getBlockValidationServices(),
     );
 
     const page = new this.pageModel({
@@ -413,7 +394,10 @@ export class PagesService {
     }
     const normalizedBlocks =
       updatePageDto.blocks !== undefined
-        ? await this.prepareBlocksForWrite(updatePageDto.blocks)
+        ? await prepareBlocksForWrite(
+            updatePageDto.blocks,
+            this.getBlockValidationServices(),
+          )
         : undefined;
 
     const updateData: Record<string, unknown> = {};
@@ -527,248 +511,16 @@ export class PagesService {
     }
   }
 
-  private async prepareBlocksForWrite(
-    blocks: PageBlock[],
-  ): Promise<PageBlock[]> {
-    await this.validateBlocks(blocks);
-
-    return blocks.map((block) => {
-      if (block.type === PageBlockType.Html) {
-        const sanitizedContent = sanitizeHtmlBlockContent(block.content);
-        if (!sanitizedContent) {
-          throw new BadRequestException(
-            `HTML block "${block.id}" content is empty after sanitization`,
-          );
-        }
-        return {
-          ...block,
-          content: sanitizedContent,
-        };
-      }
-
-      if (block.type !== PageBlockType.RichText) {
-        return block;
-      }
-
-      return {
-        ...block,
-        description:
-          typeof block.description === 'string'
-            ? sanitizeRichTextHtml(block.description)
-            : block.description,
-        relatedPeople: block.relatedPeople
-          ? {
-              ...block.relatedPeople,
-              display:
-                block.relatedPeople.display || RelatedPeopleDisplay.Inline,
-            }
-          : undefined,
-      };
-    });
-  }
-
-  private async validateBlocks(blocks: PageBlock[]): Promise<void> {
-    const seenIds = new Set<string>();
-    const refs = this.createValidationRefs();
-
-    for (const block of blocks) {
-      if (seenIds.has(block.id)) {
-        throw new BadRequestException(
-          `Duplicate block id found in page payload: ${block.id}`,
-        );
-      }
-      seenIds.add(block.id);
-
-      switch (block.type) {
-        case PageBlockType.RichText:
-          this.validateRichTextBlock(block, refs);
-          break;
-        case PageBlockType.EntityCollection:
-          this.validateEntityCollectionBlock(block, refs);
-          break;
-        case PageBlockType.Hero:
-          this.validateHeroBlock(block, refs);
-          break;
-        case PageBlockType.Cta:
-          this.validateCtaBlock(block, refs);
-          break;
-        case PageBlockType.Gallery:
-          this.validateGalleryBlock(block, refs);
-          break;
-        case PageBlockType.ApplicationForm:
-          this.validateApplicationFormType(block.applicationType);
-          break;
-        case PageBlockType.Html:
-          break;
-        default:
-          throw new BadRequestException('Unsupported page block type');
-      }
-    }
-
-    await this.validateCollectedRefs(refs);
-  }
-
-  private validateRichTextBlock(
-    block: RichTextBlock,
-    refs: ValidationRefs,
-  ): void {
-    if (block.media) {
-      refs.mediaIds.add(block.media.mediaId);
-    }
-
-    this.collectButtonRefs(block.buttons, refs);
-
-    if (block.relatedPeople) {
-      if (!block.relatedPeople.title) {
-        throw new BadRequestException('relatedPeople.title is required');
-      }
-      if (!block.relatedPeople.peopleIds.length) {
-        throw new BadRequestException(
-          'relatedPeople.peopleIds must contain at least one person',
-        );
-      }
-      this.collectIds(refs.peopleIds, block.relatedPeople.peopleIds);
-    }
-  }
-
-  private validateEntityCollectionBlock(
-    block: EntityCollectionBlock,
-    refs: ValidationRefs,
-  ): void {
-    this.ensureBlockHasItems(
-      block.items,
-      'entityCollection.items must contain at least one item',
-    );
-
-    switch (block.entityType) {
-      case EntityCollectionEntityType.People:
-        this.collectIds(refs.peopleIds, block.items);
-        break;
-      case EntityCollectionEntityType.Partners:
-        this.collectIds(refs.partnerIds, block.items);
-        break;
-      case EntityCollectionEntityType.Events:
-        this.collectIds(refs.eventIds, block.items);
-        break;
-      default:
-        throw new BadRequestException(
-          `Unsupported entity collection type: ${block.entityType}`,
-        );
-    }
-  }
-
-  private validateHeroBlock(block: HeroBlock, refs: ValidationRefs): void {
-    if (block.backgroundMedia) {
-      refs.mediaIds.add(block.backgroundMedia.mediaId);
-    }
-
-    for (const item of block.items || []) {
-      if (item.button) {
-        this.collectButtonRefs([item.button], refs);
-      }
-    }
-  }
-
-  private validateCtaBlock(block: CtaBlock, refs: ValidationRefs): void {
-    this.ensureBlockHasItems(
-      block.buttons,
-      'cta.buttons must contain at least one button',
-    );
-    this.collectButtonRefs(block.buttons, refs);
-  }
-
-  private validateGalleryBlock(
-    block: GalleryBlock,
-    refs: ValidationRefs,
-  ): void {
-    this.ensureBlockHasItems(
-      block.items,
-      'gallery.items must contain at least one item',
-    );
-
-    for (const item of block.items) {
-      refs.mediaIds.add(item.mediaId);
-    }
-  }
-
-  private validateApplicationFormType(value: string): void {
-    if (
-      !Object.values(ApplicationFormType).includes(value as ApplicationFormType)
-    ) {
-      throw new BadRequestException(
-        `Unsupported application form type: ${value}`,
-      );
-    }
-  }
-
-  private collectButtonRefs(
-    buttons: Array<{
-      type: BlockButtonType;
-      targetId?: string;
-      url?: string;
-    }> = [],
-    refs: ValidationRefs,
-  ): void {
-    for (const button of buttons || []) {
-      switch (button.type) {
-        case BlockButtonType.External:
-          if (!button.url) {
-            throw new BadRequestException('External button url is required');
-          }
-          if (button.targetId) {
-            throw new BadRequestException(
-              'External buttons must not include targetId',
-            );
-          }
-          break;
-        case BlockButtonType.Page:
-          if (!button.targetId) {
-            throw new BadRequestException('Page button target is required');
-          }
-          if (button.url) {
-            throw new BadRequestException('Page buttons must not include url');
-          }
-          refs.pageIds.add(button.targetId);
-          break;
-        case BlockButtonType.Domain:
-          if (!button.targetId) {
-            throw new BadRequestException('Domain button target is required');
-          }
-          if (button.url) {
-            throw new BadRequestException(
-              'Domain buttons must not include url',
-            );
-          }
-          refs.domainIds.add(button.targetId);
-          break;
-        case BlockButtonType.Application:
-          if (!button.targetId) {
-            throw new BadRequestException(
-              'Application button target is required',
-            );
-          }
-          if (button.url) {
-            throw new BadRequestException(
-              'Application buttons must not include url',
-            );
-          }
-          this.validateApplicationFormType(button.targetId);
-          break;
-        default:
-          throw new BadRequestException(
-            `Unsupported button type: ${button.type}`,
-          );
-      }
-    }
-  }
-
-  private ensureBlockHasItems(
-    items: unknown[] | undefined,
-    message: string,
-  ): asserts items is unknown[] {
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException(message);
-    }
+  private getBlockValidationServices(): BlockValidationServices {
+    return {
+      peopleExistingIds: (ids) => this.peopleService.existingIds(ids),
+      partnersExistingIds: (ids) => this.partnersService.existingIds(ids),
+      eventsExistingIds: (ids) => this.eventsService.existingIds(ids),
+      mediaExistingPublishedIds: (ids) =>
+        this.mediaService.existingPublishedIds(ids),
+      pagesExistingIds: (ids) => this.existingIds(ids),
+      domainsGetActiveById: (id) => this.domainsService.getActiveById(id),
+    };
   }
 
   async existingIds(ids: string[]): Promise<Set<string>> {
@@ -807,28 +559,10 @@ export class PagesService {
 
   private async toPublicPage(page: PublicPageSource): Promise<PageDocument> {
     const blocks = Array.isArray(page.blocks) ? page.blocks : [];
-    const publicBlocks: Array<PageBlock | Record<string, unknown>> = [];
-
-    for (const block of blocks) {
-      if (!block || typeof block !== 'object') {
-        continue;
-      }
-
-      const typedBlock = block as Record<string, unknown>;
-      if (typedBlock.isVisible === false) {
-        continue;
-      }
-
-      if (typedBlock.type === PageBlockType.RichText) {
-        const processedBlock = await this.toPublicRichTextBlock(typedBlock);
-        if (processedBlock) {
-          publicBlocks.push(processedBlock);
-        }
-        continue;
-      }
-
-      publicBlocks.push(typedBlock);
-    }
+    const publicBlocks = await toPublicBlocks(blocks, {
+      findPublishedPeopleSummariesByIds: (ids) =>
+        this.peopleService.findPublishedSummariesByIds(ids),
+    });
 
     return this.normalizePageTitleVisibility({
       ...(page as unknown as PageDocument),
@@ -843,124 +577,6 @@ export class PagesService {
       ...(page as unknown as PageDocument),
       isTitleVisible: page.isTitleVisible === false ? false : true,
     } as PageDocument;
-  }
-
-  private async toPublicRichTextBlock(
-    block: Record<string, unknown>,
-  ): Promise<Record<string, unknown> | null> {
-    const relatedPeople =
-      block.relatedPeople && typeof block.relatedPeople === 'object'
-        ? (block.relatedPeople as Record<string, unknown>)
-        : null;
-
-    if (!relatedPeople) {
-      return block;
-    }
-
-    const peopleIds = Array.isArray(relatedPeople.peopleIds)
-      ? relatedPeople.peopleIds.filter(
-          (value): value is string => typeof value === 'string',
-        )
-      : [];
-
-    const summaries = await this.peopleService.findPublishedSummariesByIds(
-      peopleIds,
-    );
-    const peopleById = new Map(
-      summaries.map((person) => [person._id.toString(), person]),
-    );
-    const people = peopleIds
-      .map((personId) => peopleById.get(personId))
-      .filter(
-        (
-          person,
-        ): person is {
-          _id: string;
-          fullName: string;
-        } => Boolean(person),
-      );
-    const visiblePeopleIds = people.map((person) => person._id);
-
-    if (!people.length) {
-      const { relatedPeople: _relatedPeople, ...rest } = block;
-      return rest;
-    }
-
-    return {
-      ...block,
-      relatedPeople: {
-        ...relatedPeople,
-        peopleIds: visiblePeopleIds,
-        people,
-      },
-    };
-  }
-
-  private createValidationRefs(): ValidationRefs {
-    return {
-      peopleIds: new Set<string>(),
-      partnerIds: new Set<string>(),
-      eventIds: new Set<string>(),
-      mediaIds: new Set<string>(),
-      pageIds: new Set<string>(),
-      domainIds: new Set<string>(),
-    };
-  }
-
-  private collectIds(target: Set<string>, ids: string[]): void {
-    for (const id of ids) {
-      target.add(id);
-    }
-  }
-
-  private async validateCollectedRefs(refs: ValidationRefs): Promise<void> {
-    await Promise.all([
-      this.ensureExistingIds(
-        refs.peopleIds,
-        (ids) => this.peopleService.existingIds(ids),
-        'Referenced person not found: ',
-      ),
-      this.ensureExistingIds(
-        refs.partnerIds,
-        (ids) => this.partnersService.existingIds(ids),
-        'Referenced partner not found: ',
-      ),
-      this.ensureExistingIds(
-        refs.eventIds,
-        (ids) => this.eventsService.existingIds(ids),
-        'Referenced event not found: ',
-      ),
-      this.ensureExistingIds(
-        refs.mediaIds,
-        (ids) => this.mediaService.existingPublishedIds(ids),
-        'Referenced published media not found: ',
-      ),
-      this.ensureExistingIds(
-        refs.pageIds,
-        (ids) => this.existingIds(ids),
-        'Referenced page button target not found: ',
-      ),
-      Promise.all(
-        [...refs.domainIds].map((id) => this.domainsService.getActiveById(id)),
-      ),
-    ]);
-  }
-
-  private async ensureExistingIds(
-    ids: Set<string>,
-    resolver: (ids: string[]) => Promise<Set<string>>,
-    messagePrefix: string,
-  ): Promise<void> {
-    if (!ids.size) {
-      return;
-    }
-
-    const values = [...ids];
-    const existingIds = await resolver(values);
-    const missingId = values.find((id) => !existingIds.has(id));
-    if (missingId) {
-      throw new BadRequestException(`${messagePrefix}${missingId}`);
-    }
   }
 
   private toPageReference(page: Record<string, unknown>): PageReference {
