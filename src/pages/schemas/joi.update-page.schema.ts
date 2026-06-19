@@ -1,12 +1,9 @@
 import * as Joi from 'joi';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
+import { joiSeoSchema } from '@/common/schemas/joi.seo.schema';
+import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { PageStatus } from '../enums/page-status.enum';
 import { pageBlocksSchema } from './joi.page-block.schema';
-import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
-
-const seoSchema = Joi.object()
-  .pattern(Joi.string().trim().max(100), Joi.string().trim().max(300))
-  .max(20);
 
 export const updatePageSchema = Joi.object({
   domainId: Joi.alternatives().try(joiObjectId, Joi.valid(null)).optional(),
@@ -17,6 +14,6 @@ export const updatePageSchema = Joi.object({
     .optional(),
   isHomepage: Joi.boolean().optional(),
   isTitleVisible: Joi.boolean().optional(),
-  seo: seoSchema.optional(),
+  seo: joiSeoSchema.optional(),
   blocks: pageBlocksSchema.optional(),
 });

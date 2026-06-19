@@ -212,6 +212,9 @@ Minimal:
   - `psych_school`
 - `title`
   UI: text input
+- `description`
+  UI: textarea
+  Notes: optional plain-text event summary; max 2000 characters
 - `slug`
   UI: text input
 - `isActive`

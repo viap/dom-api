@@ -4,6 +4,17 @@ import {
   PriceGroup,
   priceGroupSchema,
 } from '@/common/schemas/price-group.schema';
+import { PageBlockType } from '@/pages/enums/page-block-type.enum';
+import {
+  applicationFormBlockSchema,
+  ctaBlockSchema,
+  entityCollectionBlockSchema,
+  galleryBlockSchema,
+  heroBlockSchema,
+  htmlBlockSchema,
+  pageBlockBaseSchema,
+  richTextBlockSchema,
+} from '@/pages/schemas/page-block.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 
@@ -27,6 +38,9 @@ export class DomainEvent {
 
   @Prop({ required: true, trim: true })
   title: string;
+
+  @Prop({ trim: true })
+  description?: string;
 
   @Prop({ required: true, trim: true })
   slug: string;
@@ -80,17 +94,58 @@ export class DomainEvent {
     deadline?: string;
   };
 
+  @Prop({
+    type: [
+      {
+        time: { type: String, required: true, trim: true },
+        title: { type: String, required: true, trim: true },
+        note: { type: String, trim: true },
+        _id: false,
+      },
+    ],
+    default: [],
+  })
+  program: Array<{ time: string; title: string; note?: string }>;
+
+  @Prop({ type: [String], default: [] })
+  learnings: string[];
+
   @Prop({ type: [priceGroupSchema] })
   priceGroups?: PriceGroup[];
 
   @Prop({ min: 1 })
   capacity?: number;
 
+  @Prop({ type: mongoose.Schema.Types.Mixed })
+  seo?: Record<string, string>;
+
+  @Prop({ type: [pageBlockBaseSchema], default: [] })
+  blocks: unknown[];
+
   @Prop({ required: true, default: 1 })
   schemaVersion: number;
 }
 
 export const domainEventSchema = SchemaFactory.createForClass(DomainEvent);
+
+const eventBlocksPath = domainEventSchema.path(
+  'blocks',
+) as mongoose.Schema.Types.DocumentArray;
+
+eventBlocksPath.discriminator(PageBlockType.RichText, richTextBlockSchema);
+eventBlocksPath.discriminator(
+  PageBlockType.EntityCollection,
+  entityCollectionBlockSchema,
+);
+eventBlocksPath.discriminator(PageBlockType.Hero, heroBlockSchema);
+eventBlocksPath.discriminator(PageBlockType.Cta, ctaBlockSchema);
+eventBlocksPath.discriminator(PageBlockType.Gallery, galleryBlockSchema);
+eventBlocksPath.discriminator(
+  PageBlockType.ApplicationForm,
+  applicationFormBlockSchema,
+);
+eventBlocksPath.discriminator(PageBlockType.Html, htmlBlockSchema);
+
 domainEventSchema.index({ mediaId: 1 }, { sparse: true });
 domainEventSchema.index({ domainId: 1, slug: 1 }, { unique: true });
 domainEventSchema.index({ domainId: 1, status: 1, startAt: 1 });
@@ -102,3 +157,9 @@ domainEventSchema.index(
   { domainId: 1, startAt: 1 },
   { partialFilterExpression: { status: EventStatus.RegistrationOpen } },
 );
+domainEventSchema.index({ 'blocks.media.mediaId': 1 }, { sparse: true });
+domainEventSchema.index(
+  { 'blocks.backgroundMedia.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index({ 'blocks.items.mediaId': 1 }, { sparse: true });

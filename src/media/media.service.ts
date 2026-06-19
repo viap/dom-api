@@ -609,23 +609,121 @@ export class MediaService {
     mediaId: string,
     summary: MediaReferenceCleanupSummary,
   ): Promise<void> {
-    const events = await this.domainEventModel
+    // Clean top-level mediaId references
+    const topLevelEvents = await this.domainEventModel
       .find({ mediaId })
       .select({ _id: 1 })
       .lean()
       .exec();
 
-    if (!events.length) {
-      return;
+    if (topLevelEvents.length) {
+      await this.domainEventModel
+        .updateMany({ mediaId }, { $unset: { mediaId: '' } })
+        .exec();
+
+      summary.events.count += topLevelEvents.length;
+      for (const item of topLevelEvents) {
+        summary.events.recordIds.push(item._id.toString());
+      }
+      this.addPath(summary.events, 'mediaId');
     }
 
-    await this.domainEventModel
-      .updateMany({ mediaId }, { $unset: { mediaId: '' } })
+    // Clean block media references (same pattern as cleanupPageReferences)
+    const blockEvents = await this.domainEventModel
+      .find({
+        $or: [
+          { 'blocks.media.mediaId': mediaId },
+          { 'blocks.backgroundMedia.mediaId': mediaId },
+          { 'blocks.items.mediaId': mediaId },
+        ],
+      })
+      .select({ _id: 1, blocks: 1 })
+      .lean()
       .exec();
 
-    summary.events.count = events.length;
-    summary.events.recordIds = events.map((item) => item._id.toString());
-    this.addPath(summary.events, 'mediaId');
+    for (const event of blockEvents as Array<{
+      _id: unknown;
+      blocks?: unknown[];
+    }>) {
+      const blocks = Array.isArray(event.blocks) ? [...event.blocks] : [];
+      const nextBlocks: unknown[] = [];
+      const eventPaths = new Set<string>();
+      let changed = false;
+
+      for (const rawBlock of blocks) {
+        if (!rawBlock || typeof rawBlock !== 'object') {
+          nextBlocks.push(rawBlock);
+          continue;
+        }
+
+        const block = rawBlock as Record<string, unknown>;
+        const blockType = block.type;
+        const nextBlock: Record<string, unknown> = { ...block };
+
+        if (
+          blockType === PageBlockType.RichText &&
+          this.matchesMediaRef(nextBlock.media, mediaId)
+        ) {
+          delete nextBlock.media;
+          changed = true;
+          eventPaths.add('blocks.media.mediaId');
+        }
+
+        if (
+          blockType === PageBlockType.Hero &&
+          this.matchesMediaRef(nextBlock.backgroundMedia, mediaId)
+        ) {
+          delete nextBlock.backgroundMedia;
+          changed = true;
+          eventPaths.add('blocks.backgroundMedia.mediaId');
+        }
+
+        if (blockType === PageBlockType.Gallery && Array.isArray(block.items)) {
+          const originalItems = block.items;
+          const filteredItems = originalItems.filter(
+            (item) =>
+              !(
+                item &&
+                typeof item === 'object' &&
+                (item as Record<string, unknown>).mediaId === mediaId
+              ),
+          );
+
+          if (filteredItems.length !== originalItems.length) {
+            changed = true;
+            eventPaths.add('blocks.items.mediaId');
+          }
+
+          if (!filteredItems.length) {
+            changed = true;
+            eventPaths.add('blocks.gallery');
+            continue;
+          }
+
+          nextBlock.items = filteredItems;
+        }
+
+        nextBlocks.push(nextBlock);
+      }
+
+      if (!changed) {
+        continue;
+      }
+
+      await this.domainEventModel
+        .updateOne(
+          { _id: event._id },
+          { $set: { blocks: nextBlocks } },
+          { runValidators: true },
+        )
+        .exec();
+
+      summary.events.count += 1;
+      summary.events.recordIds.push(String(event._id));
+      for (const path of eventPaths) {
+        this.addPath(summary.events, path);
+      }
+    }
   }
 
   private async cleanupPeopleReferences(

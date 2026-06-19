@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -20,9 +20,20 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
+import {
+  Application,
+  ApplicationDocument,
+} from '@/applications/schemas/application.schema';
+import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
 import { MediaService } from '@/media/media.service';
+import {
+  BlockValidationServices,
+  prepareBlocksForWrite,
+  PublicBlockServices,
+  toPublicBlocks,
+} from '@/pages/utils/block-validation';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -47,6 +58,8 @@ export class EventsService {
   constructor(
     @InjectModel(DomainEvent.name)
     private eventModel: Model<DomainEventDocument>,
+    @InjectModel(Application.name)
+    private applicationModel: Model<ApplicationDocument>,
     private domainsService: DomainsService,
     private locationsService: LocationsService,
     private mediaService: MediaService,
@@ -58,7 +71,17 @@ export class EventsService {
     await this.validateDomainAndRefs(createEventDto);
     await this.ensureUniqueSlug(createEventDto.domainId, createEventDto.slug);
 
-    const event = new this.eventModel(createEventDto);
+    const normalizedBlocks = createEventDto.blocks?.length
+      ? await prepareBlocksForWrite(
+          createEventDto.blocks,
+          this.getBlockValidationServices(),
+        )
+      : createEventDto.blocks;
+
+    const event = new this.eventModel({
+      ...createEventDto,
+      blocks: normalizedBlocks ?? [],
+    });
     return event.save();
   }
 
@@ -81,13 +104,28 @@ export class EventsService {
       query.domainId = domainId;
     }
 
-    return this.eventModel
+    const events = await this.eventModel
       .find(query)
       .sort({ startAt: 1, title: 1 })
       .skip(offset)
       .limit(limit)
       .lean()
       .exec();
+
+    const eventIds = events.map((e) =>
+      (e as DomainEventDocument)._id.toString(),
+    );
+    const countsMap = await this.countRegistrationsByEventIds(eventIds);
+
+    return Promise.all(
+      events.map((event) => {
+        const id = (event as DomainEventDocument)._id.toString();
+        return this.toPublicEvent(
+          event as DomainEventDocument,
+          countsMap.get(id) ?? 0,
+        );
+      }),
+    );
   }
 
   async findOne(id: string): Promise<DomainEventDocument> {
@@ -104,7 +142,28 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    return event as DomainEventDocument;
+    return this.toPublicEvent(event as DomainEventDocument);
+  }
+
+  async findOneByDomainSlugAndEventSlug(
+    domainSlug: string,
+    eventSlug: string,
+  ): Promise<DomainEventDocument> {
+    const domain = await this.domainsService.getActiveBySlug(domainSlug);
+
+    const event = await this.eventModel
+      .findOne({
+        domainId: domain._id,
+        slug: eventSlug,
+        status: { $in: PUBLIC_EVENT_STATUSES },
+      })
+      .lean()
+      .exec();
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    return this.toPublicEvent(event as DomainEventDocument);
   }
 
   async findManyByIds(
@@ -125,9 +184,20 @@ export class EventsService {
       .lean()
       .exec();
 
+    const eventIds = (events as DomainEventDocument[]).map((e) =>
+      e._id.toString(),
+    );
+    const countsMap = await this.countRegistrationsByEventIds(eventIds);
+
+    const publicEvents = await Promise.all(
+      (events as DomainEventDocument[]).map((event) =>
+        this.toPublicEvent(event, countsMap.get(event._id.toString()) ?? 0),
+      ),
+    );
+
     return toBulkResolveResponse({
       preparedIds,
-      items: events as DomainEventDocument[],
+      items: publicEvents,
       getId: (event) => event._id.toString(),
     });
   }
@@ -167,8 +237,24 @@ export class EventsService {
     });
     await this.ensureUniqueSlug(domainId, slug, validId);
 
+    const normalizedBlocks =
+      updateEventDto.blocks !== undefined
+        ? await prepareBlocksForWrite(
+            updateEventDto.blocks,
+            this.getBlockValidationServices(),
+          )
+        : undefined;
+
+    const updateData: Record<string, unknown> = { ...updateEventDto };
+    if (normalizedBlocks !== undefined) {
+      updateData.blocks = normalizedBlocks;
+    }
+
     const event = await this.eventModel
-      .findByIdAndUpdate(validId, updateEventDto, { new: true })
+      .findByIdAndUpdate(validId, updateData, {
+        new: true,
+        runValidators: true,
+      })
       .lean()
       .exec();
 
@@ -201,6 +287,92 @@ export class EventsService {
 
   async existingIds(ids: string[]): Promise<Set<string>> {
     return resolveExistingIds(this.eventModel, ids);
+  }
+
+  private async toPublicEvent(
+    event: DomainEventDocument,
+    registeredCount?: number,
+  ): Promise<DomainEventDocument> {
+    const eventObj = event as unknown as Record<string, unknown>;
+    const blocks = Array.isArray(eventObj.blocks)
+      ? (eventObj.blocks as Array<Record<string, unknown>>)
+      : [];
+    const publicBlocks = await toPublicBlocks(
+      blocks,
+      this.getPublicBlockServices(),
+    );
+
+    let count = registeredCount;
+    if (count === undefined) {
+      const eventId = (eventObj._id as { toString(): string }).toString();
+      count = await this.applicationModel.countDocuments({
+        formType: ApplicationFormType.EventRegistration,
+        'source.entityType': 'event',
+        'source.entityId': eventId,
+      });
+    }
+
+    return {
+      ...eventObj,
+      blocks: publicBlocks,
+      registeredCount: count,
+    } as unknown as DomainEventDocument;
+  }
+
+  private async countRegistrationsByEventIds(
+    eventIds: string[],
+  ): Promise<Map<string, number>> {
+    if (eventIds.length === 0) return new Map();
+
+    const results = await this.applicationModel.aggregate<{
+      _id: string;
+      count: number;
+    }>([
+      {
+        $match: {
+          formType: ApplicationFormType.EventRegistration,
+          'source.entityType': 'event',
+          'source.entityId': {
+            $in: eventIds.map((id) => new Types.ObjectId(id)),
+          },
+        },
+      },
+      {
+        $group: { _id: { $toString: '$source.entityId' }, count: { $sum: 1 } },
+      },
+    ]);
+
+    const map = new Map<string, number>();
+    for (const r of results) {
+      map.set(r._id, r.count);
+    }
+    return map;
+  }
+
+  private getBlockValidationServices(): BlockValidationServices {
+    return {
+      peopleExistingIds: (ids) => this.peopleService.existingIds(ids),
+      partnersExistingIds: (ids) => this.partnersService.existingIds(ids),
+      eventsExistingIds: (ids) => this.existingIds(ids),
+      mediaExistingPublishedIds: (ids) =>
+        this.mediaService.existingPublishedIds(ids),
+      pagesExistingIds: async (ids) => {
+        if (ids.length > 0) {
+          throw new BadRequestException(
+            'Page button links are not supported in event blocks',
+          );
+        }
+        return new Set<string>();
+      },
+      domainsGetActiveById: (id) => this.domainsService.getActiveById(id),
+    };
+  }
+
+  private getPublicBlockServices(): PublicBlockServices {
+    return {
+      findPublishedPeopleSummariesByIds: (ids) =>
+        this.peopleService.findPublishedSummariesByIds(ids),
+    };
   }
 
   private async validateDomainAndRefs(data: {

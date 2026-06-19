@@ -21,6 +21,38 @@ describe('Event Joi priceGroups validation', () => {
     expect(error).toBeUndefined();
   });
 
+  it('accepts and trims optional description in create payload', () => {
+    const { error, value } = createEventSchema.validate({
+      ...baseCreatePayload,
+      description: '  Short event summary  ',
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.description).toBe('Short event summary');
+  });
+
+  it('accepts empty optional description in update payload', () => {
+    const { error, value } = updateEventSchema.validate({
+      description: '',
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.description).toBe('');
+  });
+
+  it('rejects description longer than 2000 characters', () => {
+    const { error: createError } = createEventSchema.validate({
+      ...baseCreatePayload,
+      description: 'a'.repeat(2001),
+    });
+    const { error: updateError } = updateEventSchema.validate({
+      description: 'a'.repeat(2001),
+    });
+
+    expect(createError).toBeDefined();
+    expect(updateError).toBeDefined();
+  });
+
   it('rejects invalid mediaId in create payload', () => {
     const { error } = createEventSchema.validate({
       ...baseCreatePayload,

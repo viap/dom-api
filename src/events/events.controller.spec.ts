@@ -12,6 +12,7 @@ describe('EventsController', () => {
     controller = new EventsController({
       findAll: jest.fn(),
       findOne: jest.fn(),
+      findOneByDomainSlugAndEventSlug: jest.fn(),
       findManyByIds: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -25,6 +26,12 @@ describe('EventsController', () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, EventsController.prototype.findOne),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        IS_PUBLIC_KEY,
+        EventsController.prototype.findOneByDomainSlugAndEventSlug,
+      ),
     ).toBe(true);
     expect(
       Reflect.getMetadata(IS_PUBLIC_KEY, EventsController.prototype.findMany),
