@@ -9,6 +9,7 @@ import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
 import { MediaService } from '@/media/media.service';
 import { PartnersService } from '@/partners/partners.service';
+import { Application } from '@/applications/schemas/application.schema';
 import { PeopleService } from '@/people/people.service';
 import { DomainEvent } from './schemas/domain-event.schema';
 import { EventsService } from './events.service';
@@ -92,6 +93,10 @@ describe('EventsService', () => {
           provide: getModelToken(DomainEvent.name),
           useValue: mockEventModel,
         },
+        {
+          provide: getModelToken(Application.name),
+          useValue: { countDocuments: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue([]) },
+        },
         { provide: DomainsService, useValue: mockDomainsService },
         { provide: LocationsService, useValue: mockLocationsService },
         { provide: MediaService, useValue: mockMediaService },
@@ -136,7 +141,7 @@ describe('EventsService', () => {
     expect(findQuery.sort).toHaveBeenCalledWith({ startAt: 1, title: 1 });
     expect(findQuery.skip).toHaveBeenCalledWith(0);
     expect(findQuery.limit).toHaveBeenCalledWith(20);
-    expect(result).toEqual([mockEvent]);
+    expect(result).toEqual([{ ...mockEvent, registeredCount: 0 }]);
   });
 
   it('with domainId validates domain and filters by that domain', async () => {
