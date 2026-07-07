@@ -17,6 +17,17 @@ describe('updateApplicationSchema notes.createdAt validation', () => {
     expect(error).toBeDefined();
   });
 
+  it('accepts person source references', () => {
+    const { error } = updateApplicationSchema.validate({
+      source: {
+        entityType: 'person',
+        entityId: '660900000000000000000099',
+      },
+    });
+
+    expect(error).toBeUndefined();
+  });
+
   it('accepts UTC ISO datetime for notes.createdAt', () => {
     const { error } = updateApplicationSchema.validate({
       notes: [

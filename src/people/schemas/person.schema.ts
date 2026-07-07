@@ -9,6 +9,7 @@ import {
 import { PersonRole } from '../enums/person-role.enum';
 import { WorkFormat } from '../enums/work-format.enum';
 import { Languages } from '../enums/languages.enum';
+import { PersonAvailability } from '../enums/person-availability.enum';
 import { PersonService, personServiceSchema } from './person-service.schema';
 
 export type PersonDocument = Person &
@@ -25,6 +26,9 @@ export class Person {
   @Prop({ required: true, trim: true })
   fullName: string;
 
+  @Prop({ trim: true, maxlength: 150 })
+  title?: string;
+
   @Prop({ type: [String], enum: Object.values(PersonRole), default: [] })
   roles: PersonRole[];
 
@@ -39,6 +43,62 @@ export class Person {
 
   @Prop({ required: true, type: [personServiceSchema], default: [] })
   services: Array<PersonService>;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Location' })
+  workLocationId?: mongoose.Schema.Types.ObjectId;
+
+  @Prop({ type: [String], default: [] })
+  specializations: string[];
+
+  @Prop({
+    required: true,
+    type: [
+      {
+        _id: false,
+        startDate: { type: String, trim: true },
+        endDate: { type: String, trim: true },
+        institution: {
+          type: String,
+          required: true,
+          trim: true,
+          maxlength: 200,
+        },
+        detail: { type: String, trim: true, maxlength: 500 },
+      },
+    ],
+    default: [],
+  })
+  educationItems: Array<{
+    startDate?: string;
+    endDate?: string;
+    institution: string;
+    detail?: string;
+  }>;
+
+  @Prop({
+    required: true,
+    type: [
+      {
+        _id: false,
+        startDate: { type: String, trim: true },
+        endDate: { type: String, trim: true },
+        title: { type: String, required: true, trim: true, maxlength: 200 },
+        organization: { type: String, trim: true, maxlength: 200 },
+        detail: { type: String, trim: true, maxlength: 700 },
+      },
+    ],
+    default: [],
+  })
+  experienceItems: Array<{
+    startDate?: string;
+    endDate?: string;
+    title: string;
+    organization?: string;
+    detail?: string;
+  }>;
+
+  @Prop({ type: String, enum: Object.values(PersonAvailability) })
+  availability?: PersonAvailability;
 
   @Prop({ type: [String], enum: Object.values(WorkFormat), default: [] })
   workFormat: WorkFormat[];
@@ -79,3 +139,4 @@ personSchema.index(
 personSchema.index({ photoId: 1 }, { sparse: true });
 personSchema.index({ isPublished: 1, fullName: 1 });
 personSchema.index({ userId: 1 }, { sparse: true });
+personSchema.index({ workLocationId: 1 }, { sparse: true });

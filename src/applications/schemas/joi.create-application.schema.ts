@@ -37,6 +37,7 @@ const payloadSchema = Joi.when('formType', {
       is: ApplicationFormType.SpecialistRequest,
       then: Joi.object({
         specialization: Joi.string().trim().min(1).max(150).required(),
+        personId: joiObjectId.optional(),
         message: Joi.string().trim().max(1000).allow('').optional(),
       }).required(),
     },
@@ -58,7 +59,9 @@ export const createApplicationSchema = Joi.object({
     .required(),
 
   source: Joi.object({
-    entityType: Joi.string().valid('program', 'event', 'partner').optional(),
+    entityType: Joi.string()
+      .valid('program', 'event', 'partner', 'person')
+      .optional(),
     entityId: joiObjectId.optional(),
     utm: Joi.object()
       .pattern(Joi.string().max(50), Joi.string().max(200))

@@ -17,6 +17,7 @@ import { DomainCode } from '@/domains/enums/domain-code.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { EventsService } from '@/events/events.service';
 import { PartnersService } from '@/partners/partners.service';
+import { PeopleService } from '@/people/people.service';
 import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
@@ -43,6 +44,7 @@ export class ApplicationsService {
     private programsService: ProgramsService,
     private eventsService: EventsService,
     private partnersService: PartnersService,
+    private peopleService: PeopleService,
     private usersService: UsersService,
   ) {}
 
@@ -196,18 +198,34 @@ export class ApplicationsService {
       data.source?.entityType,
       data.source?.entityId,
     );
+    await this.validatePayloadReferences(data.payload);
+  }
 
-    if (typeof data.payload?.programId === 'string') {
-      const exists = await this.programsService.exists(data.payload.programId);
+  private async validatePayloadReferences(
+    payload?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!payload) {
+      return;
+    }
+
+    if (typeof payload.programId === 'string') {
+      const exists = await this.programsService.exists(payload.programId);
       if (!exists) {
         throw new BadRequestException('Referenced program not found');
       }
     }
 
-    if (typeof data.payload?.eventId === 'string') {
-      const exists = await this.eventsService.exists(data.payload.eventId);
+    if (typeof payload.eventId === 'string') {
+      const exists = await this.eventsService.exists(payload.eventId);
       if (!exists) {
         throw new BadRequestException('Referenced event not found');
+      }
+    }
+
+    if (typeof payload.personId === 'string') {
+      const exists = await this.peopleService.exists(payload.personId);
+      if (!exists) {
+        throw new BadRequestException('Referenced person not found');
       }
     }
   }
@@ -233,6 +251,7 @@ export class ApplicationsService {
       data.source?.entityType,
       data.source?.entityId,
     );
+    await this.validatePayloadReferences(data.payload);
   }
 
   private async validateEntityReference(
@@ -269,6 +288,14 @@ export class ApplicationsService {
       const exists = await this.partnersService.exists(entityId);
       if (!exists) {
         throw new BadRequestException('Referenced partner not found');
+      }
+      return;
+    }
+
+    if (entityType === 'person') {
+      const exists = await this.peopleService.exists(entityId);
+      if (!exists) {
+        throw new BadRequestException('Referenced person not found');
       }
       return;
     }

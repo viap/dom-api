@@ -6,6 +6,7 @@ import {
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MediaService } from '@/media/media.service';
+import { LocationsService } from '@/locations/locations.service';
 import { UsersService } from '@/users/users.service';
 import { PersonRole } from './enums/person-role.enum';
 import { Person } from './schemas/person.schema';
@@ -14,20 +15,29 @@ import { PeopleService } from './people.service';
 describe('PeopleService', () => {
   let service: PeopleService;
 
-  const createLeanExecChain = (value: unknown) => ({
-    lean: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue(value),
-    }),
-  });
-  const createLeanRejectChain = (error: unknown) => ({
-    lean: jest.fn().mockReturnValue({
-      exec: jest.fn().mockRejectedValue(error),
-    }),
-  });
+  const createLeanExecChain = (value: unknown) => {
+    const chain = {
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(value),
+      }),
+    };
+    return chain;
+  };
+  const createLeanRejectChain = (error: unknown) => {
+    const chain = {
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue(error),
+      }),
+    };
+    return chain;
+  };
 
   const mockSave = jest.fn().mockImplementation(async (payload) => payload);
   const mockQueryExec = jest.fn().mockResolvedValue([]);
   const mockQueryChain = {
+    populate: jest.fn().mockReturnThis(),
     sort: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
@@ -52,6 +62,9 @@ describe('PeopleService', () => {
   const mockMediaService = {
     existsPublished: jest.fn().mockResolvedValue(true),
   };
+  const mockLocationsService = {
+    exists: jest.fn().mockResolvedValue(true),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +73,7 @@ describe('PeopleService', () => {
         { provide: getModelToken(Person.name), useValue: mockPersonModel },
         { provide: UsersService, useValue: mockUsersService },
         { provide: MediaService, useValue: mockMediaService },
+        { provide: LocationsService, useValue: mockLocationsService },
       ],
     }).compile();
 
@@ -69,6 +83,7 @@ describe('PeopleService', () => {
       _id: '507f1f77bcf86cd799439031',
     });
     mockMediaService.existsPublished.mockResolvedValue(true);
+    mockLocationsService.exists.mockResolvedValue(true);
     mockQueryExec.mockResolvedValue([]);
     mockPersonModel.findOne.mockReturnValue(createLeanExecChain(null));
   });
@@ -97,6 +112,18 @@ describe('PeopleService', () => {
     ).rejects.toThrow(BadRequestException);
 
     expect(mockPersonModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('should reject invalid work location references', async () => {
+    mockLocationsService.exists.mockResolvedValue(false);
+
+    await expect(
+      service.create({
+        slug: 'john-doe',
+        fullName: 'John Doe',
+        workLocationId: '507f1f77bcf86cd799439032',
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('should apply role filter when provided in findAll query params', async () => {
@@ -241,6 +268,36 @@ describe('PeopleService', () => {
 
     expect(mockPersonModel.findById).not.toHaveBeenCalled();
     expect(mockPersonModel.findOne).not.toHaveBeenCalled();
+    expect(result).toEqual(updatedPerson);
+  });
+
+  it('should clear optional specialist fields on update', async () => {
+    const updatedPerson = {
+      _id: '507f1f77bcf86cd799439032',
+      slug: 'john-doe',
+      fullName: 'John Doe',
+    };
+
+    mockPersonModel.findByIdAndUpdate.mockReturnValue(
+      createLeanExecChain(updatedPerson),
+    );
+
+    const result = await service.update('507f1f77bcf86cd799439032', {
+      title: null,
+      workLocationId: null,
+    });
+
+    expect(mockLocationsService.exists).not.toHaveBeenCalled();
+    expect(mockPersonModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439032',
+      {
+        $unset: {
+          title: '',
+          workLocationId: '',
+        },
+      },
+      { new: true },
+    );
     expect(result).toEqual(updatedPerson);
   });
 

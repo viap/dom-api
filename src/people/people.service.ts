@@ -13,6 +13,7 @@ import {
 } from '@/common/utils/bulk-resolve';
 import { isMongoDuplicateSlugError } from '@/common/utils/mongo-duplicate-slug-error';
 import { MediaService } from '@/media/media.service';
+import { LocationsService } from '@/locations/locations.service';
 import { UsersService } from '@/users/users.service';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
 import {
@@ -34,13 +35,19 @@ export class PeopleService {
     @InjectModel(Person.name) private personModel: Model<PersonDocument>,
     private usersService: UsersService,
     private mediaService: MediaService,
+    private locationsService: LocationsService,
   ) {}
 
   async create(createPersonDto: CreatePersonDto): Promise<PersonDocument> {
-    await this.validateRefs(createPersonDto.userId, createPersonDto.photoId);
-    await this.ensureUniqueSlug(createPersonDto.slug);
+    const createData = this.prepareCreateData(createPersonDto);
+    await this.validateRefs(
+      createData.userId,
+      createData.photoId,
+      createData.workLocationId,
+    );
+    await this.ensureUniqueSlug(createData.slug);
 
-    const person = new this.personModel(createPersonDto);
+    const person = new this.personModel(createData);
     try {
       return await person.save();
     } catch (error) {
@@ -69,6 +76,7 @@ export class PeopleService {
 
     return this.personModel
       .find(query)
+      .populate('workLocationId')
       .sort({ fullName: 1 })
       .skip(offset)
       .limit(limit)
@@ -94,6 +102,7 @@ export class PeopleService {
 
     return this.personModel
       .find(query)
+      .populate('workLocationId')
       .sort({ fullName: 1 })
       .skip(offset)
       .limit(limit)
@@ -109,6 +118,7 @@ export class PeopleService {
 
     const person = await this.personModel
       .findOne({ _id: validId, isPublished: true })
+      .populate('workLocationId')
       .lean()
       .exec();
     if (!person) {
@@ -130,6 +140,7 @@ export class PeopleService {
 
     const people = await this.personModel
       .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
+      .populate('workLocationId')
       .lean()
       .exec();
 
@@ -143,6 +154,7 @@ export class PeopleService {
   async findOneBySlug(slug: string): Promise<PersonDocument> {
     const person = await this.personModel
       .findOne({ slug, isPublished: true })
+      .populate('workLocationId')
       .lean()
       .exec();
     if (!person) {
@@ -158,7 +170,11 @@ export class PeopleService {
       throw new NotFoundException('Invalid person ID format');
     }
 
-    const person = await this.personModel.findById(validId).lean().exec();
+    const person = await this.personModel
+      .findById(validId)
+      .populate('workLocationId')
+      .lean()
+      .exec();
     if (!person) {
       throw new NotFoundException('Person not found');
     }
@@ -175,7 +191,13 @@ export class PeopleService {
       throw new NotFoundException('Invalid person ID format');
     }
 
-    await this.validateRefs(updatePersonDto.userId, updatePersonDto.photoId);
+    const updateData = this.prepareUpdateData(updatePersonDto);
+
+    await this.validateRefs(
+      updatePersonDto.userId,
+      updatePersonDto.photoId,
+      updatePersonDto.workLocationId || undefined,
+    );
 
     if (updatePersonDto.slug !== undefined) {
       const existingPerson = await this.personModel
@@ -193,7 +215,7 @@ export class PeopleService {
 
     try {
       const person = await this.personModel
-        .findByIdAndUpdate(validId, updatePersonDto, { new: true })
+        .findByIdAndUpdate(validId, updateData, { new: true })
         .lean()
         .exec();
       if (!person) {
@@ -260,7 +282,48 @@ export class PeopleService {
     }));
   }
 
-  private async validateRefs(userId?: string, photoId?: string): Promise<void> {
+  private prepareCreateData(createPersonDto: CreatePersonDto): CreatePersonDto {
+    const createData: CreatePersonDto = { ...createPersonDto };
+
+    if (createData.title === null) {
+      delete createData.title;
+    }
+
+    if (createData.workLocationId === null) {
+      delete createData.workLocationId;
+    }
+
+    return createData;
+  }
+
+  private prepareUpdateData(
+    updatePersonDto: UpdatePersonDto,
+  ): Record<string, unknown> {
+    const updateData: Record<string, unknown> = { ...updatePersonDto };
+    const unsetData: Record<string, ''> = {};
+
+    if (updatePersonDto.title === null) {
+      delete updateData.title;
+      unsetData.title = '';
+    }
+
+    if (updatePersonDto.workLocationId === null) {
+      delete updateData.workLocationId;
+      unsetData.workLocationId = '';
+    }
+
+    if (Object.keys(unsetData).length > 0) {
+      updateData.$unset = unsetData;
+    }
+
+    return updateData;
+  }
+
+  private async validateRefs(
+    userId?: string,
+    photoId?: string,
+    workLocationId?: string,
+  ): Promise<void> {
     if (userId) {
       const user = await this.usersService.getById(userId);
       if (!user) {
@@ -272,6 +335,13 @@ export class PeopleService {
       const mediaExists = await this.mediaService.existsPublished(photoId);
       if (!mediaExists) {
         throw new BadRequestException('Referenced published media not found');
+      }
+    }
+
+    if (workLocationId) {
+      const locationExists = await this.locationsService.exists(workLocationId);
+      if (!locationExists) {
+        throw new BadRequestException('Referenced work location not found');
       }
     }
   }

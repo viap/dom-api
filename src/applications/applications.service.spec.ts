@@ -5,6 +5,7 @@ import { DomainCode } from '@/domains/enums/domain-code.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { EventsService } from '@/events/events.service';
 import { PartnersService } from '@/partners/partners.service';
+import { PeopleService } from '@/people/people.service';
 import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
 import { ApplicationFormType } from './enums/application-form-type.enum';
@@ -48,6 +49,7 @@ describe('ApplicationsService', () => {
   const mockProgramsService = { exists: jest.fn() };
   const mockEventsService = { exists: jest.fn() };
   const mockPartnersService = { exists: jest.fn() };
+  const mockPeopleService = { exists: jest.fn() };
   const mockUsersService = { getById: jest.fn() };
 
   beforeEach(async () => {
@@ -62,6 +64,7 @@ describe('ApplicationsService', () => {
         { provide: ProgramsService, useValue: mockProgramsService },
         { provide: EventsService, useValue: mockEventsService },
         { provide: PartnersService, useValue: mockPartnersService },
+        { provide: PeopleService, useValue: mockPeopleService },
         { provide: UsersService, useValue: mockUsersService },
       ],
     }).compile();
@@ -77,6 +80,7 @@ describe('ApplicationsService', () => {
     mockProgramsService.exists.mockResolvedValue(true);
     mockEventsService.exists.mockResolvedValue(true);
     mockPartnersService.exists.mockResolvedValue(true);
+    mockPeopleService.exists.mockResolvedValue(true);
     mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
   });
 
@@ -93,6 +97,22 @@ describe('ApplicationsService', () => {
         formType: 'event_registration' as any,
         applicant: mockApplication.applicant as any,
         payload: { eventId: '507f1f77bcf86cd799439033' },
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject invalid referenced person ids in specialist payload', async () => {
+    mockPeopleService.exists.mockResolvedValue(false);
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.SpecialistRequest,
+        applicant: mockApplication.applicant as any,
+        payload: {
+          specialization: 'Family therapy',
+          personId: '507f1f77bcf86cd799439099',
+        },
       }),
     ).rejects.toThrow(BadRequestException);
   });
@@ -145,6 +165,23 @@ describe('ApplicationsService', () => {
         source: { entityType: 'weird', entityId: '507f1f77bcf86cd799439099' },
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should accept person source entity references', async () => {
+    await service.create({
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.General,
+      applicant: mockApplication.applicant as any,
+      payload: { message: 'General request' },
+      source: {
+        entityType: 'person',
+        entityId: '507f1f77bcf86cd799439099',
+      },
+    });
+
+    expect(mockPeopleService.exists).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439099',
+    );
   });
 
   it('should reject invalid assigned users on update', async () => {

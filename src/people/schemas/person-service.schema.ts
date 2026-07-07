@@ -6,6 +6,9 @@ export class PersonService {
   @Prop({ required: true, trim: true, minlength: 1, maxlength: 100 })
   title: string;
 
+  @Prop({ trim: true, maxlength: 200 })
+  description?: string;
+
   @Prop({ required: true, type: [priceSchema], default: [] })
   prices: Array<Price>;
 }

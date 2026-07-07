@@ -13,7 +13,9 @@ export const updateApplicationSchema = Joi.object({
   assignedTo: joiObjectId.optional(),
 
   source: Joi.object({
-    entityType: Joi.string().valid('program', 'event', 'partner').optional(),
+    entityType: Joi.string()
+      .valid('program', 'event', 'partner', 'person')
+      .optional(),
     entityId: joiObjectId.optional(),
     utm: Joi.object()
       .pattern(Joi.string().max(50), Joi.string().max(200))
