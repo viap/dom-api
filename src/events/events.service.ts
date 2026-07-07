@@ -28,6 +28,7 @@ import { ApplicationFormType } from '@/applications/enums/application-form-type.
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
 import { MediaService } from '@/media/media.service';
+import { MediaDocument } from '@/media/schemas/media.schema';
 import {
   BlockValidationServices,
   prepareBlocksForWrite,
@@ -103,6 +104,12 @@ export class EventsService {
     if (domainId) {
       query.domainId = domainId;
     }
+    if (typeof safeParams.personId === 'string') {
+      query.$or = [
+        { speakerIds: safeParams.personId },
+        { organizerIds: safeParams.personId },
+      ];
+    }
 
     const events = await this.eventModel
       .find(query)
@@ -112,17 +119,25 @@ export class EventsService {
       .lean()
       .exec();
 
-    const eventIds = events.map((e) =>
-      (e as DomainEventDocument)._id.toString(),
-    );
-    const countsMap = await this.countRegistrationsByEventIds(eventIds);
+    const eventDocuments = events as DomainEventDocument[];
+    const eventIds = eventDocuments.map((event) => event._id.toString());
+    const [domainSlugById, countsMap, mediaById] = await Promise.all([
+      this.resolveDomainSlugsForEvents(eventDocuments),
+      this.countRegistrationsByEventIds(eventIds),
+      this.resolveEventMediaById(eventDocuments),
+    ]);
 
     return Promise.all(
       events.map((event) => {
         const id = (event as DomainEventDocument)._id.toString();
+        const domainId = this.toIdString(
+          (event as unknown as Record<string, unknown>).domainId,
+        );
         return this.toPublicEvent(
           event as DomainEventDocument,
           countsMap.get(id) ?? 0,
+          domainId ? domainSlugById.get(domainId) : undefined,
+          mediaById,
         );
       }),
     );
@@ -142,7 +157,16 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    return this.toPublicEvent(event as DomainEventDocument);
+    const mediaById = await this.resolveEventMediaById([
+      event as DomainEventDocument,
+    ]);
+
+    return this.toPublicEvent(
+      event as DomainEventDocument,
+      undefined,
+      undefined,
+      mediaById,
+    );
   }
 
   async findOneByDomainSlugAndEventSlug(
@@ -163,7 +187,16 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    return this.toPublicEvent(event as DomainEventDocument);
+    const mediaById = await this.resolveEventMediaById([
+      event as DomainEventDocument,
+    ]);
+
+    return this.toPublicEvent(
+      event as DomainEventDocument,
+      undefined,
+      undefined,
+      mediaById,
+    );
   }
 
   async findManyByIds(
@@ -184,14 +217,21 @@ export class EventsService {
       .lean()
       .exec();
 
-    const eventIds = (events as DomainEventDocument[]).map((e) =>
-      e._id.toString(),
-    );
-    const countsMap = await this.countRegistrationsByEventIds(eventIds);
+    const eventDocuments = events as DomainEventDocument[];
+    const eventIds = eventDocuments.map((event) => event._id.toString());
+    const [countsMap, mediaById] = await Promise.all([
+      this.countRegistrationsByEventIds(eventIds),
+      this.resolveEventMediaById(eventDocuments),
+    ]);
 
     const publicEvents = await Promise.all(
-      (events as DomainEventDocument[]).map((event) =>
-        this.toPublicEvent(event, countsMap.get(event._id.toString()) ?? 0),
+      eventDocuments.map((event) =>
+        this.toPublicEvent(
+          event,
+          countsMap.get(event._id.toString()) ?? 0,
+          undefined,
+          mediaById,
+        ),
       ),
     );
 
@@ -292,6 +332,8 @@ export class EventsService {
   private async toPublicEvent(
     event: DomainEventDocument,
     registeredCount?: number,
+    domainSlug?: string,
+    mediaById: Map<string, MediaDocument> = new Map(),
   ): Promise<DomainEventDocument> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
@@ -312,11 +354,97 @@ export class EventsService {
       });
     }
 
+    const mediaId = this.toIdString(eventObj.mediaId);
+    const media = mediaId ? mediaById.get(mediaId) : undefined;
+
     return {
       ...eventObj,
+      ...(media ? { mediaId: media } : {}),
+      ...(domainSlug ? { domainSlug } : {}),
       blocks: publicBlocks,
       registeredCount: count,
     } as unknown as DomainEventDocument;
+  }
+
+  private toIdString(value: unknown): string {
+    if (!value) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (value instanceof Types.ObjectId) {
+      return value.toString();
+    }
+
+    if (
+      typeof value === 'object' &&
+      'toHexString' in value &&
+      typeof value.toHexString === 'function'
+    ) {
+      return value.toHexString();
+    }
+
+    if (typeof value === 'object' && '_id' in value) {
+      const id = (value as { _id?: unknown })._id;
+      if (id && id !== value) {
+        return this.toIdString(id);
+      }
+    }
+
+    return '';
+  }
+
+  private async resolveDomainSlugsForEvents(
+    events: DomainEventDocument[],
+  ): Promise<Map<string, string>> {
+    const domainIds = Array.from(
+      new Set(
+        events
+          .map((event) =>
+            this.toIdString(
+              (event as unknown as Record<string, unknown>).domainId,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    if (!domainIds.length) {
+      return new Map();
+    }
+
+    const domains = await this.domainsService.findManyByIds(domainIds);
+    return new Map(
+      domains.items.map((domain) => [domain._id.toString(), domain.slug]),
+    );
+  }
+
+  private async resolveEventMediaById(
+    events: DomainEventDocument[],
+  ): Promise<Map<string, MediaDocument>> {
+    const mediaIds = Array.from(
+      new Set(
+        events
+          .map((event) =>
+            this.toIdString(
+              (event as unknown as Record<string, unknown>).mediaId,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    if (!mediaIds.length) {
+      return new Map();
+    }
+
+    const media = await this.mediaService.findManyByIds(mediaIds);
+    return new Map(
+      media.items.map((item) => [item._id.toString(), item as MediaDocument]),
+    );
   }
 
   private async countRegistrationsByEventIds(

@@ -3,6 +3,7 @@ import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 
 export const eventQuerySchema = Joi.object({
   domainId: joiObjectId.optional(),
+  personId: joiObjectId.optional(),
   limit: Joi.number().integer().min(1).max(100).default(20),
   offset: Joi.number().integer().min(0).default(0),
 });

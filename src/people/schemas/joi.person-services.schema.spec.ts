@@ -4,6 +4,7 @@ import { updatePersonSchema } from './joi.update-person.schema';
 describe('Person services Joi validation', () => {
   const validService = {
     title: 'Individual therapy',
+    description: '50 minutes',
     prices: [{ currency: 'gel', value: 120 }],
   };
 
@@ -99,5 +100,19 @@ describe('Person services Joi validation', () => {
       ],
     });
     expect(longTitle.error).toBeDefined();
+  });
+
+  it('rejects over-limit service descriptions', () => {
+    const { error } = updatePersonSchema.validate({
+      services: [
+        {
+          title: 'Consultation',
+          description: 'a'.repeat(201),
+          prices: [{ currency: 'gel', value: 100 }],
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
   });
 });

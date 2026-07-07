@@ -3,6 +3,7 @@ import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { PersonRole } from '../enums/person-role.enum';
 import { WorkFormat } from '../enums/work-format.enum';
 import { Languages } from '../enums/languages.enum';
+import { PersonAvailability } from '../enums/person-availability.enum';
 import { createPersonSchema } from './joi.create-person.schema';
 import { personQuerySchema } from './joi.person-query.schema';
 import { personSlugParamsSchema } from './joi.person-slug.params.schema';
@@ -186,6 +187,85 @@ describe('Person role Joi validation', () => {
     expect(
       updatePersonSchema.validate({
         languages: [],
+      }).error,
+    ).toBeDefined();
+  });
+
+  it('accepts specialist profile fields on create and update', () => {
+    const payload = {
+      slug: 'jane-doe',
+      fullName: 'Jane Doe',
+      title: 'Clinical psychologist',
+      workLocationId: '660900000000000000000099',
+      specializations: ['Family therapy'],
+      educationItems: [
+        {
+          startDate: '2010-09-01',
+          endDate: '2014-06-30',
+          institution: 'State University',
+          detail: 'Psychology',
+        },
+      ],
+      experienceItems: [
+        {
+          startDate: '2015-01-01',
+          title: 'Therapist',
+          organization: 'DOM',
+          detail: 'Individual sessions',
+        },
+      ],
+      availability: PersonAvailability.Accepting,
+    };
+
+    expect(createPersonSchema.validate(payload).error).toBeUndefined();
+    expect(
+      updatePersonSchema.validate({
+        title: payload.title,
+        workLocationId: payload.workLocationId,
+        specializations: payload.specializations,
+        educationItems: payload.educationItems,
+        experienceItems: payload.experienceItems,
+        availability: PersonAvailability.Waitlist,
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it('accepts null clear values for optional specialist profile fields', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        title: null,
+        workLocationId: null,
+      }).error,
+    ).toBeUndefined();
+
+    expect(
+      updatePersonSchema.validate({
+        title: null,
+        workLocationId: null,
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it('rejects invalid specialist profile fields', () => {
+    expect(
+      updatePersonSchema.validate({ availability: 'busy' }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({ workLocationId: 'not-an-id' }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({
+        educationItems: [{ institution: '', startDate: '2026-02-30' }],
+      }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({
+        experienceItems: [{ title: '', startDate: '2026/02/20' }],
       }).error,
     ).toBeDefined();
   });

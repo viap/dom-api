@@ -24,4 +24,34 @@ describe('createApplicationSchema domainId behavior', () => {
     });
     expect(error).toBeUndefined();
   });
+
+  it('accepts specialist request personId and person source', () => {
+    const { error } = createApplicationSchema.validate({
+      formType: 'specialist_request',
+      source: {
+        entityType: 'person',
+        entityId: '660900000000000000000098',
+      },
+      applicant: validBasePayload.applicant,
+      payload: {
+        specialization: 'Family therapy',
+        personId: '660900000000000000000099',
+      },
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects invalid specialist request personId', () => {
+    const { error } = createApplicationSchema.validate({
+      formType: 'specialist_request',
+      applicant: validBasePayload.applicant,
+      payload: {
+        specialization: 'Family therapy',
+        personId: 'not-an-id',
+      },
+    });
+
+    expect(error).toBeDefined();
+  });
 });

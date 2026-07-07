@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Types } from 'mongoose';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
 import { MediaService } from '@/media/media.service';
@@ -37,6 +38,15 @@ describe('EventsService', () => {
     updatedAt: new Date(),
   };
 
+  const mockMedia = {
+    _id: '507f1f77bcf86cd799439111',
+    kind: 'image',
+    url: '/media/event-cover.jpg',
+    title: 'Event cover',
+    alt: 'Event cover alt',
+    isPublished: true,
+  };
+
   const mockSave = jest.fn().mockResolvedValue(mockEvent);
   const mockInstance = { save: mockSave };
   const mockEventModel = Object.assign(
@@ -54,11 +64,13 @@ describe('EventsService', () => {
   const mockDomainsService = {
     getActiveById: jest.fn(),
     getActiveBySlug: jest.fn(),
+    findManyByIds: jest.fn(),
   };
   const mockLocationsService = { exists: jest.fn() };
   const mockMediaService = {
     existsPublished: jest.fn(),
     existingPublishedIds: jest.fn(),
+    findManyByIds: jest.fn(),
   };
   const mockPeopleService = {
     exists: jest.fn(),
@@ -95,7 +107,10 @@ describe('EventsService', () => {
         },
         {
           provide: getModelToken(Application.name),
-          useValue: { countDocuments: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            countDocuments: jest.fn().mockResolvedValue(0),
+            aggregate: jest.fn().mockResolvedValue([]),
+          },
         },
         { provide: DomainsService, useValue: mockDomainsService },
         { provide: LocationsService, useValue: mockLocationsService },
@@ -110,8 +125,12 @@ describe('EventsService', () => {
     mockDomainsService.getActiveById.mockResolvedValue({
       _id: mockEvent.domainId,
     });
+    mockDomainsService.findManyByIds.mockResolvedValue({
+      items: [{ _id: mockEvent.domainId, slug: 'psych-center' }],
+    });
     mockLocationsService.exists.mockResolvedValue(true);
     mockMediaService.existsPublished.mockResolvedValue(true);
+    mockMediaService.findManyByIds.mockResolvedValue({ items: [] });
     mockPeopleService.exists.mockResolvedValue(true);
     mockPartnersService.exists.mockResolvedValue(true);
   });
@@ -141,7 +160,80 @@ describe('EventsService', () => {
     expect(findQuery.sort).toHaveBeenCalledWith({ startAt: 1, title: 1 });
     expect(findQuery.skip).toHaveBeenCalledWith(0);
     expect(findQuery.limit).toHaveBeenCalledWith(20);
-    expect(result).toEqual([{ ...mockEvent, registeredCount: 0 }]);
+    expect(mockMediaService.findManyByIds).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      { ...mockEvent, domainSlug: 'psych-center', registeredCount: 0 },
+    ]);
+  });
+
+  it('populates public event media when an event has a media id', async () => {
+    const eventWithMedia = {
+      ...mockEvent,
+      mediaId: mockMedia._id,
+    };
+    const findQuery = createFindQueryMock([eventWithMedia]);
+    mockEventModel.find.mockReturnValue(findQuery);
+    mockMediaService.findManyByIds.mockResolvedValue({ items: [mockMedia] });
+
+    const result = await service.findAll({});
+
+    expect(mockMediaService.findManyByIds).toHaveBeenCalledWith([
+      mockMedia._id,
+    ]);
+    expect(result).toEqual([
+      {
+        ...eventWithMedia,
+        mediaId: mockMedia,
+        domainSlug: 'psych-center',
+        registeredCount: 0,
+      },
+    ]);
+  });
+
+  it('resolves domain slugs for events with ObjectId domain ids', async () => {
+    const domainObjectId = new Types.ObjectId(mockEvent.domainId);
+    const eventWithObjectIdDomain = {
+      ...mockEvent,
+      domainId: domainObjectId,
+    };
+    const findQuery = createFindQueryMock([eventWithObjectIdDomain]);
+    mockEventModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAll({});
+
+    expect(mockDomainsService.findManyByIds).toHaveBeenCalledWith([
+      mockEvent.domainId,
+    ]);
+    expect(result).toEqual([
+      {
+        ...eventWithObjectIdDomain,
+        domainSlug: 'psych-center',
+        registeredCount: 0,
+      },
+    ]);
+  });
+
+  it('resolves domain slugs for events with populated domain ids', async () => {
+    const domainObjectId = new Types.ObjectId(mockEvent.domainId);
+    const eventWithPopulatedDomain = {
+      ...mockEvent,
+      domainId: { _id: domainObjectId, slug: 'psych-center' },
+    };
+    const findQuery = createFindQueryMock([eventWithPopulatedDomain]);
+    mockEventModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findAll({});
+
+    expect(mockDomainsService.findManyByIds).toHaveBeenCalledWith([
+      mockEvent.domainId,
+    ]);
+    expect(result).toEqual([
+      {
+        ...eventWithPopulatedDomain,
+        domainSlug: 'psych-center',
+        registeredCount: 0,
+      },
+    ]);
   });
 
   it('with domainId validates domain and filters by that domain', async () => {
@@ -165,6 +257,30 @@ describe('EventsService', () => {
         ],
       },
     });
+  });
+
+  it('filters public events by speaker or organizer personId', async () => {
+    const findQuery = createFindQueryMock([mockEvent]);
+    mockEventModel.find.mockReturnValue(findQuery);
+    const personId = '507f1f77bcf86cd799439099';
+
+    await service.findAll({ personId });
+
+    expect(mockEventModel.find).toHaveBeenCalledWith({
+      status: {
+        $in: [
+          'planned',
+          'registration_open',
+          'ongoing',
+          'completed',
+          'cancelled',
+        ],
+      },
+      $or: [{ speakerIds: personId }, { organizerIds: personId }],
+    });
+    expect(mockDomainsService.findManyByIds).toHaveBeenCalledWith([
+      mockEvent.domainId,
+    ]);
   });
 
   it('passes optional description into the created event document', async () => {

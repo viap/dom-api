@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MediaModule } from '@/media/media.module';
+import { LocationsModule } from '@/locations/locations.module';
 import { UsersModule } from '@/users/users.module';
 import { PeopleController } from './people.controller';
 import { PeopleService } from './people.service';
@@ -11,6 +12,7 @@ import { Person, personSchema } from './schemas/person.schema';
     MongooseModule.forFeature([{ name: Person.name, schema: personSchema }]),
     UsersModule,
     MediaModule,
+    LocationsModule,
   ],
   controllers: [PeopleController],
   providers: [PeopleService],

@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { DomainsModule } from '@/domains/domains.module';
 import { EventsModule } from '@/events/events.module';
 import { PartnersModule } from '@/partners/partners.module';
+import { PeopleModule } from '@/people/people.module';
 import { ProgramsModule } from '@/programs/programs.module';
 import { UsersModule } from '@/users/users.module';
 import { Application, applicationSchema } from './schemas/application.schema';
@@ -18,6 +19,7 @@ import { ApplicationsService } from './applications.service';
     ProgramsModule,
     EventsModule,
     PartnersModule,
+    PeopleModule,
     UsersModule,
   ],
   controllers: [ApplicationsController],
