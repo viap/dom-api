@@ -4,6 +4,7 @@ export class CreateTherapySessionDto {
   dateTime?: number;
   client: string;
   psychologist: string;
+  therapyRequest?: string;
   duration: number;
   price: Price;
   commission?: Price;

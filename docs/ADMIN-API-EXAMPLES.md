@@ -2399,7 +2399,12 @@ Response:
         "hidden": false
       }
     ],
-    "accepted": false
+    "accepted": false,
+    "clientGender": "unknown",
+    "requestCategory": "unknown",
+    "topic": "",
+    "analyticsReviewRequired": true,
+    "analyticsInference": {}
   }
 ]
 ```
@@ -2440,9 +2445,100 @@ Response:
       "hidden": false
     }
   ],
-  "accepted": false
+  "accepted": false,
+  "clientGender": "unknown",
+  "requestCategory": "unknown",
+  "topic": "Needs weekly therapy sessions",
+  "analyticsReviewRequired": true
 }
 ```
+
+### `GET /therapy-request-analytics/summary`
+
+Admin-only. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `topic`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
+
+Response:
+
+```json
+{
+  "totalRequests": 12,
+  "reviewRequiredCount": 5,
+  "monthly": [
+    {
+      "month": "2026-01",
+      "total": 12,
+      "byCategory": { "individual": 7, "family": 3, "unknown": 2 },
+      "byGender": { "unknown": 8, "female": 3, "male": 1 }
+    }
+  ],
+  "categoryBreakdown": [
+    { "category": "individual", "total": 7 },
+    { "category": "family", "total": 3 }
+  ],
+  "genderBreakdown": [
+    { "gender": "unknown", "total": 8 }
+  ]
+}
+```
+
+### `GET /therapy-request-analytics/lifecycle`
+
+Admin-only. Returns psychologist-level rankings and request-level rows for validation.
+
+Response:
+
+```json
+{
+  "shortestPsychologists": [
+    {
+      "psychologistId": "660900000000000000000030",
+      "psychologistName": "Specialist Name",
+      "averageLifecycleDays": 12.5,
+      "medianLifecycleDays": 10,
+      "requestCount": 4,
+      "linkedSessionCount": 11,
+      "averageFirstSessionDelayDays": 3.5,
+      "noSessionCount": 2
+    }
+  ],
+  "longestPsychologists": [],
+  "requestRows": [
+    {
+      "requestId": "661900000000000000000001",
+      "psychologistName": "Specialist Name",
+      "clientName": "Client Request",
+      "requestCreatedAt": "2026-01-01T00:00:00.000Z",
+      "firstSessionAt": "2026-01-03T00:00:00.000Z",
+      "latestSessionAt": "2026-01-12T00:00:00.000Z",
+      "firstSessionDelayDays": 2,
+      "lifecycleDays": 11,
+      "linkedSessionCount": 3,
+      "linkStatus": "linked"
+    }
+  ],
+  "unlinkedSessionCount": 6,
+  "noSessionRequestCount": 2
+}
+```
+
+### `PUT /therapy-request-analytics/requests/:therapyRequestId`
+
+Admin-only manual correction endpoint. Corrected fields are marked as manual in `analyticsInference`.
+
+Request:
+
+```json
+{
+  "clientGender": "unknown",
+  "requestCategory": "family",
+  "topic": "Relationship conflict",
+  "analyticsReviewRequired": false
+}
+```
+
+### `GET /therapy-request-analytics/export`
+
+Admin-only. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
 
 ### `POST /therapy-requests/:therapyRequestId/accept`
 

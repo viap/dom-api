@@ -17,6 +17,17 @@ describe('joiCreateTherapySessionSchema', () => {
     expect(error).toBeUndefined();
   });
 
+  it('accepts optional therapy request id', () => {
+    const { error } = joiCreateTherapySessionSchema.validate({
+      ...basePayload,
+      client: '507f1f77bcf86cd799439011',
+      psychologist: '507f1f77bcf86cd799439012',
+      therapyRequest: '507f1f77bcf86cd799439013',
+    });
+
+    expect(error).toBeUndefined();
+  });
+
   it('rejects invalid client ObjectId', () => {
     const { error } = joiCreateTherapySessionSchema.validate({
       ...basePayload,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Price } from '@/common/schemas/price.schema';
@@ -9,6 +9,10 @@ import {
 } from '@/common/utils/mongo-sanitizer';
 import { Currencies } from '@/psychologists/enums/currencies.enum';
 import { PsychologistsService } from '@/psychologists/psychologists.service';
+import {
+  TherapyRequest,
+  TherapyRequestDocument,
+} from '@/therapy-requests/schemas/therapy-request.schema';
 import { UsersService } from '@/users/users.service';
 import { CreateTherapySessionDto } from './dto/create-therapy-session.dto';
 import { TherapySessionsControllerStatistic } from './dto/therapy-sessions-statistic.dto';
@@ -21,6 +25,7 @@ import {
 const submodels = [
   'psychologist',
   'client',
+  'therapyRequest',
   {
     path: 'psychologist',
     populate: {
@@ -32,11 +37,33 @@ const submodels = [
 
 const oneDay = 1000 * 60 * 60 * 24;
 
+function toId(value: unknown): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  const record = value as {
+    _id?: { toString: () => string };
+    toString?: () => string;
+  };
+  return record._id?.toString?.() || record.toString?.();
+}
+
+function hasOwn(object: object, field: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, field);
+}
+
 @Injectable()
 export class TherapySessionsService {
   constructor(
     @InjectModel(TherapySession.name)
     private therapySessionModel: Model<TherapySessionDocument>,
+    @InjectModel(TherapyRequest.name)
+    private therapyRequestModel: Model<TherapyRequestDocument>,
     private psychologistsService: PsychologistsService,
     private usersService: UsersService,
   ) {}
@@ -208,11 +235,22 @@ export class TherapySessionsService {
     const dateTime = createData.dateTime
       ? new Date(createData.dateTime).getTime()
       : Date.now();
+    const therapyRequest = createData.therapyRequest
+      ? await this.validateTherapyRequestLink(
+          psychologistId,
+          client._id.toString(),
+          createData.therapyRequest,
+        )
+      : await this.resolveDeterministicTherapyRequestId(
+          psychologistId,
+          client._id.toString(),
+        );
     return this.therapySessionModel.create({
       ...createData,
       dateTime,
       psychologist: psychologistId,
       client: client._id,
+      therapyRequest,
     });
   }
 
@@ -220,12 +258,27 @@ export class TherapySessionsService {
     id: string,
     updateData: UpdateTherapySessionDto,
   ): Promise<TherapySessionDocument> {
+    const existingSession = await this.getById(id);
+    if (!existingSession) {
+      return null;
+    }
+
     const dateTime = updateData.dateTime
       ? new Date(updateData.dateTime).getTime()
       : Date.now();
+    const therapyRequest = hasOwn(updateData, 'therapyRequest')
+      ? updateData.therapyRequest
+        ? await this.validateTherapyRequestLink(
+            existingSession.psychologist._id.toString(),
+            existingSession.client._id.toString(),
+            updateData.therapyRequest,
+          )
+        : updateData.therapyRequest
+      : existingSession.therapyRequest;
     await this.therapySessionModel.findByIdAndUpdate(id, {
       ...updateData,
       dateTime,
+      therapyRequest,
     });
     return this.getById(id);
   }
@@ -249,5 +302,65 @@ export class TherapySessionsService {
       .exec();
 
     return true;
+  }
+
+  private async resolveDeterministicTherapyRequestId(
+    psychologistId: string,
+    clientId: string,
+  ): Promise<string | undefined> {
+    const psychologist = await this.psychologistsService.getById(
+      psychologistId,
+      false,
+    );
+    const matchingRequestIds = (psychologist?.clients || [])
+      .filter((client) => {
+        const userId = toId(client.user);
+        return userId === clientId && !!client.therapyRequest;
+      })
+      .map((client) => toId(client.therapyRequest))
+      .filter(Boolean);
+
+    const uniqueRequestIds = Array.from(new Set(matchingRequestIds));
+    return uniqueRequestIds.length === 1 ? uniqueRequestIds[0] : undefined;
+  }
+
+  private async validateTherapyRequestLink(
+    psychologistId: string,
+    clientId: string,
+    therapyRequestId: string,
+  ): Promise<string | undefined> {
+    const validTherapyRequestId = validateObjectId(therapyRequestId);
+    if (!validTherapyRequestId) {
+      throw new BadRequestException('Invalid therapy request link');
+    }
+
+    const request = await this.therapyRequestModel
+      .findById(validTherapyRequestId)
+      .exec();
+
+    if (!request) {
+      throw new BadRequestException('Invalid therapy request link');
+    }
+
+    const requestPsychologistId = toId(request.psychologist);
+
+    if (requestPsychologistId && requestPsychologistId !== psychologistId) {
+      throw new BadRequestException('Invalid therapy request link');
+    }
+
+    const requestUserId = toId(request.user);
+
+    if (requestUserId && requestUserId === clientId) {
+      return validTherapyRequestId;
+    }
+
+    const deterministicRequestId =
+      await this.resolveDeterministicTherapyRequestId(psychologistId, clientId);
+
+    if (deterministicRequestId === validTherapyRequestId) {
+      return validTherapyRequestId;
+    }
+
+    throw new BadRequestException('Invalid therapy request link');
   }
 }

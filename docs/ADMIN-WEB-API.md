@@ -1110,6 +1110,45 @@ This section is intentionally shorter. It is meant as a frontend catalog, not a 
 - admin / psychologist request processing
 - user request submission
 
+### Therapy Request Analytics
+
+Admin-only analytics routes:
+
+- `GET /therapy-request-analytics/filters`
+- `GET /therapy-request-analytics/summary`
+- `GET /therapy-request-analytics/requests`
+- `GET /therapy-request-analytics/lifecycle`
+- `GET /therapy-request-analytics/export`
+- `PUT /therapy-request-analytics/requests/:therapyRequestId`
+
+Analytics fields on therapy requests:
+
+- `clientGender`: inferred analytics value, not verified personal data.
+- `requestCategory`: `individual`, `family`, `group`, `child`, or `unknown`.
+- `topic`: editable normalized request theme.
+- `analyticsReviewRequired`: marks low-confidence or incomplete inference.
+- `analyticsInference`: shallow per-field metadata with value, confidence, sources, reasons, detectedAt, reviewedAt, reviewedBy, and manual.
+
+Inference is conservative and explainable. Automatic classification never overwrites fields marked as manually reviewed. Low-confidence values are stored as `unknown` or left review-required.
+
+Lifecycle analytics:
+
+- Request-level lifecycle rows show request creation, first linked session, latest linked session, first-session delay, lifecycle days, linked session count, and link status.
+- Psychologist rankings aggregate request lifecycles by average and median lifecycle days and include request count, linked session count, average first-session delay, and no-session count.
+- Sessions without deterministic request links are excluded from rankings and reported separately.
+
+Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
+
+Backfill:
+
+```bash
+node scripts/backfill_therapy_request_analytics.js
+node scripts/backfill_therapy_request_analytics.js --limit 100
+node scripts/backfill_therapy_request_analytics.js --write --confirm-production-backfill
+```
+
+The default mode is dry-run. Write mode requires explicit confirmation, only applies deterministic updates, preserves manually reviewed analytics fields, and supports `--limit`, `--batch-size`, `--only-requests`, `--only-sessions`, and `--force-reclassify`.
+
 ---
 
 ## 4.4 Therapy Sessions
