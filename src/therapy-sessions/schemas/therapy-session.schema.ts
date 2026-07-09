@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { Price, priceSchema } from '@/common/schemas/price.schema';
 import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
+import { TherapyRequestDocument } from '@/therapy-requests/schemas/therapy-request.schema';
 import { UserDocument } from '@/users/schemas/user.schema';
 
 @Schema({ timestamps: true })
@@ -11,6 +12,9 @@ export class TherapySession {
 
   @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'User' })
   client: UserDocument;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'TherapyRequest' })
+  therapyRequest?: TherapyRequestDocument;
 
   @Prop({
     required: true,
@@ -39,5 +43,6 @@ export const therapySessionSchema =
 
 therapySessionSchema.index({ psychologist: 1, dateTime: 1 });
 therapySessionSchema.index({ psychologist: 1, client: 1 });
+therapySessionSchema.index({ therapyRequest: 1 });
 therapySessionSchema.index({ dateTime: 1 });
 therapySessionSchema.index({ client: 1 });

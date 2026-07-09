@@ -6,6 +6,10 @@ import {
   TherapySession,
   therapySessionSchema,
 } from './schemas/therapy-session.schema';
+import {
+  TherapyRequest,
+  schemaTherapyRequest,
+} from '@/therapy-requests/schemas/therapy-request.schema';
 import { TherapySessionsController } from './therapy-sessions.controller';
 import { TherapySessionsService } from './therapy-sessions.service';
 
@@ -17,6 +21,10 @@ import { TherapySessionsService } from './therapy-sessions.service';
       {
         name: TherapySession.name,
         schema: therapySessionSchema,
+      },
+      {
+        name: TherapyRequest.name,
+        schema: schemaTherapyRequest,
       },
     ]),
   ],

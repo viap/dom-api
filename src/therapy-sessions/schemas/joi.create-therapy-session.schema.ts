@@ -9,6 +9,7 @@ export const joiCreateTherapySessionSchema = Joi.object({
   dateTime: Joi.number(),
   client: joiObjectId.required(),
   psychologist: joiObjectIdWithFallback('me').required(),
+  therapyRequest: joiObjectId.optional(),
   duration: Joi.number().required(),
   price: joiPriceSchema.required(),
   commission: joiPriceSchema,
