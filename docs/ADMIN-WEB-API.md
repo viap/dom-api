@@ -1112,7 +1112,7 @@ This section is intentionally shorter. It is meant as a frontend catalog, not a 
 
 ### Therapy Request Analytics
 
-Admin-only analytics routes:
+Admin/editor analytics routes:
 
 - `GET /therapy-request-analytics/filters`
 - `GET /therapy-request-analytics/summary`

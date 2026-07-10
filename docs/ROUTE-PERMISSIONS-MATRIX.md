@@ -271,12 +271,12 @@ This section is intentionally high-signal rather than exhaustive. It covers the 
 | `POST`   | `/therapy-requests/:therapyRequestId/reject`     | Admin, Editor, Psychologist | Admin / specialist     |
 | `PUT`    | `/therapy-requests/:therapyRequestId`            | Admin, Editor, Psychologist | Admin / specialist     |
 | `DELETE` | `/therapy-requests/:therapyRequestId`            | Admin, Editor, Psychologist | Admin / specialist     |
-| `GET`    | `/therapy-request-analytics/filters`             | Admin                       | Admin analytics        |
-| `GET`    | `/therapy-request-analytics/summary`             | Admin                       | Admin analytics        |
-| `GET`    | `/therapy-request-analytics/requests`            | Admin                       | Admin analytics        |
-| `GET`    | `/therapy-request-analytics/lifecycle`           | Admin                       | Admin analytics        |
-| `GET`    | `/therapy-request-analytics/export`              | Admin                       | Admin analytics export |
-| `PUT`    | `/therapy-request-analytics/requests/:id`        | Admin                       | Admin analytics review |
+| `GET`    | `/therapy-request-analytics/filters`             | Admin, Editor               | Admin/editor analytics |
+| `GET`    | `/therapy-request-analytics/summary`             | Admin, Editor               | Admin/editor analytics |
+| `GET`    | `/therapy-request-analytics/requests`            | Admin, Editor               | Admin/editor analytics |
+| `GET`    | `/therapy-request-analytics/lifecycle`           | Admin, Editor               | Admin/editor analytics |
+| `GET`    | `/therapy-request-analytics/export`              | Admin, Editor               | Admin/editor analytics export |
+| `PUT`    | `/therapy-request-analytics/requests/:id`        | Admin, Editor               | Admin/editor analytics review |
 
 Note:
 
