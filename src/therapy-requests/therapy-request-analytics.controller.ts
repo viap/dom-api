@@ -13,6 +13,7 @@ import {
   TherapyRequestAnalyticsFiltersResponse,
   TherapyRequestAnalyticsLifecycleResponse,
   TherapyRequestAnalyticsQuery,
+  TherapyRequestAnalyticsRequestDetails,
   TherapyRequestAnalyticsRequestsResponse,
   TherapyRequestAnalyticsSummaryResponse,
 } from './types/therapy-request-analytics.types';
@@ -45,6 +46,14 @@ export class TherapyRequestAnalyticsController {
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsRequestsResponse> {
     return this.analyticsService.getRequests(query);
+  }
+
+  @Get('requests/:therapyRequestId')
+  @Roles(Role.Admin, Role.Editor)
+  getRequestDetails(
+    @Param('therapyRequestId') therapyRequestId: string,
+  ): Promise<TherapyRequestAnalyticsRequestDetails> {
+    return this.analyticsService.getRequestDetails(therapyRequestId);
   }
 
   @Get('lifecycle')

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import ExcelJS from 'exceljs';
@@ -24,6 +24,7 @@ import {
   TherapyRequestAnalyticsFiltersResponse,
   TherapyRequestAnalyticsLifecycleResponse,
   TherapyRequestAnalyticsQuery,
+  TherapyRequestAnalyticsRequestDetails,
   TherapyRequestAnalyticsRequest,
   TherapyRequestAnalyticsRequestsResponse,
   TherapyRequestAnalyticsSummaryResponse,
@@ -258,6 +259,37 @@ export class TherapyRequestAnalyticsService {
     });
 
     return toPaginatedResponse(requests, total, limit, normalizedOffset);
+  }
+
+  async getRequestDetails(
+    therapyRequestId: string,
+  ): Promise<TherapyRequestAnalyticsRequestDetails> {
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      throw new NotFoundException('Invalid therapy request ID format');
+    }
+
+    const request = await this.therapyRequestModel
+      .findById(validId)
+      .select('_id descr contacts')
+      .exec();
+
+    if (!request) {
+      throw new NotFoundException('Therapy request not found');
+    }
+
+    return {
+      _id: request._id.toString(),
+      descr: request.descr || '',
+      contacts: (request.contacts || [])
+        .filter((contact) => contact.hidden !== true)
+        .map((contact) => ({
+          ...(contact.id ? { id: contact.id } : {}),
+          network: String(contact.network),
+          username: contact.username,
+          hidden: contact.hidden === true,
+        })),
+    };
   }
 
   async getSummary(

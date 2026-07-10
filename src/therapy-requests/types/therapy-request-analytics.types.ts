@@ -41,6 +41,19 @@ export interface TherapyRequestAnalyticsRequest {
 export type TherapyRequestAnalyticsRequestsResponse =
   PaginatedResponse<TherapyRequestAnalyticsRequest>;
 
+export interface TherapyRequestAnalyticsRequestDetails {
+  _id: string;
+  descr: string;
+  contacts: TherapyRequestAnalyticsContact[];
+}
+
+export interface TherapyRequestAnalyticsContact {
+  id?: string;
+  network: string;
+  username: string;
+  hidden: boolean;
+}
+
 export interface TherapyRequestAnalyticsFiltersResponse {
   clientGenders: TherapyRequestClientGender[];
   requestCategories: TherapyRequestCategory[];

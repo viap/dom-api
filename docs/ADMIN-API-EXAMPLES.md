@@ -2479,6 +2479,27 @@ Response:
 }
 ```
 
+### `GET /therapy-request-analytics/requests/:therapyRequestId`
+
+Admin/editor. Returns read-only context for the analytics review modal. Contacts with `hidden: true` are filtered out.
+
+Response:
+
+```json
+{
+  "_id": "661900000000000000000001",
+  "descr": "Needs weekly therapy sessions.",
+  "contacts": [
+    {
+      "id": "telegram",
+      "network": "telegram",
+      "username": "client_name",
+      "hidden": false
+    }
+  ]
+}
+```
+
 ### `GET /therapy-request-analytics/lifecycle`
 
 Admin/editor. Returns psychologist-level rankings and request-level rows for validation.

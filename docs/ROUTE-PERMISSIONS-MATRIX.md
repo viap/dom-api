@@ -274,6 +274,7 @@ This section is intentionally high-signal rather than exhaustive. It covers the 
 | `GET`    | `/therapy-request-analytics/filters`             | Admin, Editor               | Admin/editor analytics |
 | `GET`    | `/therapy-request-analytics/summary`             | Admin, Editor               | Admin/editor analytics |
 | `GET`    | `/therapy-request-analytics/requests`            | Admin, Editor               | Admin/editor analytics |
+| `GET`    | `/therapy-request-analytics/requests/:id`        | Admin, Editor               | Admin/editor analytics review context |
 | `GET`    | `/therapy-request-analytics/lifecycle`           | Admin, Editor               | Admin/editor analytics |
 | `GET`    | `/therapy-request-analytics/export`              | Admin, Editor               | Admin/editor analytics export |
 | `PUT`    | `/therapy-request-analytics/requests/:id`        | Admin, Editor               | Admin/editor analytics review |
