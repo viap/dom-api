@@ -6,6 +6,5 @@ import {
 export class UpdateTherapyRequestAnalyticsDto {
   readonly clientGender?: TherapyRequestClientGender;
   readonly requestCategory?: TherapyRequestCategory;
-  readonly topic?: string;
   readonly analyticsReviewRequired?: boolean;
 }

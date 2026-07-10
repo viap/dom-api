@@ -1125,7 +1125,6 @@ Analytics fields on therapy requests:
 
 - `clientGender`: inferred analytics value, not verified personal data.
 - `requestCategory`: `individual`, `family`, `group`, `child`, or `unknown`.
-- `topic`: editable normalized request theme.
 - `analyticsReviewRequired`: marks low-confidence or incomplete inference.
 - `analyticsInference`: shallow per-field metadata with value, confidence, sources, reasons, detectedAt, reviewedAt, reviewedBy, and manual.
 

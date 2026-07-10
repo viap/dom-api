@@ -21,7 +21,6 @@ export interface TherapyRequestClassifierServiceInput
   current?: {
     clientGender?: TherapyRequestClientGender;
     requestCategory?: TherapyRequestCategory;
-    topic?: string;
     analyticsInference?: TherapyRequestAnalyticsInference;
   };
 }

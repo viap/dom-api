@@ -32,7 +32,7 @@ const REQUEST_CATEGORY = {
   UNKNOWN: TherapyRequestCategory.Unknown,
 };
 
-const ANALYTICS_FIELDS = ['clientGender', 'requestCategory', 'topic'];
+const ANALYTICS_FIELDS = ['clientGender', 'requestCategory'];
 
 function parsePositiveInteger(rawValue, optionName) {
   const value = Number(rawValue);
@@ -66,6 +66,7 @@ function parseOptions(argv = []) {
     batchSize: 100,
     onlyRequests: false,
     onlySessions: false,
+    cleanupTopic: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -80,6 +81,8 @@ function parseOptions(argv = []) {
       options.onlyRequests = true;
     } else if (arg === '--only-sessions') {
       options.onlySessions = true;
+    } else if (arg === '--cleanup-topic') {
+      options.cleanupTopic = true;
     } else if (arg === '--limit' || arg.startsWith('--limit=')) {
       const parsed = readOptionValue(argv, i, '--limit');
       options.limit = parsePositiveInteger(parsed.value, '--limit');
@@ -107,6 +110,20 @@ function parseOptions(argv = []) {
 }
 
 function buildRequestCandidateQuery(options = {}) {
+  if (options.cleanupTopic) {
+    return {
+      $or: [
+        { topic: { $exists: true } },
+        { 'analyticsInference.topic': { $exists: true } },
+        { clientGender: { $exists: false } },
+        { requestCategory: { $exists: false } },
+        { analyticsReviewRequired: { $exists: false } },
+        { 'analyticsInference.clientGender': { $exists: false } },
+        { 'analyticsInference.requestCategory': { $exists: false } },
+      ],
+    };
+  }
+
   if (options.forceReclassify) {
     return {};
   }
@@ -115,11 +132,18 @@ function buildRequestCandidateQuery(options = {}) {
     $or: [
       { clientGender: { $exists: false } },
       { requestCategory: { $exists: false } },
-      { topic: { $exists: false } },
       { analyticsReviewRequired: { $exists: false } },
       { 'analyticsInference.clientGender': { $exists: false } },
       { 'analyticsInference.requestCategory': { $exists: false } },
-      { 'analyticsInference.topic': { $exists: false } },
+    ],
+  };
+}
+
+function buildTopicCleanupQuery() {
+  return {
+    $or: [
+      { topic: { $exists: true } },
+      { 'analyticsInference.topic': { $exists: true } },
     ],
   };
 }
@@ -249,7 +273,6 @@ function buildRequestProposal(request, user, options = {}, now = new Date()) {
   const values = {
     clientGender: request.clientGender,
     requestCategory: request.requestCategory,
-    topic: request.topic,
   };
   const analyticsInference = { ...(request.analyticsInference || {}) };
   let skippedManual = 0;
@@ -272,12 +295,10 @@ function buildRequestProposal(request, user, options = {}, now = new Date()) {
   const proposedSet = {
     clientGender: values.clientGender || CLIENT_GENDER.UNKNOWN,
     requestCategory: values.requestCategory || REQUEST_CATEGORY.UNKNOWN,
-    topic: typeof values.topic === 'string' ? values.topic : '',
     analyticsReviewRequired: computeReviewRequired(
       {
         clientGender: values.clientGender || CLIENT_GENDER.UNKNOWN,
         requestCategory: values.requestCategory || REQUEST_CATEGORY.UNKNOWN,
-        topic: typeof values.topic === 'string' ? values.topic : '',
       },
       analyticsInference,
     ),
@@ -290,6 +311,38 @@ function buildRequestProposal(request, user, options = {}, now = new Date()) {
     fieldProposals,
     skippedManual,
     ...diff,
+  };
+}
+
+function buildTopicCleanupPatch(request) {
+  const analyticsInference = { ...(request.analyticsInference || {}) };
+  delete analyticsInference.topic;
+
+  const clientGender = request.clientGender || CLIENT_GENDER.UNKNOWN;
+  const requestCategory = request.requestCategory || REQUEST_CATEGORY.UNKNOWN;
+  const analyticsReviewRequired = computeReviewRequired(
+    { clientGender, requestCategory },
+    analyticsInference,
+  );
+  const set = {};
+  const unset = {};
+
+  if (!stableEqual(request.analyticsReviewRequired, analyticsReviewRequired)) {
+    set.analyticsReviewRequired = analyticsReviewRequired;
+  }
+
+  if (hasOwn(request, 'topic')) {
+    unset.topic = '';
+  }
+
+  if (request.analyticsInference?.topic) {
+    unset['analyticsInference.topic'] = '';
+  }
+
+  return {
+    set,
+    unset,
+    hasChanges: Object.keys(set).length > 0 || Object.keys(unset).length > 0,
   };
 }
 
@@ -335,12 +388,6 @@ function summarizeRequestProposal(summary, request, proposal) {
   incrementCounter(summary.currentRequestCategory, request.requestCategory);
   incrementCounter(summary.proposedRequestCategory, proposed.requestCategory);
 
-  if (proposed.topic) {
-    summary.topic.nonEmpty += 1;
-  } else {
-    summary.topic.empty += 1;
-  }
-
   if (
     proposed.clientGender === CLIENT_GENDER.UNKNOWN ||
     proposed.requestCategory === REQUEST_CATEGORY.UNKNOWN
@@ -359,10 +406,6 @@ function createRequestSummary() {
     proposedClientGender: createCounter(Object.values(CLIENT_GENDER)),
     currentRequestCategory: createCounter(Object.values(REQUEST_CATEGORY)),
     proposedRequestCategory: createCounter(Object.values(REQUEST_CATEGORY)),
-    topic: {
-      empty: 0,
-      nonEmpty: 0,
-    },
     unknownCount: 0,
     reviewRequiredCount: 0,
   };
@@ -376,13 +419,11 @@ function createRequestSample(request, proposal) {
     existing: {
       clientGender: request.clientGender,
       requestCategory: request.requestCategory,
-      topic: request.topic,
       analyticsReviewRequired: request.analyticsReviewRequired,
     },
     proposed: {
       clientGender: proposal.proposedSet.clientGender,
       requestCategory: proposal.proposedSet.requestCategory,
-      topic: proposal.proposedSet.topic,
       analyticsReviewRequired: proposal.proposedSet.analyticsReviewRequired,
     },
     inference: Object.fromEntries(
@@ -407,6 +448,8 @@ module.exports = {
   buildFieldProposal,
   buildRequestCandidateQuery,
   buildRequestProposal,
+  buildTopicCleanupPatch,
+  buildTopicCleanupQuery,
   createRequestSample,
   createRequestSummary,
   diffRequestPatch,

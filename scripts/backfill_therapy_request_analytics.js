@@ -13,6 +13,7 @@
  *   --only-requests
  *   --only-sessions
  *   --force-reclassify
+ *   --cleanup-topic
  */
 
 const path = require('path');
@@ -22,6 +23,8 @@ const { MongoClient } = require('mongodb');
 const {
   buildRequestCandidateQuery,
   buildRequestProposal,
+  buildTopicCleanupPatch,
+  buildTopicCleanupQuery,
   createRequestSample,
   createRequestSummary,
   idToString,
@@ -61,6 +64,15 @@ function createStats(options) {
       samples: [],
       failures: [],
     },
+    topicCleanup: {
+      scanned: 0,
+      actualChanges: 0,
+      updated: 0,
+      indexPresent: false,
+      indexDropped: false,
+      failed: 0,
+      failures: [],
+    },
     sessions: {
       scanned: 0,
       linkable: 0,
@@ -71,6 +83,21 @@ function createStats(options) {
       failures: [],
     },
   };
+}
+
+async function dropTopicIndexIfPresent(collection, stats, options) {
+  const indexes = await collection.indexes();
+  const topicIndex = indexes.find(
+    (index) => index.name === 'topic_1_createdAt_1',
+  );
+  stats.topicCleanup.indexPresent = Boolean(topicIndex);
+
+  if (!topicIndex || !options.write) {
+    return;
+  }
+
+  await collection.dropIndex(topicIndex.name);
+  stats.topicCleanup.indexDropped = true;
 }
 
 function cursorWithLimit(cursor, limit) {
@@ -150,6 +177,66 @@ async function processRequests({ collections, options, stats }) {
   }
 
   await flushBulk(therapyRequests, operations, stats.requests, options);
+}
+
+async function processTopicCleanup({ collections, options, stats }) {
+  const { therapyRequests } = collections;
+  const cursor = cursorWithLimit(
+    therapyRequests.find(buildTopicCleanupQuery()),
+    options.limit,
+  );
+  const operations = [];
+
+  await dropTopicIndexIfPresent(therapyRequests, stats, options);
+
+  while (await cursor.hasNext()) {
+    const request = await cursor.next();
+    if (!request) {
+      continue;
+    }
+
+    stats.topicCleanup.scanned += 1;
+
+    let patch;
+    try {
+      patch = buildTopicCleanupPatch(request);
+    } catch (error) {
+      stats.topicCleanup.failed += 1;
+      if (stats.topicCleanup.failures.length < SAMPLE_LIMIT) {
+        stats.topicCleanup.failures.push({
+          _id: idToString(request._id),
+          error: error.message || String(error),
+        });
+      }
+      continue;
+    }
+
+    if (!patch.hasChanges) {
+      continue;
+    }
+
+    stats.topicCleanup.actualChanges += 1;
+    const update = {};
+    if (Object.keys(patch.set).length) {
+      update.$set = patch.set;
+    }
+    if (Object.keys(patch.unset).length) {
+      update.$unset = patch.unset;
+    }
+
+    operations.push({
+      updateOne: {
+        filter: { _id: request._id },
+        update,
+      },
+    });
+
+    if (operations.length >= options.batchSize) {
+      await flushBulk(therapyRequests, operations, stats.topicCleanup, options);
+    }
+  }
+
+  await flushBulk(therapyRequests, operations, stats.topicCleanup, options);
 }
 
 function findDeterministicClientRequest(psychologist, session) {
@@ -242,9 +329,11 @@ function printReadableSummary(stats) {
   console.log(
     `Request review: unknown=${stats.requests.summary.unknownCount}, reviewRequired=${stats.requests.summary.reviewRequiredCount}, manualFieldsSkipped=${stats.requests.manualFieldsSkipped}`,
   );
-  console.log(
-    `Topics: empty=${stats.requests.summary.topic.empty}, nonEmpty=${stats.requests.summary.topic.nonEmpty}`,
-  );
+  if (stats.options.cleanupTopic) {
+    console.log(
+      `Topic cleanup: scanned=${stats.topicCleanup.scanned}, actualChanges=${stats.topicCleanup.actualChanges}, updated=${stats.topicCleanup.updated}, indexPresent=${stats.topicCleanup.indexPresent}, indexDropped=${stats.topicCleanup.indexDropped}, failed=${stats.topicCleanup.failed}`,
+    );
+  }
   console.log(
     `Sessions: scanned=${stats.sessions.scanned}, linkable=${stats.sessions.linkable}, linked=${stats.sessions.linked}, ambiguous=${stats.sessions.ambiguous}, unlinked=${stats.sessions.unlinked}, failed=${stats.sessions.failed}`,
   );
@@ -270,13 +359,18 @@ function printReadableSummary(stats) {
     console.log(JSON.stringify(stats.requests.samples, null, 2));
   }
 
-  if (stats.requests.failures.length || stats.sessions.failures.length) {
+  if (
+    stats.requests.failures.length ||
+    stats.sessions.failures.length ||
+    stats.topicCleanup.failures.length
+  ) {
     console.log('\nSample failures:');
     console.log(
       JSON.stringify(
         {
           requests: stats.requests.failures,
           sessions: stats.sessions.failures,
+          topicCleanup: stats.topicCleanup.failures,
         },
         null,
         2,
@@ -317,6 +411,10 @@ async function run(argv = process.argv.slice(2)) {
       await processSessions({ collections, options, stats });
     }
 
+    if (options.cleanupTopic && !options.onlySessions) {
+      await processTopicCleanup({ collections, options, stats });
+    }
+
     printReadableSummary(stats);
     console.log('\nStructured JSON:');
     console.log(JSON.stringify(stats, null, 2));
@@ -337,6 +435,7 @@ module.exports = {
   findDeterministicClientRequest,
   processRequests,
   processSessions,
+  processTopicCleanup,
   readMongoConfig,
   run,
 };

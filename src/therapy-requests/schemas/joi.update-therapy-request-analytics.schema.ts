@@ -13,6 +13,5 @@ export const joiUpdateTherapyRequestAnalyticsSchema =
     requestCategory: Joi.string().valid(
       ...Object.values(TherapyRequestCategory),
     ),
-    topic: Joi.string().allow('').max(160),
     analyticsReviewRequired: Joi.boolean(),
   }).min(1);

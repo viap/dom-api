@@ -30,7 +30,6 @@ describe('TherapyRequestClassifierService', () => {
       current: {
         clientGender: TherapyRequestClientGender.Other,
         requestCategory: TherapyRequestCategory.Individual,
-        topic: 'Manual topic',
         analyticsInference: {
           clientGender: {
             value: TherapyRequestClientGender.Other,
@@ -46,20 +45,13 @@ describe('TherapyRequestClassifierService', () => {
             reasons: ['Manual'],
             manual: true,
           },
-          topic: {
-            value: 'Manual topic',
-            confidence: 1,
-            sources: ['admin'],
-            reasons: ['Manual'],
-            manual: true,
-          },
         },
       },
     });
 
     expect(result.clientGender).toBe(TherapyRequestClientGender.Other);
     expect(result.requestCategory).toBe(TherapyRequestCategory.Individual);
-    expect(result.topic).toBe('Manual topic');
+    expect(result.analyticsInference).not.toHaveProperty('topic');
   });
 
   it('reclassifies self-reported analytics fields because they are not admin manual locks', () => {
@@ -103,7 +95,6 @@ describe('TherapyRequestClassifierService', () => {
       {
         clientGender: TherapyRequestClientGender.Female,
         requestCategory: TherapyRequestCategory.Individual,
-        topic: 'Женщина ищет индивидуальную работу с тревогой',
       },
       {
         clientGender: {
@@ -121,13 +112,6 @@ describe('TherapyRequestClassifierService', () => {
           reasons: ['Self-reported during therapy request creation'],
           manual: false,
           selfReported: true,
-        },
-        topic: {
-          value: 'Женщина ищет индивидуальную работу с тревогой',
-          confidence: 0.68,
-          sources: ['descr'],
-          reasons: ['Used the first meaningful request text fragment as topic'],
-          manual: false,
         },
       },
     );
@@ -186,9 +170,7 @@ describe('TherapyRequestClassifierService', () => {
     expect(
       result.analyticsInference.requestCategory.confidence,
     ).toBeGreaterThanOrEqual(0.75);
-    expect(result.analyticsInference.topic.confidence).toBeGreaterThanOrEqual(
-      0.65,
-    );
+    expect(result.analyticsInference).not.toHaveProperty('topic');
     expect(result.analyticsReviewRequired).toBe(false);
   });
 });

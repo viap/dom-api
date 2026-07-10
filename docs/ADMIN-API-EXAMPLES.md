@@ -2402,7 +2402,6 @@ Response:
     "accepted": false,
     "clientGender": "unknown",
     "requestCategory": "unknown",
-    "topic": "",
     "analyticsReviewRequired": true,
     "analyticsInference": {}
   }
@@ -2448,14 +2447,13 @@ Response:
   "accepted": false,
   "clientGender": "unknown",
   "requestCategory": "unknown",
-  "topic": "Needs weekly therapy sessions",
   "analyticsReviewRequired": true
 }
 ```
 
 ### `GET /therapy-request-analytics/summary`
 
-Admin-only. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `topic`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
+Admin-only. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
 
 Response:
 
@@ -2531,7 +2529,6 @@ Request:
 {
   "clientGender": "unknown",
   "requestCategory": "family",
-  "topic": "Relationship conflict",
   "analyticsReviewRequired": false
 }
 ```

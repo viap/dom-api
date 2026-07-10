@@ -17,7 +17,6 @@ export interface TherapyRequestClassifierInput {
   current?: {
     clientGender?: TherapyRequestClientGender;
     requestCategory?: TherapyRequestCategory;
-    topic?: string;
     analyticsInference?: TherapyRequestAnalyticsInference;
   };
 }
@@ -25,14 +24,12 @@ export interface TherapyRequestClassifierInput {
 export interface TherapyRequestClassification {
   clientGender: TherapyRequestClientGender;
   requestCategory: TherapyRequestCategory;
-  topic: string;
   analyticsReviewRequired: boolean;
   analyticsInference: TherapyRequestAnalyticsInference;
 }
 
 const CLIENT_GENDER_CONFIDENCE_THRESHOLD = 0.75;
 const REQUEST_CATEGORY_CONFIDENCE_THRESHOLD = 0.75;
-const TOPIC_CONFIDENCE_THRESHOLD = 0.65;
 
 function normalizeText(value?: string): string {
   return (value || '').toLowerCase().trim();
@@ -239,62 +236,20 @@ function inferCategory(
   };
 }
 
-function inferTopic(
-  input: TherapyRequestClassifierInput,
-  now: Date,
-): {
-  value: string;
-  inference: AnalyticsFieldInferenceValue;
-} {
-  const descr = (input.descr || '').trim();
-  const firstSentence = descr
-    .split(/[.!?\n]/)
-    .map((part) => part.trim())
-    .find(Boolean);
-  const topic = (firstSentence || descr).slice(0, 120).trim();
-
-  if (topic.length >= 4) {
-    return {
-      value: topic,
-      inference: fieldInference(
-        topic,
-        0.68,
-        ['descr'],
-        ['Used the first meaningful request text fragment as topic'],
-        now,
-      ),
-    };
-  }
-
-  return {
-    value: '',
-    inference: fieldInference(
-      '',
-      0.1,
-      ['descr'],
-      ['Request text is too short to normalize a topic'],
-      now,
-    ),
-  };
-}
-
 export function computeTherapyRequestAnalyticsReviewRequired(
   values: {
     clientGender?: TherapyRequestClientGender | string;
     requestCategory?: TherapyRequestCategory | string;
-    topic?: string;
   },
   inference: TherapyRequestAnalyticsInference = {},
 ): boolean {
   return (
     values.clientGender === TherapyRequestClientGender.Unknown ||
     values.requestCategory === TherapyRequestCategory.Unknown ||
-    !values.topic ||
     (inference.clientGender?.confidence || 0) <
       CLIENT_GENDER_CONFIDENCE_THRESHOLD ||
     (inference.requestCategory?.confidence || 0) <
       REQUEST_CATEGORY_CONFIDENCE_THRESHOLD ||
-    (inference.topic?.confidence || 0) < TOPIC_CONFIDENCE_THRESHOLD ||
     inference.clientGender?.selfReported === true ||
     inference.requestCategory?.selfReported === true
   );
@@ -319,28 +274,18 @@ export function classifyTherapyRequestAnalytics(
       }
     : inferCategory(input, now);
 
-  const topic = isManual(current, 'topic')
-    ? {
-        value: current?.topic || '',
-        inference: current?.analyticsInference?.topic,
-      }
-    : inferTopic(input, now);
-
   const analyticsInference: TherapyRequestAnalyticsInference = {
     clientGender: gender.inference,
     requestCategory: category.inference,
-    topic: topic.inference,
   };
 
   return {
     clientGender: gender.value as TherapyRequestClientGender,
     requestCategory: category.value as TherapyRequestCategory,
-    topic: topic.value,
     analyticsReviewRequired: computeTherapyRequestAnalyticsReviewRequired(
       {
         clientGender: gender.value,
         requestCategory: category.value,
-        topic: topic.value,
       },
       analyticsInference,
     ),

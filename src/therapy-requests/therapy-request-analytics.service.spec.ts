@@ -119,7 +119,6 @@ describe('TherapyRequestAnalyticsService', () => {
       clientGender: 'unknown',
       requestCategory: 'unknown',
       analyticsReviewRequired: 'true',
-      topic: { $ne: '' } as any,
       limit: '20',
       offset: '40',
     });
@@ -130,7 +129,7 @@ describe('TherapyRequestAnalyticsService', () => {
       analyticsReviewRequired: { $ne: false },
     });
     expect(findChain.select).toHaveBeenCalledWith(
-      '_id createdAt updatedAt name descr accepted clientGender requestCategory topic analyticsReviewRequired analyticsInference psychologist',
+      '_id createdAt updatedAt name descr accepted clientGender requestCategory analyticsReviewRequired analyticsInference psychologist',
     );
     expect(findChain.skip).toHaveBeenCalledWith(40);
     expect(findChain.limit).toHaveBeenCalledWith(20);

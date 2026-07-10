@@ -9,7 +9,6 @@ export interface TherapyRequestAnalyticsQuery {
   endDate?: string;
   clientGender?: TherapyRequestClientGender | string;
   requestCategory?: TherapyRequestCategory | string;
-  topic?: string;
   psychologist?: string;
   accepted?: string | boolean;
   analyticsReviewRequired?: string | boolean;
@@ -34,7 +33,6 @@ export interface TherapyRequestAnalyticsRequest {
   accepted?: boolean;
   clientGender?: TherapyRequestClientGender;
   requestCategory?: TherapyRequestCategory;
-  topic?: string;
   analyticsReviewRequired?: boolean;
   analyticsInference?: unknown;
   psychologist?: unknown;
@@ -46,7 +44,6 @@ export type TherapyRequestAnalyticsRequestsResponse =
 export interface TherapyRequestAnalyticsFiltersResponse {
   clientGenders: TherapyRequestClientGender[];
   requestCategories: TherapyRequestCategory[];
-  topics: string[];
   psychologists: Array<{
     id: string;
     name: string;
@@ -122,5 +119,4 @@ export interface AnalyticsFieldInferenceValue {
 export interface TherapyRequestAnalyticsInference {
   clientGender?: AnalyticsFieldInferenceValue;
   requestCategory?: AnalyticsFieldInferenceValue;
-  topic?: AnalyticsFieldInferenceValue;
 }
