@@ -65,7 +65,6 @@ describe('RequestsService', () => {
       classify: jest.fn().mockReturnValue({
         clientGender: 'unknown',
         requestCategory: 'unknown',
-        topic: 'Needs support',
         analyticsReviewRequired: true,
         analyticsInference: {},
       }),
@@ -184,7 +183,6 @@ describe('RequestsService', () => {
     classifierService.classify.mockReturnValueOnce({
       clientGender: TherapyRequestClientGender.Female,
       requestCategory: TherapyRequestCategory.Individual,
-      topic: 'Женщина ищет индивидуальную терапию',
       analyticsReviewRequired: false,
       analyticsInference: {},
     });
@@ -200,7 +198,6 @@ describe('RequestsService', () => {
       expect.objectContaining({
         clientGender: TherapyRequestClientGender.Female,
         requestCategory: TherapyRequestCategory.Individual,
-        topic: 'Женщина ищет индивидуальную терапию',
         analyticsReviewRequired: false,
         analyticsInference: {},
       }),
@@ -218,7 +215,6 @@ describe('RequestsService', () => {
     classifierService.classify.mockReturnValueOnce({
       clientGender: TherapyRequestClientGender.Unknown,
       requestCategory: TherapyRequestCategory.Unknown,
-      topic: 'Нужна индивидуальная терапия из-за тревоги',
       analyticsReviewRequired: true,
       analyticsInference: {
         clientGender: {
@@ -233,13 +229,6 @@ describe('RequestsService', () => {
           confidence: 0.2,
           sources: ['descr', 'name'],
           reasons: ['No reliable request category signal found'],
-          manual: false,
-        },
-        topic: {
-          value: 'Нужна индивидуальная терапия из-за тревоги',
-          confidence: 0.68,
-          sources: ['descr'],
-          reasons: ['Used the first meaningful request text fragment as topic'],
           manual: false,
         },
       },
@@ -281,8 +270,12 @@ describe('RequestsService', () => {
     );
 
     const createArg = therapyRequestModel.create.mock.calls[0][0];
-    expect(createArg.analyticsInference.clientGender.reviewedAt).toBeUndefined();
-    expect(createArg.analyticsInference.clientGender.reviewedBy).toBeUndefined();
+    expect(
+      createArg.analyticsInference.clientGender.reviewedAt,
+    ).toBeUndefined();
+    expect(
+      createArg.analyticsInference.clientGender.reviewedBy,
+    ).toBeUndefined();
     expect(
       createArg.analyticsInference.requestCategory.reviewedAt,
     ).toBeUndefined();
@@ -302,7 +295,6 @@ describe('RequestsService', () => {
     classifierService.classify.mockReturnValueOnce({
       clientGender: TherapyRequestClientGender.Female,
       requestCategory: TherapyRequestCategory.Individual,
-      topic: 'Нужна индивидуальная терапия из-за тревоги',
       analyticsReviewRequired: false,
       analyticsInference: {
         clientGender: {
@@ -317,13 +309,6 @@ describe('RequestsService', () => {
           confidence: 0.78,
           sources: ['descr', 'name'],
           reasons: ['Matched request category signal "тревог"'],
-          manual: false,
-        },
-        topic: {
-          value: 'Нужна индивидуальная терапия из-за тревоги',
-          confidence: 0.68,
-          sources: ['descr'],
-          reasons: ['Used the first meaningful request text fragment as topic'],
           manual: false,
         },
       },
@@ -351,7 +336,6 @@ describe('RequestsService', () => {
       _id: therapyRequestId,
       clientGender: 'unknown',
       requestCategory: 'unknown',
-      topic: '',
       analyticsReviewRequired: true,
       analyticsInference: {
         requestCategory: {
@@ -396,7 +380,6 @@ describe('RequestsService', () => {
       _id: therapyRequestId,
       clientGender: 'female',
       requestCategory: 'individual',
-      topic: 'Тревога',
       analyticsReviewRequired: true,
       analyticsInference: {},
     };
@@ -447,7 +430,6 @@ describe('RequestsService', () => {
       expect.objectContaining({
         clientGender: 'unknown',
         requestCategory: 'unknown',
-        topic: '',
         analyticsReviewRequired: true,
       }),
     );

@@ -53,9 +53,6 @@ export class TherapyRequest {
   })
   requestCategory: TherapyRequestCategory;
 
-  @Prop({ required: true, default: '' })
-  topic: string;
-
   @Prop({ required: true, default: true })
   analyticsReviewRequired: boolean;
 
@@ -74,4 +71,3 @@ schemaTherapyRequest.index({ accepted: 1, createdAt: 1 });
 schemaTherapyRequest.index({ createdAt: 1 });
 schemaTherapyRequest.index({ clientGender: 1, createdAt: 1 });
 schemaTherapyRequest.index({ requestCategory: 1, createdAt: 1 });
-schemaTherapyRequest.index({ topic: 1, createdAt: 1 });

@@ -74,7 +74,6 @@ export class TherapyRequestsService {
           current?.clientGender || TherapyRequestClientGender.Unknown,
         requestCategory:
           current?.requestCategory || TherapyRequestCategory.Unknown,
-        topic: current?.topic || '',
         analyticsInference: current?.analyticsInference || {},
         analyticsReviewRequired: true,
       };
@@ -134,7 +133,6 @@ export class TherapyRequestsService {
         {
           clientGender: analyticsPatch.clientGender,
           requestCategory: analyticsPatch.requestCategory,
-          topic: analyticsPatch.topic,
         },
         analyticsInference,
       );
@@ -332,7 +330,6 @@ export class TherapyRequestsService {
       clientGender: updateData.clientGender ?? therapyRequest.clientGender,
       requestCategory:
         updateData.requestCategory ?? therapyRequest.requestCategory,
-      topic: updateData.topic ?? therapyRequest.topic,
     };
     const analyticsReviewRequired =
       typeof updateData.analyticsReviewRequired === 'boolean'

@@ -13,12 +13,13 @@ import {
   TherapyRequestAnalyticsFiltersResponse,
   TherapyRequestAnalyticsLifecycleResponse,
   TherapyRequestAnalyticsQuery,
+  TherapyRequestAnalyticsRequestDetails,
   TherapyRequestAnalyticsRequestsResponse,
   TherapyRequestAnalyticsSummaryResponse,
 } from './types/therapy-request-analytics.types';
 
 @Controller('therapy-request-analytics')
-@Roles(Role.Admin)
+@Roles(Role.Admin, Role.Editor)
 export class TherapyRequestAnalyticsController {
   constructor(
     private analyticsService: TherapyRequestAnalyticsService,
@@ -26,13 +27,13 @@ export class TherapyRequestAnalyticsController {
   ) {}
 
   @Get('filters')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   getFilters(): Promise<TherapyRequestAnalyticsFiltersResponse> {
     return this.analyticsService.getFilters();
   }
 
   @Get('summary')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   getSummary(
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsSummaryResponse> {
@@ -40,15 +41,23 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('requests')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   getRequests(
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsRequestsResponse> {
     return this.analyticsService.getRequests(query);
   }
 
+  @Get('requests/:therapyRequestId')
+  @Roles(Role.Admin, Role.Editor)
+  getRequestDetails(
+    @Param('therapyRequestId') therapyRequestId: string,
+  ): Promise<TherapyRequestAnalyticsRequestDetails> {
+    return this.analyticsService.getRequestDetails(therapyRequestId);
+  }
+
   @Get('lifecycle')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   getLifecycle(
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsLifecycleResponse> {
@@ -56,7 +65,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('export')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   async export(
     @Query() query: TherapyRequestAnalyticsQuery,
     @Res() response: Response,
@@ -74,7 +83,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Put('requests/:therapyRequestId')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.Editor)
   updateRequestAnalytics(
     @Param('therapyRequestId') therapyRequestId: string,
     @GetUser() user: UserDocument,

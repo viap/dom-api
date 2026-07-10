@@ -2402,7 +2402,6 @@ Response:
     "accepted": false,
     "clientGender": "unknown",
     "requestCategory": "unknown",
-    "topic": "",
     "analyticsReviewRequired": true,
     "analyticsInference": {}
   }
@@ -2448,14 +2447,13 @@ Response:
   "accepted": false,
   "clientGender": "unknown",
   "requestCategory": "unknown",
-  "topic": "Needs weekly therapy sessions",
   "analyticsReviewRequired": true
 }
 ```
 
 ### `GET /therapy-request-analytics/summary`
 
-Admin-only. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `topic`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
+Admin/editor. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
 
 Response:
 
@@ -2481,9 +2479,30 @@ Response:
 }
 ```
 
+### `GET /therapy-request-analytics/requests/:therapyRequestId`
+
+Admin/editor. Returns read-only context for the analytics review modal. Contacts with `hidden: true` are filtered out.
+
+Response:
+
+```json
+{
+  "_id": "661900000000000000000001",
+  "descr": "Needs weekly therapy sessions.",
+  "contacts": [
+    {
+      "id": "telegram",
+      "network": "telegram",
+      "username": "client_name",
+      "hidden": false
+    }
+  ]
+}
+```
+
 ### `GET /therapy-request-analytics/lifecycle`
 
-Admin-only. Returns psychologist-level rankings and request-level rows for validation.
+Admin/editor. Returns psychologist-level rankings and request-level rows for validation.
 
 Response:
 
@@ -2523,7 +2542,7 @@ Response:
 
 ### `PUT /therapy-request-analytics/requests/:therapyRequestId`
 
-Admin-only manual correction endpoint. Corrected fields are marked as manual in `analyticsInference`.
+Admin/editor manual correction endpoint. Corrected fields are marked as manual in `analyticsInference`.
 
 Request:
 
@@ -2531,14 +2550,13 @@ Request:
 {
   "clientGender": "unknown",
   "requestCategory": "family",
-  "topic": "Relationship conflict",
   "analyticsReviewRequired": false
 }
 ```
 
 ### `GET /therapy-request-analytics/export`
 
-Admin-only. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
+Admin/editor. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
 
 ### `POST /therapy-requests/:therapyRequestId/accept`
 

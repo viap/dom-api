@@ -1,4 +1,5 @@
 import { TherapyRequestAnalyticsService } from './therapy-request-analytics.service';
+import { NotFoundException } from '@nestjs/common';
 
 function chain(result: unknown) {
   return {
@@ -119,7 +120,6 @@ describe('TherapyRequestAnalyticsService', () => {
       clientGender: 'unknown',
       requestCategory: 'unknown',
       analyticsReviewRequired: 'true',
-      topic: { $ne: '' } as any,
       limit: '20',
       offset: '40',
     });
@@ -130,7 +130,7 @@ describe('TherapyRequestAnalyticsService', () => {
       analyticsReviewRequired: { $ne: false },
     });
     expect(findChain.select).toHaveBeenCalledWith(
-      '_id createdAt updatedAt name descr accepted clientGender requestCategory topic analyticsReviewRequired analyticsInference psychologist',
+      '_id createdAt updatedAt name descr accepted clientGender requestCategory analyticsReviewRequired analyticsInference psychologist',
     );
     expect(findChain.skip).toHaveBeenCalledWith(40);
     expect(findChain.limit).toHaveBeenCalledWith(20);
@@ -146,6 +146,96 @@ describe('TherapyRequestAnalyticsService', () => {
       limit: 20,
       totalPages: 3,
     });
+  });
+
+  it('returns request detail context with description and projected contacts', async () => {
+    const detail = {
+      _id: id('507f1f77bcf86cd799439011'),
+      descr: 'Client asks for help with family conflict',
+      contacts: [
+        {
+          id: 'telegram',
+          network: 'telegram',
+          username: '@client',
+          hidden: false,
+        },
+        {
+          id: 'phone',
+          network: 'phone',
+          username: '+995 555 12 34 56',
+          hidden: true,
+        },
+      ],
+    };
+    const findByIdChain = chain(detail);
+    const findById = jest.fn().mockReturnValue(findByIdChain);
+    const service = new TherapyRequestAnalyticsService(
+      {
+        findById,
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getRequestDetails('507f1f77bcf86cd799439011');
+
+    expect(findById).toHaveBeenCalledWith('507f1f77bcf86cd799439011');
+    expect(findByIdChain.select).toHaveBeenCalledWith('_id descr contacts');
+    expect(result).toEqual({
+      _id: '507f1f77bcf86cd799439011',
+      descr: 'Client asks for help with family conflict',
+      contacts: [
+        {
+          id: 'telegram',
+          network: 'telegram',
+          username: '@client',
+          hidden: false,
+        },
+      ],
+    });
+  });
+
+  it('rejects invalid request detail ids', async () => {
+    const service = new TherapyRequestAnalyticsService(
+      {
+        findById: jest.fn(),
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    await expect(service.getRequestDetails('not-an-id')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('rejects missing request detail documents', async () => {
+    const service = new TherapyRequestAnalyticsService(
+      {
+        findById: jest.fn().mockReturnValue(chain(null)),
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    await expect(
+      service.getRequestDetails('507f1f77bcf86cd799439011'),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('uses 20 as the default request page size', async () => {

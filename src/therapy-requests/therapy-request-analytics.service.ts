@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import ExcelJS from 'exceljs';
@@ -24,6 +24,7 @@ import {
   TherapyRequestAnalyticsFiltersResponse,
   TherapyRequestAnalyticsLifecycleResponse,
   TherapyRequestAnalyticsQuery,
+  TherapyRequestAnalyticsRequestDetails,
   TherapyRequestAnalyticsRequest,
   TherapyRequestAnalyticsRequestsResponse,
   TherapyRequestAnalyticsSummaryResponse,
@@ -227,17 +228,15 @@ export class TherapyRequestAnalyticsService {
   ) {}
 
   async getFilters(): Promise<TherapyRequestAnalyticsFiltersResponse> {
-    const [topics, psychologists] = await Promise.all([
-      this.therapyRequestModel.distinct('topic', {
-        topic: { $exists: true, $ne: '' },
-      }),
-      this.psychologistModel.find().populate('user').select('_id user').exec(),
-    ]);
+    const psychologists = await this.psychologistModel
+      .find()
+      .populate('user')
+      .select('_id user')
+      .exec();
 
     return {
       clientGenders: Object.values(TherapyRequestClientGender),
       requestCategories: Object.values(TherapyRequestCategory),
-      topics: topics.sort(),
       psychologists: psychologists.map((psychologist) => ({
         id: psychologist._id.toString(),
         name: toName(psychologist),
@@ -260,6 +259,37 @@ export class TherapyRequestAnalyticsService {
     });
 
     return toPaginatedResponse(requests, total, limit, normalizedOffset);
+  }
+
+  async getRequestDetails(
+    therapyRequestId: string,
+  ): Promise<TherapyRequestAnalyticsRequestDetails> {
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      throw new NotFoundException('Invalid therapy request ID format');
+    }
+
+    const request = await this.therapyRequestModel
+      .findById(validId)
+      .select('_id descr contacts')
+      .exec();
+
+    if (!request) {
+      throw new NotFoundException('Therapy request not found');
+    }
+
+    return {
+      _id: request._id.toString(),
+      descr: request.descr || '',
+      contacts: (request.contacts || [])
+        .filter((contact) => contact.hidden !== true)
+        .map((contact) => ({
+          ...(contact.id ? { id: contact.id } : {}),
+          network: String(contact.network),
+          username: contact.username,
+          hidden: contact.hidden === true,
+        })),
+    };
   }
 
   async getSummary(
@@ -485,7 +515,7 @@ export class TherapyRequestAnalyticsService {
       { header: 'Created At', key: 'createdAt', width: 22 },
       { header: 'Month', key: 'month', width: 12 },
       { header: 'Name', key: 'name', width: 28 },
-      { header: 'Topic', key: 'topic', width: 36 },
+      { header: 'Description', key: 'descr', width: 48 },
       { header: 'Gender', key: 'gender', width: 14 },
       { header: 'Category', key: 'category', width: 16 },
       { header: 'Psychologist', key: 'psychologist', width: 28 },
@@ -498,7 +528,7 @@ export class TherapyRequestAnalyticsService {
         createdAt: request.createdAt?.toISOString?.() || '',
         month: monthKey(request.createdAt),
         name: request.name,
-        topic: request.topic,
+        descr: request.descr,
         gender: request.clientGender,
         category: request.requestCategory,
         psychologist: toName(request.psychologist),
@@ -590,7 +620,7 @@ export class TherapyRequestAnalyticsService {
     const requestQuery = this.therapyRequestModel
       .find(options.filter || this.buildRequestFilter(query))
       .select(
-        '_id createdAt updatedAt name descr accepted clientGender requestCategory topic analyticsReviewRequired analyticsInference psychologist',
+        '_id createdAt updatedAt name descr accepted clientGender requestCategory analyticsReviewRequired analyticsInference psychologist',
       )
       .populate({
         path: 'psychologist',
@@ -808,10 +838,6 @@ export class TherapyRequestAnalyticsService {
         query.requestCategory === TherapyRequestCategory.Unknown
           ? { $in: [TherapyRequestCategory.Unknown, null] }
           : query.requestCategory;
-    }
-
-    if (typeof query.topic === 'string' && query.topic) {
-      filter.topic = query.topic;
     }
 
     const psychologist = validateObjectId(query.psychologist);

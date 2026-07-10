@@ -1112,11 +1112,12 @@ This section is intentionally shorter. It is meant as a frontend catalog, not a 
 
 ### Therapy Request Analytics
 
-Admin-only analytics routes:
+Admin/editor analytics routes:
 
 - `GET /therapy-request-analytics/filters`
 - `GET /therapy-request-analytics/summary`
 - `GET /therapy-request-analytics/requests`
+- `GET /therapy-request-analytics/requests/:therapyRequestId`
 - `GET /therapy-request-analytics/lifecycle`
 - `GET /therapy-request-analytics/export`
 - `PUT /therapy-request-analytics/requests/:therapyRequestId`
@@ -1125,9 +1126,10 @@ Analytics fields on therapy requests:
 
 - `clientGender`: inferred analytics value, not verified personal data.
 - `requestCategory`: `individual`, `family`, `group`, `child`, or `unknown`.
-- `topic`: editable normalized request theme.
 - `analyticsReviewRequired`: marks low-confidence or incomplete inference.
 - `analyticsInference`: shallow per-field metadata with value, confidence, sources, reasons, detectedAt, reviewedAt, reviewedBy, and manual.
+
+The request-detail analytics route returns only `_id`, `descr`, and non-hidden request contacts for review context. Contacts with `hidden: true` are not exposed by that endpoint.
 
 Inference is conservative and explainable. Automatic classification never overwrites fields marked as manually reviewed. Low-confidence values are stored as `unknown` or left review-required.
 

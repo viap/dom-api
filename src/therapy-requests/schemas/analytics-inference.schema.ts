@@ -41,9 +41,6 @@ export class AnalyticsInference {
 
   @Prop({ schema: analyticsFieldInferenceSchema })
   requestCategory?: AnalyticsFieldInference;
-
-  @Prop({ schema: analyticsFieldInferenceSchema })
-  topic?: AnalyticsFieldInference;
 }
 
 export const analyticsInferenceSchema =

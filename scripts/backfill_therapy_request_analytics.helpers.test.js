@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   createStats,
+  processTopicCleanup,
   processRequests,
   processSessions,
   readMongoConfig,
@@ -9,6 +10,8 @@ const {
 const {
   buildRequestCandidateQuery,
   buildRequestProposal,
+  buildTopicCleanupPatch,
+  buildTopicCleanupQuery,
   createRequestSample,
   mergeInference,
   parseOptions,
@@ -38,6 +41,7 @@ test('parseOptions keeps dry-run default and requires write confirmation', () =>
     batchSize: 100,
     onlyRequests: false,
     onlySessions: false,
+    cleanupTopic: false,
   });
 
   assert.throws(() => parseOptions(['--write']), /Refusing to write/);
@@ -49,6 +53,7 @@ test('parseOptions keeps dry-run default and requires write confirmation', () =>
       '10',
       '--batch-size=5',
       '--only-requests',
+      '--cleanup-topic',
     ]),
     {
       write: true,
@@ -58,6 +63,7 @@ test('parseOptions keeps dry-run default and requires write confirmation', () =>
       batchSize: 5,
       onlyRequests: true,
       onlySessions: false,
+      cleanupTopic: true,
     },
   );
 });
@@ -66,10 +72,16 @@ test('buildRequestCandidateQuery targets missing analytics fields unless forced'
   assert.deepEqual(buildRequestCandidateQuery({ forceReclassify: true }), {});
 
   const query = buildRequestCandidateQuery({});
-  assert.equal(query.$or.length, 7);
+  assert.equal(query.$or.length, 5);
   assert.ok(
     query.$or.some((entry) => entry['analyticsInference.clientGender']),
   );
+  assert.deepEqual(buildTopicCleanupQuery(), {
+    $or: [
+      { topic: { $exists: true } },
+      { 'analyticsInference.topic': { $exists: true } },
+    ],
+  });
 });
 
 test('mergeInference preserves existing detectedAt and review metadata', () => {
@@ -113,7 +125,6 @@ test('buildRequestProposal does not overwrite manual fields', () => {
     descr: 'Запрос про ребенка',
     clientGender: 'other',
     requestCategory: 'individual',
-    topic: 'Manual topic',
     analyticsReviewRequired: false,
     analyticsInference: {
       clientGender: {
@@ -133,13 +144,6 @@ test('buildRequestProposal does not overwrite manual fields', () => {
         reasons: ['manual'],
         manual: true,
       },
-      topic: {
-        value: 'Manual topic',
-        confidence: 1,
-        sources: ['admin'],
-        reasons: ['manual'],
-        manual: true,
-      },
     },
   };
 
@@ -148,7 +152,7 @@ test('buildRequestProposal does not overwrite manual fields', () => {
   });
 
   assert.equal(proposal.hasChanges, false);
-  assert.equal(proposal.skippedManual, 3);
+  assert.equal(proposal.skippedManual, 2);
 });
 
 test('buildRequestProposal is idempotent for complete identical analytics', () => {
@@ -159,7 +163,6 @@ test('buildRequestProposal is idempotent for complete identical analytics', () =
     descr: 'Семейный запрос про отношения',
     clientGender: 'unknown',
     requestCategory: 'family',
-    topic: 'Семейный запрос про отношения',
     analyticsReviewRequired: true,
     analyticsInference: {
       clientGender: {
@@ -175,14 +178,6 @@ test('buildRequestProposal is idempotent for complete identical analytics', () =
         confidence: 0.84,
         sources: ['descr', 'name'],
         reasons: ['Matched request category signal "сем"'],
-        detectedAt,
-        manual: false,
-      },
-      topic: {
-        value: 'Семейный запрос про отношения',
-        confidence: 0.68,
-        sources: ['descr'],
-        reasons: ['Used the first meaningful request text fragment as topic'],
         detectedAt,
         manual: false,
       },
@@ -223,6 +218,48 @@ test('createRequestSample does not include client names', () => {
 
   assert.equal(Object.hasOwn(sample, 'name'), false);
   assert.equal(JSON.stringify(sample).includes('Client Name'), false);
+});
+
+test('buildTopicCleanupPatch unsets topic fields and recomputes review flag', () => {
+  const patch = buildTopicCleanupPatch({
+    _id: 'request-1',
+    topic: 'Old topic',
+    clientGender: 'female',
+    requestCategory: 'individual',
+    analyticsReviewRequired: true,
+    analyticsInference: {
+      clientGender: {
+        value: 'female',
+        confidence: 0.9,
+        sources: ['name'],
+        reasons: ['signal'],
+        manual: false,
+      },
+      requestCategory: {
+        value: 'individual',
+        confidence: 0.9,
+        sources: ['descr'],
+        reasons: ['signal'],
+        manual: false,
+      },
+      topic: {
+        value: 'Old topic',
+        confidence: 0.8,
+        sources: ['descr'],
+        reasons: ['legacy'],
+        manual: false,
+      },
+    },
+  });
+
+  assert.equal(patch.hasChanges, true);
+  assert.deepEqual(patch.unset, {
+    topic: '',
+    'analyticsInference.topic': '',
+  });
+  assert.deepEqual(patch.set, {
+    analyticsReviewRequired: false,
+  });
 });
 
 test('readMongoConfig requires explicit database settings', () => {
@@ -268,6 +305,123 @@ test('processRequests isolates per-document failures', async () => {
 
   assert.equal(stats.requests.failed, 1);
   assert.equal(stats.requests.failures[0]._id, 'request-1');
+});
+
+test('processTopicCleanup reports dry-run changes without dropping the topic index', async () => {
+  const stats = createStats(parseOptions(['--cleanup-topic']));
+  const bulkWrites = [];
+  let dropIndexCalled = false;
+
+  await processTopicCleanup({
+    options: parseOptions(['--cleanup-topic']),
+    stats,
+    collections: {
+      therapyRequests: {
+        find: () =>
+          createCursor([
+            {
+              _id: 'request-1',
+              topic: 'Old topic',
+              clientGender: 'female',
+              requestCategory: 'individual',
+              analyticsReviewRequired: true,
+              analyticsInference: {
+                clientGender: {
+                  value: 'female',
+                  confidence: 0.9,
+                  manual: false,
+                },
+                requestCategory: {
+                  value: 'individual',
+                  confidence: 0.9,
+                  manual: false,
+                },
+                topic: { value: 'Old topic', confidence: 0.8 },
+              },
+            },
+          ]),
+        indexes: async () => [{ name: 'topic_1_createdAt_1' }],
+        dropIndex: async () => {
+          dropIndexCalled = true;
+        },
+        bulkWrite: async (operations) => {
+          bulkWrites.push(...operations);
+          return { modifiedCount: operations.length };
+        },
+      },
+    },
+  });
+
+  assert.equal(stats.topicCleanup.scanned, 1);
+  assert.equal(stats.topicCleanup.actualChanges, 1);
+  assert.equal(stats.topicCleanup.updated, 0);
+  assert.equal(stats.topicCleanup.indexPresent, true);
+  assert.equal(stats.topicCleanup.indexDropped, false);
+  assert.equal(dropIndexCalled, false);
+  assert.deepEqual(bulkWrites, []);
+});
+
+test('processTopicCleanup writes unsets and drops the old topic index when confirmed', async () => {
+  const options = parseOptions([
+    '--cleanup-topic',
+    '--write',
+    '--confirm-production-backfill',
+  ]);
+  const stats = createStats(options);
+  const bulkWrites = [];
+  const droppedIndexes = [];
+
+  await processTopicCleanup({
+    options,
+    stats,
+    collections: {
+      therapyRequests: {
+        find: () =>
+          createCursor([
+            {
+              _id: 'request-1',
+              topic: 'Old topic',
+              clientGender: 'unknown',
+              requestCategory: 'individual',
+              analyticsReviewRequired: true,
+              analyticsInference: {
+                requestCategory: {
+                  value: 'individual',
+                  confidence: 0.9,
+                  manual: false,
+                },
+                topic: { value: 'Old topic', confidence: 0.8 },
+              },
+            },
+          ]),
+        indexes: async () => [{ name: 'topic_1_createdAt_1' }],
+        dropIndex: async (name) => {
+          droppedIndexes.push(name);
+        },
+        bulkWrite: async (operations) => {
+          bulkWrites.push(...operations);
+          return { modifiedCount: operations.length };
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(droppedIndexes, ['topic_1_createdAt_1']);
+  assert.equal(stats.topicCleanup.updated, 1);
+  assert.equal(stats.topicCleanup.indexDropped, true);
+  assert.deepEqual(bulkWrites, [
+    {
+      updateOne: {
+        filter: { _id: 'request-1' },
+        update: {
+          $unset: {
+            topic: '',
+            'analyticsInference.topic': '',
+          },
+        },
+      },
+    },
+  ]);
 });
 
 test('processSessions isolates per-document failures', async () => {

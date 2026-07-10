@@ -5,7 +5,6 @@ describe('joiUpdateTherapyRequestAnalyticsSchema', () => {
     const { error } = joiUpdateTherapyRequestAnalyticsSchema.validate({
       clientGender: 'unknown',
       requestCategory: 'family',
-      topic: 'Family conflict',
       analyticsReviewRequired: false,
     });
 
@@ -16,6 +15,14 @@ describe('joiUpdateTherapyRequestAnalyticsSchema', () => {
     const { error } = joiUpdateTherapyRequestAnalyticsSchema.validate({
       clientGender: 'verified',
       requestCategory: 'couple',
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('rejects topic analytics edits', () => {
+    const { error } = joiUpdateTherapyRequestAnalyticsSchema.validate({
+      topic: 'Family conflict',
     });
 
     expect(error).toBeDefined();

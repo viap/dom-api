@@ -16,7 +16,6 @@ export enum TherapyRequestCategory {
 export const therapyRequestAnalyticsFields = [
   'clientGender',
   'requestCategory',
-  'topic',
 ] as const;
 
 export type TherapyRequestAnalyticsField =
