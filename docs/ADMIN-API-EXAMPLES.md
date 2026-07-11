@@ -2502,41 +2502,152 @@ Response:
 
 ### `GET /therapy-request-analytics/lifecycle`
 
-Admin/editor. Returns psychologist-level rankings and request-level rows for validation.
+Admin/editor. Returns KPI-based psychologist rankings and request-level audit rows. The route name is kept for compatibility.
+The KPI session aggregation uses MongoDB `$firstN`; production MongoDB must be 5.2+.
 
 Response:
 
 ```json
 {
-  "shortestPsychologists": [
+  "topPsychologists": [
     {
       "psychologistId": "660900000000000000000030",
       "psychologistName": "Specialist Name",
-      "averageLifecycleDays": 12.5,
-      "medianLifecycleDays": 10,
-      "requestCount": 4,
+      "baseScore": 75.3,
+      "scoreStatus": "scored",
+      "confidenceCoefficient": 0.8,
+      "confidenceLevel": "low",
+      "clientsWithAtLeastOneSession": 4,
+      "acceptedRequestCount": 5,
+      "acceptedRequestsWithAtLeastOneSession": 4,
+      "acceptedRequestsWithAtLeastTwoSessions": 3,
       "linkedSessionCount": 11,
-      "averageFirstSessionDelayDays": 3.5,
-      "noSessionCount": 2
+      "noSessionCount": 1,
+      "missingMetrics": [],
+      "warnings": [],
+      "metrics": {
+        "retention": {
+          "status": "available",
+          "rawValue": 5,
+          "score": 50,
+          "weight": 0.3684,
+          "contribution": 18.4,
+          "sampleSize": 5,
+          "supportingValues": {
+            "reachedSession2Count": 3,
+            "reachedSession2Percent": 60,
+            "reachedSession5Count": 2,
+            "reachedSession5Percent": 40,
+            "reachedSession10Count": 1,
+            "reachedSession10Percent": 20
+          }
+        },
+        "startRate": {
+          "status": "available",
+          "rawValue": 0.8,
+          "score": 80,
+          "weight": 0.2632,
+          "contribution": 21.1,
+          "sampleSize": 5
+        },
+        "timeToFirstSession": {
+          "status": "available",
+          "rawValue": 2,
+          "score": 95,
+          "weight": 0.2105,
+          "contribution": 20,
+          "sampleSize": 4
+        },
+        "regularity": {
+          "status": "available",
+          "rawValue": 7,
+          "score": 100,
+          "weight": 0.1579,
+          "contribution": 15.8,
+          "sampleSize": 3
+        },
+        "documentation": {
+          "status": "excluded",
+          "rawValue": null,
+          "score": null,
+          "weight": 0,
+          "contribution": null,
+          "sampleSize": 0
+        }
+      }
     }
   ],
-  "longestPsychologists": [],
+  "bottomPsychologists": [],
+  "insufficientDataPsychologists": [],
   "requestRows": [
     {
       "requestId": "661900000000000000000001",
+      "psychologistId": "660900000000000000000030",
       "psychologistName": "Specialist Name",
       "clientName": "Client Request",
       "requestCreatedAt": "2026-01-01T00:00:00.000Z",
       "firstSessionAt": "2026-01-03T00:00:00.000Z",
       "latestSessionAt": "2026-01-12T00:00:00.000Z",
       "firstSessionDelayDays": 2,
-      "lifecycleDays": 11,
+      "firstTenSessionCount": 3,
+      "firstTenMedianIntervalDays": 4.5,
       "linkedSessionCount": 3,
-      "linkStatus": "linked"
+      "linkStatus": "linked",
+      "warnings": []
     }
   ],
+  "requestRowsTotal": 1,
   "unlinkedSessionCount": 6,
-  "noSessionRequestCount": 2
+  "noSessionRequestCount": 2,
+  "scoringModel": {
+    "supportedWeights": {
+      "retention": 0.3684,
+      "startRate": 0.2632,
+      "timeToFirstSession": 0.2105,
+      "regularity": 0.1579
+    },
+    "excludedMetrics": [
+      {
+        "metric": "documentation",
+        "reason": "No independent source for completed sessions exists; recorded session rows are the only evidence a session happened."
+      }
+    ],
+    "metricDescriptors": {
+      "retention": {
+        "rawValueLabel": "median capped sessions in first 10",
+        "formula": "median(min(recordedSessionCount, 10)) / 10 * 100",
+        "explanation": "Uses the median capped recorded session count across accepted requests."
+      },
+      "startRate": {
+        "rawValueLabel": "accepted requests with first session / accepted requests",
+        "formula": "acceptedRequestsWithAtLeastOneSession / allAcceptedRequests * 100",
+        "explanation": "Measures how many accepted requests have at least one linked session."
+      },
+      "timeToFirstSession": {
+        "rawValueLabel": "median days from request creation to first session",
+        "formula": "max(50, 100 - max(0, medianDaysToFirstSession - 1) * 5)",
+        "explanation": "Uses request creation time and the first linked session. Invalid negative delays are excluded.",
+        "unavailableReason": "No accepted request has a reliable first linked session."
+      },
+      "regularity": {
+        "rawValueLabel": "median interval days between first 10 sessions",
+        "formula": "max(0, 100 - abs(specialistMedianInterval - 7) * 10)",
+        "explanation": "Uses median calendar-day intervals between consecutive sessions in each request/client first 10 sessions.",
+        "unavailableReason": "No accepted request has at least two linked sessions."
+      },
+      "documentation": {
+        "rawValueLabel": "unavailable",
+        "formula": "Future metric: recordedRequiredSessions / min(actualCompletedSessions, 10)",
+        "explanation": "Documentation score is excluded from the current weighted score.",
+        "unavailableReason": "No independent source for completed sessions exists; recorded session rows are the only evidence a session happened."
+      }
+    },
+    "confidenceThresholdClients": 5,
+    "period": {
+      "month": "2026-01",
+      "timezone": "UTC"
+    }
+  }
 }
 ```
 
@@ -2556,7 +2667,7 @@ Request:
 
 ### `GET /therapy-request-analytics/export`
 
-Admin/editor. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
+Admin/editor. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
 
 ### `POST /therapy-requests/:therapyRequestId/accept`
 

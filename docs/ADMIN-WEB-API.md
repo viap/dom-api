@@ -1133,13 +1133,19 @@ The request-detail analytics route returns only `_id`, `descr`, and non-hidden r
 
 Inference is conservative and explainable. Automatic classification never overwrites fields marked as manually reviewed. Low-confidence values are stored as `unknown` or left review-required.
 
-Lifecycle analytics:
+KPI analytics (`GET /therapy-request-analytics/lifecycle`):
 
-- Request-level lifecycle rows show request creation, first linked session, latest linked session, first-session delay, lifecycle days, linked session count, and link status.
-- Psychologist rankings aggregate request lifecycles by average and median lifecycle days and include request count, linked session count, average first-session delay, and no-session count.
-- Sessions without deterministic request links are excluded from rankings and reported separately.
+- The route name is kept for compatibility, but the payload is KPI-based.
+- KPI scoring uses accepted requests with an assigned psychologist. Date/month filters apply to `TherapyRequest.createdAt`.
+- Time to first session uses request creation to first linked session. There is no `acceptedAt` field.
+- Only sessions linked through `TherapySession.therapyRequest` are used for KPI scoring. Unlinked sessions are excluded from scores and reported separately for cleanup.
+- Supported score weights are retention `36.84%`, start rate `26.32%`, time to first session `21.05%`, and regularity `15.79%`.
+- Documentation score is unavailable and excluded because there is no independent source for completed sessions; recorded session rows are the only evidence a session happened.
+- Confidence is informational only: `min(clientsWithAtLeastOneSession / 5, 1)`. Low confidence does not change score, ranking, or eligibility.
+- Specialists missing any supported metric get `baseScore: null`, `scoreStatus: "insufficient_data"`, and are returned outside Top 10 / Bottom 10.
+- No archived/deleted/cancelled/duplicate/test request status exists in the current schema, so those categories are not silently filtered.
 
-Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist lifecycle, and request lifecycles.
+Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
 
 Backfill:
 
