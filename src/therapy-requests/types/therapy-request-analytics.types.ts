@@ -91,30 +91,94 @@ export interface TherapyRequestAnalyticsLifecycleRow {
   firstSessionAt?: Date;
   latestSessionAt?: Date;
   firstSessionDelayDays: number | null;
-  lifecycleDays: number | null;
+  firstTenSessionCount: number;
+  firstTenMedianIntervalDays: number | null;
   linkedSessionCount: number;
   linkStatus: 'linked' | 'no_sessions';
+  warnings: TherapyRequestAnalyticsWarningKey[];
+}
+
+export type TherapyRequestAnalyticsWarningKey =
+  | 'invalid_session_date_ignored'
+  | 'first_session_before_request_creation';
+
+export type TherapyRequestAnalyticsMetricKey =
+  | 'retention'
+  | 'startRate'
+  | 'timeToFirstSession'
+  | 'regularity';
+
+export type TherapyRequestAnalyticsMetricDescriptorKey =
+  | TherapyRequestAnalyticsMetricKey
+  | 'documentation';
+
+export interface TherapyRequestAnalyticsMetricDescriptor {
+  rawValueLabel: string;
+  formula: string;
+  explanation: string;
+  unavailableReason?: string;
+}
+
+export interface TherapyRequestAnalyticsMetricBreakdown {
+  status: 'available' | 'unavailable' | 'excluded';
+  rawValue: number | null;
+  score: number | null;
+  weight: number;
+  contribution: number | null;
+  sampleSize: number;
+  supportingValues?: Record<string, number>;
 }
 
 export interface TherapyRequestAnalyticsPsychologistLifecycle {
   psychologistId: string;
   psychologistName: string;
-  averageLifecycleDays: number;
-  medianLifecycleDays: number;
-  requestCount: number;
+  baseScore: number | null;
+  scoreStatus: 'scored' | 'insufficient_data';
+  confidenceCoefficient: number;
+  confidenceLevel: 'high' | 'low';
+  clientsWithAtLeastOneSession: number;
+  acceptedRequestCount: number;
+  acceptedRequestsWithAtLeastOneSession: number;
+  acceptedRequestsWithAtLeastTwoSessions: number;
   linkedSessionCount: number;
-  averageFirstSessionDelayDays: number;
   noSessionCount: number;
-  insufficientData: boolean;
+  missingMetrics: TherapyRequestAnalyticsMetricKey[];
+  warnings: TherapyRequestAnalyticsWarningKey[];
+  metrics: {
+    retention: TherapyRequestAnalyticsMetricBreakdown;
+    startRate: TherapyRequestAnalyticsMetricBreakdown;
+    timeToFirstSession: TherapyRequestAnalyticsMetricBreakdown;
+    regularity: TherapyRequestAnalyticsMetricBreakdown;
+    documentation: TherapyRequestAnalyticsMetricBreakdown;
+  };
 }
 
 export interface TherapyRequestAnalyticsLifecycleResponse {
-  shortestPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
-  longestPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  topPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  bottomPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  insufficientDataPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
   requestRows: TherapyRequestAnalyticsLifecycleRow[];
   requestRowsTotal: number;
   unlinkedSessionCount: number;
   noSessionRequestCount: number;
+  scoringModel: {
+    supportedWeights: Record<TherapyRequestAnalyticsMetricKey, number>;
+    excludedMetrics: Array<{
+      metric: 'documentation';
+      reason: string;
+    }>;
+    metricDescriptors: Record<
+      TherapyRequestAnalyticsMetricDescriptorKey,
+      TherapyRequestAnalyticsMetricDescriptor
+    >;
+    confidenceThresholdClients: number;
+    period: {
+      startDate?: string;
+      endDate?: string;
+      month?: string;
+      timezone: 'UTC';
+    };
+  };
 }
 
 export interface AnalyticsFieldInferenceValue {

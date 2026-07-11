@@ -1,5 +1,11 @@
-import { TherapyRequestAnalyticsService } from './therapy-request-analytics.service';
+import {
+  TherapyRequestAnalyticsService,
+  buildFiniteSessionDateExpression,
+  buildSessionCountPipeline,
+  buildSessionDatePipeline,
+} from './therapy-request-analytics.service';
 import { NotFoundException } from '@nestjs/common';
+import mongoose from 'mongoose';
 
 function chain(result: unknown) {
   return {
@@ -29,6 +35,93 @@ const id = (value: string) => ({
 });
 
 describe('TherapyRequestAnalyticsService', () => {
+  const mongoBackedIt =
+    process.env.MONGO_URL && process.env.MONGO_DBNAME ? it : it.skip;
+
+  it('builds finite-date session aggregation expressions that reject NaN', () => {
+    expect(buildFiniteSessionDateExpression()).toEqual({
+      $and: [
+        {
+          $in: [{ $type: '$dateTime' }, ['int', 'long', 'double', 'decimal']],
+        },
+        { $gt: ['$dateTime', -Infinity] },
+        { $lt: ['$dateTime', Infinity] },
+      ],
+    });
+    expect(JSON.stringify(buildFiniteSessionDateExpression())).not.toContain(
+      '$eq',
+    );
+
+    const countPipeline = buildSessionCountPipeline(['request-1']);
+    const datePipeline = buildSessionDatePipeline(['request-1']);
+    expect(countPipeline).toContainEqual({
+      $group: expect.objectContaining({
+        invalidSessionDateCount: {
+          $sum: {
+            $cond: [buildFiniteSessionDateExpression(), 0, 1],
+          },
+        },
+      }),
+    });
+    expect(datePipeline).toContainEqual({
+      $sort: { therapyRequest: 1, dateTime: 1, _id: 1 },
+    });
+    expect(datePipeline).toContainEqual({
+      $match: { $expr: buildFiniteSessionDateExpression() },
+    });
+  });
+
+  mongoBackedIt(
+    'rejects NaN session dates in a live Mongo aggregation',
+    async () => {
+      const connection = await mongoose
+        .createConnection(process.env.MONGO_URL as string, {
+          dbName: process.env.MONGO_DBNAME,
+          user: process.env.MONGO_INITDB_ROOT_USERNAME,
+          pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+        })
+        .asPromise();
+      const collection = connection.db.collection(
+        `therapy_session_nan_test_${Date.now()}`,
+      );
+      const therapyRequest = new mongoose.Types.ObjectId();
+
+      try {
+        await collection.insertMany([
+          { therapyRequest, dateTime: 100 },
+          { therapyRequest, dateTime: Number.NaN },
+          { therapyRequest, dateTime: 200 },
+        ]);
+
+        const countRows = await collection
+          .aggregate(buildSessionCountPipeline([therapyRequest]) as any[])
+          .toArray();
+        const dateRows = await collection
+          .aggregate(buildSessionDatePipeline([therapyRequest]) as any[])
+          .toArray();
+
+        expect(countRows).toEqual([
+          expect.objectContaining({
+            _id: therapyRequest,
+            linkedSessionCount: 3,
+            invalidSessionDateCount: 1,
+          }),
+        ]);
+        expect(dateRows).toEqual([
+          expect.objectContaining({
+            _id: therapyRequest,
+            firstSessionAt: 100,
+            latestSessionAt: 200,
+            firstTenSessionDates: [100, 200],
+          }),
+        ]);
+      } finally {
+        await collection.drop().catch(() => undefined);
+        await connection.close();
+      }
+    },
+  );
+
   it('returns summary from aggregation with legacy-safe review defaults', async () => {
     const aggregate = jest.fn().mockReturnValue(
       aggregateChain([
@@ -348,16 +441,30 @@ describe('TherapyRequestAnalyticsService', () => {
         distinct: jest.fn(),
       } as any,
       {
-        aggregate: jest.fn().mockReturnValue(
-          aggregateChain([
-            {
-              _id: id('request-1'),
-              firstSessionAt: new Date('2026-01-11T00:00:00Z').getTime(),
-              latestSessionAt: new Date('2026-01-21T00:00:00Z').getTime(),
-              linkedSessionCount: 2,
-            },
-          ]),
-        ),
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                linkedSessionCount: 2,
+                invalidSessionDateCount: 0,
+              },
+            ]),
+          )
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                firstSessionAt: new Date('2026-01-11T00:00:00Z').getTime(),
+                latestSessionAt: new Date('2026-01-21T00:00:00Z').getTime(),
+                firstTenSessionDates: [
+                  new Date('2026-01-11T00:00:00Z').getTime(),
+                  new Date('2026-01-21T00:00:00Z').getTime(),
+                ],
+              },
+            ]),
+          ),
         countDocuments: jest.fn().mockReturnValue(countChain(3)),
       } as any,
       { find: jest.fn() } as any,
@@ -368,24 +475,240 @@ describe('TherapyRequestAnalyticsService', () => {
       offset: '1',
     });
 
-    expect(result.shortestPsychologists).toHaveLength(1);
-    expect(result.shortestPsychologists[0]).toMatchObject({
+    expect(result.topPsychologists).toHaveLength(1);
+    expect(result.bottomPsychologists).toEqual([]);
+    expect(result.topPsychologists[0]).toMatchObject({
       psychologistName: 'Dr One',
-      averageLifecycleDays: 20,
-      medianLifecycleDays: 20,
-      requestCount: 1,
+      baseScore: 31.5,
+      scoreStatus: 'scored',
+      confidenceCoefficient: 0.2,
+      confidenceLevel: 'low',
+      acceptedRequestCount: 3,
+      acceptedRequestsWithAtLeastOneSession: 1,
+      acceptedRequestsWithAtLeastTwoSessions: 1,
       linkedSessionCount: 2,
       noSessionCount: 2,
+      missingMetrics: [],
+      metrics: {
+        retention: expect.objectContaining({
+          rawValue: 0,
+          score: 0,
+          sampleSize: 3,
+        }),
+        startRate: expect.objectContaining({
+          rawValue: 0.3,
+          score: 33.3,
+          sampleSize: 3,
+        }),
+        timeToFirstSession: expect.objectContaining({
+          rawValue: 10,
+          score: 55,
+          sampleSize: 1,
+        }),
+        regularity: expect.objectContaining({
+          rawValue: 10,
+          score: 70,
+          sampleSize: 1,
+        }),
+        documentation: expect.objectContaining({
+          status: 'excluded',
+          score: null,
+        }),
+      },
     });
     expect(result.requestRowsTotal).toBe(3);
     expect(result.requestRows).toEqual([
       expect.objectContaining({
         requestId: 'request-2',
-        lifecycleDays: null,
+        firstTenSessionCount: 0,
+        firstTenMedianIntervalDays: null,
         linkStatus: 'no_sessions',
       }),
     ]);
     expect(result.unlinkedSessionCount).toBe(3);
+    expect(result.scoringModel.supportedWeights).toMatchObject({
+      retention: 0.3684,
+      startRate: 0.2632,
+      timeToFirstSession: 0.2105,
+      regularity: 0.1579,
+    });
+    const contributionTotal = Object.values(result.topPsychologists[0].metrics)
+      .map((metric) => metric.contribution || 0)
+      .reduce((sum, contribution) => sum + contribution, 0);
+    expect(result.topPsychologists[0].baseScore).toBe(
+      Math.round(contributionTotal * 10) / 10,
+    );
+  });
+
+  it('counts misdated linked sessions for start rate but excludes them from delay metrics', async () => {
+    const psychologist = {
+      _id: id('psychologist-1'),
+      user: { name: 'Dr One' },
+    };
+    const requests = [
+      {
+        _id: id('request-1'),
+        createdAt: new Date('2026-01-10T00:00:00Z'),
+        name: 'Client One',
+        psychologist,
+      },
+      {
+        _id: id('request-2'),
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        name: 'Client Two',
+        psychologist,
+      },
+    ];
+    const find = jest.fn().mockReturnValue(chain(requests));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        find,
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        distinct: jest.fn(),
+      } as any,
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                linkedSessionCount: 1,
+                invalidSessionDateCount: 0,
+              },
+              {
+                _id: id('request-2'),
+                linkedSessionCount: 2,
+                invalidSessionDateCount: 0,
+              },
+            ]),
+          )
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                firstSessionAt: new Date('2026-01-05T00:00:00Z').getTime(),
+                latestSessionAt: new Date('2026-01-05T00:00:00Z').getTime(),
+                firstTenSessionDates: [
+                  new Date('2026-01-05T00:00:00Z').getTime(),
+                ],
+              },
+              {
+                _id: id('request-2'),
+                firstSessionAt: new Date('2026-01-02T00:00:00Z').getTime(),
+                latestSessionAt: new Date('2026-01-09T00:00:00Z').getTime(),
+                firstTenSessionDates: [
+                  new Date('2026-01-02T00:00:00Z').getTime(),
+                  new Date('2026-01-09T00:00:00Z').getTime(),
+                ],
+              },
+            ]),
+          ),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getLifecycle({
+      accepted: 'false',
+      clientGender: 'female',
+    });
+
+    expect(find).toHaveBeenCalledWith({
+      clientGender: 'female',
+      accepted: true,
+    });
+    expect(result.topPsychologists[0]).toMatchObject({
+      clientsWithAtLeastOneSession: 2,
+      acceptedRequestsWithAtLeastOneSession: 2,
+      confidenceCoefficient: 0.4,
+      metrics: {
+        startRate: expect.objectContaining({
+          rawValue: 1,
+          score: 100,
+          sampleSize: 2,
+        }),
+        timeToFirstSession: expect.objectContaining({
+          rawValue: 1,
+          score: 100,
+          sampleSize: 1,
+        }),
+      },
+    });
+    expect(result.requestRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requestId: 'request-1',
+          firstSessionDelayDays: null,
+          linkStatus: 'linked',
+          warnings: ['first_session_before_request_creation'],
+        }),
+      ]),
+    );
+  });
+
+  it('keeps valid session dates bounded while warning about invalid linked dates', async () => {
+    const psychologist = {
+      _id: id('psychologist-1'),
+      user: { name: 'Dr One' },
+    };
+    const requests = [
+      {
+        _id: id('request-1'),
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        name: 'Client One',
+        psychologist,
+      },
+    ];
+    const service = new TherapyRequestAnalyticsService(
+      {
+        find: jest.fn().mockReturnValue(chain(requests)),
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        distinct: jest.fn(),
+      } as any,
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                linkedSessionCount: 3,
+                invalidSessionDateCount: 1,
+              },
+            ]),
+          )
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                firstSessionAt: new Date('2026-01-02T00:00:00Z').getTime(),
+                latestSessionAt: new Date('2026-01-09T00:00:00Z').getTime(),
+                firstTenSessionDates: [
+                  new Date('2026-01-02T00:00:00Z').getTime(),
+                  new Date('2026-01-09T00:00:00Z').getTime(),
+                ],
+              },
+            ]),
+          ),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getLifecycle({});
+
+    expect(result.requestRows).toEqual([
+      expect.objectContaining({
+        requestId: 'request-1',
+        firstSessionDelayDays: 1,
+        firstTenSessionCount: 2,
+        firstTenMedianIntervalDays: 7,
+        latestSessionAt: new Date('2026-01-09T00:00:00Z'),
+        linkedSessionCount: 3,
+        warnings: ['invalid_session_date_ignored'],
+      }),
+    ]);
   });
 
   it('normalizes oversized lifecycle row offsets to the last available page', async () => {
@@ -437,6 +760,14 @@ describe('TherapyRequestAnalyticsService', () => {
     });
 
     expect(result.requestRowsTotal).toBe(3);
+    expect(result.topPsychologists).toHaveLength(0);
+    expect(result.insufficientDataPsychologists).toEqual([
+      expect.objectContaining({
+        psychologistName: 'Dr One',
+        baseScore: null,
+        missingMetrics: ['timeToFirstSession', 'regularity'],
+      }),
+    ]);
     expect(result.requestRows).toEqual([
       expect.objectContaining({
         requestId: 'request-3',
@@ -463,6 +794,6 @@ describe('TherapyRequestAnalyticsService', () => {
 
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.subarray(0, 2).toString()).toBe('PK');
-    expect(find).toHaveBeenCalledTimes(1);
+    expect(find).toHaveBeenCalledTimes(2);
   });
 });

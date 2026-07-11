@@ -43,6 +43,7 @@ export const therapySessionSchema =
 
 therapySessionSchema.index({ psychologist: 1, dateTime: 1 });
 therapySessionSchema.index({ psychologist: 1, client: 1 });
-therapySessionSchema.index({ therapyRequest: 1 });
+// KPI lifecycle aggregation uses $firstN, so production MongoDB must be 5.2+.
+therapySessionSchema.index({ therapyRequest: 1, dateTime: 1, _id: 1 });
 therapySessionSchema.index({ dateTime: 1 });
 therapySessionSchema.index({ client: 1 });
