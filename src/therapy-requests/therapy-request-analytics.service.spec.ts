@@ -647,6 +647,66 @@ describe('TherapyRequestAnalyticsService', () => {
     );
   });
 
+  it('does not warn when the first session is earlier in time on the same UTC date as request creation', async () => {
+    const psychologist = {
+      _id: id('psychologist-1'),
+      user: { name: 'Dr One' },
+    };
+    const requests = [
+      {
+        _id: id('request-1'),
+        createdAt: new Date('2026-01-10T18:00:00Z'),
+        name: 'Client One',
+        psychologist,
+      },
+    ];
+    const service = new TherapyRequestAnalyticsService(
+      {
+        find: jest.fn().mockReturnValue(chain(requests)),
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        distinct: jest.fn(),
+      } as any,
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                linkedSessionCount: 1,
+                invalidSessionDateCount: 0,
+              },
+            ]),
+          )
+          .mockReturnValueOnce(
+            aggregateChain([
+              {
+                _id: id('request-1'),
+                firstSessionAt: new Date('2026-01-10T09:00:00Z').getTime(),
+                latestSessionAt: new Date('2026-01-10T09:00:00Z').getTime(),
+                firstTenSessionDates: [
+                  new Date('2026-01-10T09:00:00Z').getTime(),
+                ],
+              },
+            ]),
+          ),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getLifecycle({});
+
+    expect(result.requestRows).toEqual([
+      expect.objectContaining({
+        requestId: 'request-1',
+        firstSessionDelayDays: 0,
+        linkStatus: 'linked',
+        warnings: [],
+      }),
+    ]);
+  });
+
   it('keeps valid session dates bounded while warning about invalid linked dates', async () => {
     const psychologist = {
       _id: id('psychologist-1'),

@@ -90,7 +90,7 @@ describe('TherapyRequestClassifierService', () => {
     ).toBeUndefined();
   });
 
-  it('keeps self-reported values in the review queue', () => {
+  it('clears review for complete self-reported values', () => {
     const reviewRequired = computeTherapyRequestAnalyticsReviewRequired(
       {
         clientGender: TherapyRequestClientGender.Female,
@@ -99,6 +99,35 @@ describe('TherapyRequestClassifierService', () => {
       {
         clientGender: {
           value: TherapyRequestClientGender.Female,
+          confidence: 1,
+          sources: ['create_payload'],
+          reasons: ['Self-reported during therapy request creation'],
+          manual: false,
+          selfReported: true,
+        },
+        requestCategory: {
+          value: TherapyRequestCategory.Individual,
+          confidence: 1,
+          sources: ['create_payload'],
+          reasons: ['Self-reported during therapy request creation'],
+          manual: false,
+          selfReported: true,
+        },
+      },
+    );
+
+    expect(reviewRequired).toBe(false);
+  });
+
+  it('keeps incomplete self-reported values in the review queue', () => {
+    const reviewRequired = computeTherapyRequestAnalyticsReviewRequired(
+      {
+        clientGender: TherapyRequestClientGender.Unknown,
+        requestCategory: TherapyRequestCategory.Individual,
+      },
+      {
+        clientGender: {
+          value: TherapyRequestClientGender.Unknown,
           confidence: 1,
           sources: ['create_payload'],
           reasons: ['Self-reported during therapy request creation'],

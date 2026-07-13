@@ -56,7 +56,8 @@ const METRIC_DESCRIPTORS = {
   },
   startRate: {
     rawValueLabel: 'accepted requests with first session / accepted requests',
-    formula: 'acceptedRequestsWithAtLeastOneSession / allAcceptedRequests * 100',
+    formula:
+      'acceptedRequestsWithAtLeastOneSession / allAcceptedRequests * 100',
     explanation:
       'Measures how many accepted requests have at least one linked session.',
   },
@@ -65,7 +66,8 @@ const METRIC_DESCRIPTORS = {
     formula: 'max(50, 100 - max(0, medianDaysToFirstSession - 1) * 5)',
     explanation:
       'Uses request creation time and the first linked session. Invalid negative delays are excluded.',
-    unavailableReason: 'No accepted request has a reliable first linked session.',
+    unavailableReason:
+      'No accepted request has a reliable first linked session.',
   },
   regularity: {
     rawValueLabel: 'median interval days between first 10 sessions',
@@ -78,7 +80,8 @@ const METRIC_DESCRIPTORS = {
     rawValueLabel: 'unavailable',
     formula:
       'Future metric: recordedRequiredSessions / min(actualCompletedSessions, 10)',
-    explanation: 'Documentation score is excluded from the current weighted score.',
+    explanation:
+      'Documentation score is excluded from the current weighted score.',
     unavailableReason: DOCUMENTATION_UNAVAILABLE_REASON,
   },
 } as const;
@@ -222,9 +225,19 @@ function daysBetween(from?: Date | number, to?: Date | number): number | null {
     return null;
   }
 
-  const fromMs = typeof from === 'number' ? from : from.getTime();
-  const toMs = typeof to === 'number' ? to : to.getTime();
-  return Math.round(((toMs - fromMs) / dayMs) * 10) / 10;
+  const fromDate = typeof from === 'number' ? new Date(from) : from;
+  const toDate = typeof to === 'number' ? new Date(to) : to;
+  const fromUtcDay = Date.UTC(
+    fromDate.getUTCFullYear(),
+    fromDate.getUTCMonth(),
+    fromDate.getUTCDate(),
+  );
+  const toUtcDay = Date.UTC(
+    toDate.getUTCFullYear(),
+    toDate.getUTCMonth(),
+    toDate.getUTCDate(),
+  );
+  return (toUtcDay - fromUtcDay) / dayMs;
 }
 
 function isValidTimestamp(value: unknown): value is number {
@@ -593,8 +606,7 @@ export class TherapyRequestAnalyticsService {
     }
 
     const specialists = Array.from(rowsByPsychologist.entries()).map(
-      ([psychologistId, rows]) =>
-        this.buildSpecialistKpi(psychologistId, rows),
+      ([psychologistId, rows]) => this.buildSpecialistKpi(psychologistId, rows),
     );
     const scoredSpecialists = specialists.filter(
       (row) => row.scoreStatus === 'scored' && row.baseScore !== null,
@@ -662,8 +674,9 @@ export class TherapyRequestAnalyticsService {
       (sum, row) => sum + row.linkedSessionCount,
       0,
     );
-    const noSessionCount = rows.filter((row) => row.linkedSessionCount === 0)
-      .length;
+    const noSessionCount = rows.filter(
+      (row) => row.linkedSessionCount === 0,
+    ).length;
     const clientsWithAtLeastOneSession = rowsWithLinkedSession.length;
     const confidenceCoefficient = round1(
       Math.min(clientsWithAtLeastOneSession / CONFIDENCE_THRESHOLD_CLIENTS, 1),
@@ -727,7 +740,9 @@ export class TherapyRequestAnalyticsService {
     const regularityScore =
       specialistMedianInterval === null
         ? null
-        : round1(Math.max(0, 100 - Math.abs(specialistMedianInterval - 7) * 10));
+        : round1(
+            Math.max(0, 100 - Math.abs(specialistMedianInterval - 7) * 10),
+          );
 
     const metrics = {
       retention: this.buildMetric({
@@ -769,15 +784,19 @@ export class TherapyRequestAnalyticsService {
       }),
     };
 
-    const missingMetrics = (Object.keys(SUPPORTED_KPI_WEIGHTS) as Array<
-      TherapyRequestAnalyticsMetricKey
-    >).filter((metric) => metrics[metric].status !== 'available');
+    const missingMetrics = (
+      Object.keys(
+        SUPPORTED_KPI_WEIGHTS,
+      ) as Array<TherapyRequestAnalyticsMetricKey>
+    ).filter((metric) => metrics[metric].status !== 'available');
     const baseScore = missingMetrics.length
       ? null
       : round1(
-          (Object.keys(SUPPORTED_KPI_WEIGHTS) as Array<
-            TherapyRequestAnalyticsMetricKey
-          >).reduce(
+          (
+            Object.keys(
+              SUPPORTED_KPI_WEIGHTS,
+            ) as Array<TherapyRequestAnalyticsMetricKey>
+          ).reduce(
             (sum, metric) => sum + (metrics[metric].contribution || 0),
             0,
           ),
@@ -820,7 +839,11 @@ export class TherapyRequestAnalyticsService {
     supportingValues?: Record<string, number>;
   }): TherapyRequestAnalyticsMetricBreakdown {
     const resolvedWeight =
-      typeof weight === 'number' ? weight : metric ? SUPPORTED_KPI_WEIGHTS[metric] : 0;
+      typeof weight === 'number'
+        ? weight
+        : metric
+        ? SUPPORTED_KPI_WEIGHTS[metric]
+        : 0;
 
     return {
       status,

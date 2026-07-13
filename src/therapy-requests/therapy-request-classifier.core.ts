@@ -244,14 +244,14 @@ export function computeTherapyRequestAnalyticsReviewRequired(
   inference: TherapyRequestAnalyticsInference = {},
 ): boolean {
   return (
+    !values.clientGender ||
+    !values.requestCategory ||
     values.clientGender === TherapyRequestClientGender.Unknown ||
     values.requestCategory === TherapyRequestCategory.Unknown ||
     (inference.clientGender?.confidence || 0) <
       CLIENT_GENDER_CONFIDENCE_THRESHOLD ||
     (inference.requestCategory?.confidence || 0) <
-      REQUEST_CATEGORY_CONFIDENCE_THRESHOLD ||
-    inference.clientGender?.selfReported === true ||
-    inference.requestCategory?.selfReported === true
+      REQUEST_CATEGORY_CONFIDENCE_THRESHOLD
   );
 }
 

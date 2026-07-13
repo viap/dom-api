@@ -245,7 +245,7 @@ describe('RequestsService', () => {
       expect.objectContaining({
         clientGender: TherapyRequestClientGender.Female,
         requestCategory: TherapyRequestCategory.Individual,
-        analyticsReviewRequired: true,
+        analyticsReviewRequired: false,
         analyticsInference: expect.objectContaining({
           clientGender: expect.objectContaining({
             value: TherapyRequestClientGender.Female,
