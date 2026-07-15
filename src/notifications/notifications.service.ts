@@ -148,18 +148,26 @@ export class NotificationsService {
     const validationResult = joiUpdateNotificationSchema.validate(updateData);
 
     if (!validationResult.error) {
+      const updatePayload = { ...validationResult.value };
+      if (
+        Object.prototype.hasOwnProperty.call(updatePayload, 'message') &&
+        !Object.prototype.hasOwnProperty.call(updatePayload, 'messageEntities')
+      ) {
+        updatePayload.messageEntities = [];
+      }
+
       const recipients: Array<mongoose.Types.ObjectId> | undefined =
-        updateData.recipients
-          ? updateData.recipients.map(valueToObjectId)
+        updatePayload.recipients
+          ? updatePayload.recipients.map(valueToObjectId)
           : undefined;
 
       const received: Array<mongoose.Types.ObjectId> | undefined =
-        updateData.received
-          ? updateData.received.map(valueToObjectId)
+        updatePayload.received
+          ? updatePayload.received.map(valueToObjectId)
           : undefined;
 
       return this.notificationModel
-        .findByIdAndUpdate(id, { ...updateData, recipients, received })
+        .findByIdAndUpdate(id, { ...updatePayload, recipients, received })
         .exec();
     }
 

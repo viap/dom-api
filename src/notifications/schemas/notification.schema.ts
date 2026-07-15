@@ -4,6 +4,7 @@ import { Role } from '@/roles/enums/roles.enum';
 import { UserDocument } from '@/users/schemas/user.schema';
 import { NotificationStatuses } from '../enums/notification-statuses.enum';
 import { NotificationTypes } from '../enums/notification-types.enum';
+import { NotificationMessageEntity } from '../types/notification-message-entity';
 
 export type NotificationDocument = Notification &
   Document & { createdAt: Date; updatedAt: Date };
@@ -21,6 +22,21 @@ export class Notification {
 
   @Prop({ required: false, default: '' })
   message: string;
+
+  @Prop({
+    required: false,
+    type: [
+      {
+        _id: false,
+        type: { type: String, required: true },
+        offset: { type: Number, required: true },
+        length: { type: Number, required: true },
+        url: { type: String, required: false },
+      },
+    ],
+    default: [],
+  })
+  messageEntities: Array<NotificationMessageEntity>;
 
   @Prop({ required: true, default: [] })
   roles: Array<Role>;
