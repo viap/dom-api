@@ -17,6 +17,9 @@ describe('NotificationsService', () => {
     findOne: jest.Mock;
     findByIdAndRemove: jest.Mock;
   };
+  let mockUsersService: {
+    getById: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockNotificationModel = {
@@ -29,7 +32,7 @@ describe('NotificationsService', () => {
       findByIdAndRemove: jest.fn(),
     };
 
-    const mockUsersService = {
+    mockUsersService = {
       getById: jest.fn(),
     };
 
@@ -141,5 +144,64 @@ describe('NotificationsService', () => {
         messageEntities: [],
       }),
     );
+  });
+
+  describe('addReceived', () => {
+    it('returns true only when the call claims a new received user', async () => {
+      const exec = jest.fn().mockResolvedValue({ _id: 'notification-id' });
+      const updateStatusSpy = jest
+        .spyOn(service, 'updateNotificationStatus')
+        .mockResolvedValue(undefined);
+      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      await expect(
+        service.addReceived('notification-id', 'user-id'),
+      ).resolves.toBe(true);
+
+      expect(mockNotificationModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: 'notification-id',
+          received: {
+            $not: { $elemMatch: { $eq: 'user-id' } },
+          },
+        },
+        {
+          $addToSet: { received: 'user-id' },
+        },
+      );
+      expect(updateStatusSpy).toHaveBeenCalledWith('notification-id');
+      expect(mockNotificationModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns false when the user was already received', async () => {
+      const exec = jest.fn().mockResolvedValue(null);
+      const updateStatusSpy = jest
+        .spyOn(service, 'updateNotificationStatus')
+        .mockResolvedValue(undefined);
+      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
+
+      await expect(
+        service.addReceived('notification-id', 'user-id'),
+      ).resolves.toBe(false);
+
+      expect(updateStatusSpy).not.toHaveBeenCalled();
+      expect(mockNotificationModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns false when the user cannot be found', async () => {
+      const updateStatusSpy = jest
+        .spyOn(service, 'updateNotificationStatus')
+        .mockResolvedValue(undefined);
+      mockUsersService.getById.mockResolvedValue(null);
+
+      await expect(
+        service.addReceived('notification-id', 'missing-user-id'),
+      ).resolves.toBe(false);
+
+      expect(mockNotificationModel.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
   });
 });
