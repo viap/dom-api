@@ -179,7 +179,7 @@ export class NotificationsService {
     if (!user) return false;
 
     // NOTICE: add user to received list in notification
-    await this.notificationModel
+    const updatedNotification = await this.notificationModel
       .findOneAndUpdate(
         {
           _id: notificationId,
@@ -193,19 +193,13 @@ export class NotificationsService {
       )
       .exec();
 
+    if (!updatedNotification) {
+      return false;
+    }
+
     await this.updateNotificationStatus(notificationId);
 
-    // NOTICE: check if user was added to received list in notification
-    return (
-      (await this.notificationModel
-        .findOne({
-          _id: notificationId,
-          received: {
-            $elemMatch: { $eq: user._id },
-          },
-        })
-        .count()) === 1
-    );
+    return true;
   }
 
   async updateNotificationStatus(notificationId: string) {
