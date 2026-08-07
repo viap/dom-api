@@ -4,7 +4,7 @@ import {
   buildSessionCountPipeline,
   buildSessionDatePipeline,
 } from './therapy-request-analytics.service';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import mongoose from 'mongoose';
 
 function chain(result: unknown) {
@@ -188,6 +188,467 @@ describe('TherapyRequestAnalyticsService', () => {
         },
       ],
     });
+    expect(result.weekly.period.groupingTimezone).toBe('UTC');
+    expect(result.weekly.applications).toHaveLength(52);
+    expect(result.weekly.applications).toHaveLength(
+      result.weekly.sessions.length,
+    );
+    expect(result.timeSeries.granularity).toBe('week');
+    expect(result.timeSeries.applications[0].bucketStart).toBe(
+      result.weekly.applications[0].weekStart,
+    );
+  });
+
+  it('rejects unsupported summary granularities', async () => {
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([{}])),
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    await expect(
+      service.getSummary({ granularity: 'quarter' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('returns ordered zero-filled weekly applications and sessions for a selected month', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            total: [{ total: 3 }],
+            reviewRequired: [],
+            monthlyTotals: [],
+            monthlyCategories: [],
+            monthlyGenders: [],
+            categoryBreakdown: [],
+            genderBreakdown: [],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            _id: '2025-12-29',
+            total: 2,
+            withSessions: 1,
+            withoutSessions: 1,
+          },
+          {
+            _id: '2026-01-05',
+            total: 1,
+            withSessions: 1,
+            withoutSessions: 0,
+          },
+        ]),
+      );
+    const sessionAggregate = jest.fn().mockReturnValue(
+      aggregateChain([
+        { _id: '2025-12-29', total: 1 },
+        { _id: '2026-01-05', total: 2 },
+      ]),
+    );
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: sessionAggregate,
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({ month: '2026-01' });
+
+    expect(result.weekly.period).toEqual({
+      groupingTimezone: 'UTC',
+      weekStartsOn: 'monday',
+      effectiveStartDate: '2026-01-01',
+      effectiveEndDate: '2026-01-31',
+      source: 'month',
+    });
+    expect(result.timeSeries).toMatchObject({
+      granularity: 'week',
+      period: {
+        groupingTimezone: 'UTC',
+        effectiveStartDate: '2026-01-01',
+        effectiveEndDate: '2026-01-31',
+        source: 'month',
+      },
+    });
+    expect(result.weekly.applications.map((row) => row.weekStart)).toEqual([
+      '2025-12-29',
+      '2026-01-05',
+      '2026-01-12',
+      '2026-01-19',
+      '2026-01-26',
+    ]);
+    expect(result.weekly.sessions.map((row) => row.weekStart)).toEqual(
+      result.weekly.applications.map((row) => row.weekStart),
+    );
+    expect(
+      result.timeSeries.applications.map((row) => row.bucketStart),
+    ).toEqual(result.weekly.applications.map((row) => row.weekStart));
+    expect(result.timeSeries.sessions.map((row) => row.bucketStart)).toEqual(
+      result.weekly.sessions.map((row) => row.weekStart),
+    );
+    expect(result.weekly.applications[0]).toEqual({
+      weekStart: '2025-12-29',
+      total: 2,
+      withSessions: 1,
+      withoutSessions: 1,
+    });
+    expect(result.weekly.applications[1]).toEqual({
+      weekStart: '2026-01-05',
+      total: 1,
+      withSessions: 1,
+      withoutSessions: 0,
+    });
+    expect(
+      result.weekly.applications.every(
+        (row) => row.total === row.withSessions + row.withoutSessions,
+      ),
+    ).toBe(true);
+    expect(result.weekly.sessions[1]).toEqual({
+      weekStart: '2026-01-05',
+      total: 2,
+    });
+    expect(result.weekly.sessions[2]).toEqual({
+      weekStart: '2026-01-12',
+      total: 0,
+    });
+  });
+
+  it('returns ordered zero-filled daily applications and sessions for a selected month', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(aggregateChain([{}]))
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            _id: '2026-02-01',
+            total: 2,
+            withSessions: 1,
+            withoutSessions: 1,
+          },
+          {
+            _id: '2026-02-29',
+            total: 1,
+            withSessions: 0,
+            withoutSessions: 1,
+          },
+        ]),
+      );
+    const sessionAggregate = jest
+      .fn()
+      .mockReturnValue(aggregateChain([{ _id: '2026-02-28', total: 3 }]));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: sessionAggregate,
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({
+      month: '2026-02',
+      granularity: 'day',
+    });
+
+    expect(result.weekly).toBeUndefined();
+    expect(result.timeSeries.granularity).toBe('day');
+    expect(result.timeSeries.period).toEqual({
+      groupingTimezone: 'UTC',
+      effectiveStartDate: '2026-02-01',
+      effectiveEndDate: '2026-02-28',
+      source: 'month',
+    });
+    expect(result.timeSeries.applications).toHaveLength(28);
+    expect(result.timeSeries.applications[0]).toEqual({
+      bucketStart: '2026-02-01',
+      total: 2,
+      withSessions: 1,
+      withoutSessions: 1,
+    });
+    expect(result.timeSeries.applications[27]).toEqual({
+      bucketStart: '2026-02-28',
+      total: 0,
+      withSessions: 0,
+      withoutSessions: 0,
+    });
+    expect(result.timeSeries.sessions[27]).toEqual({
+      bucketStart: '2026-02-28',
+      total: 3,
+    });
+
+    const applicationPipeline = requestAggregate.mock.calls[1][0];
+    expect(applicationPipeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          $addFields: expect.objectContaining({
+            _bucketStart: expect.objectContaining({
+              $dateToString: expect.objectContaining({
+                date: expect.objectContaining({
+                  $dateTrunc: expect.objectContaining({ unit: 'day' }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it('caps explicit time-series date ranges to the default 52-week span', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(aggregateChain([{}]))
+      .mockReturnValueOnce(aggregateChain([]));
+    const sessionAggregate = jest.fn().mockReturnValue(aggregateChain([]));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: sessionAggregate,
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({
+      startDate: '2020-01-01',
+      endDate: '2026-08-07',
+      granularity: 'day',
+    });
+
+    expect(result.timeSeries.period).toEqual({
+      groupingTimezone: 'UTC',
+      effectiveStartDate: '2020-01-01',
+      effectiveEndDate: '2020-12-29',
+      source: 'range',
+    });
+    expect(result.timeSeries.applications).toHaveLength(364);
+    expect(result.timeSeries.sessions).toHaveLength(364);
+    expect(result.timeSeries.applications[0].bucketStart).toBe('2020-01-01');
+    expect(result.timeSeries.applications[363].bucketStart).toBe('2020-12-29');
+
+    expect(requestAggregate.mock.calls[1][0][0].$match.createdAt).toEqual({
+      $gte: new Date('2020-01-01T00:00:00.000Z'),
+      $lt: new Date('2020-12-30T00:00:00.000Z'),
+    });
+    expect(sessionAggregate.mock.calls[0][0][0].$match.dateTime).toEqual({
+      $gte: new Date('2020-01-01T00:00:00.000Z').getTime(),
+      $lt: new Date('2020-12-30T00:00:00.000Z').getTime(),
+    });
+  });
+
+  it('returns month and year buckets without local-time date shifts', async () => {
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(aggregateChain([{}]))
+          .mockReturnValueOnce(aggregateChain([]))
+          .mockReturnValueOnce(aggregateChain([{}]))
+          .mockReturnValueOnce(aggregateChain([])),
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const monthly = await service.getSummary({
+      startDate: '2026-01-15',
+      endDate: '2026-03-02',
+      granularity: 'month',
+    });
+    const yearly = await service.getSummary({
+      startDate: '2025-12-31',
+      endDate: '2026-01-01',
+      granularity: 'year',
+    });
+
+    expect(
+      monthly.timeSeries.applications.map((row) => row.bucketStart),
+    ).toEqual(['2026-01-01', '2026-02-01', '2026-03-01']);
+    expect(
+      yearly.timeSeries.applications.map((row) => row.bucketStart),
+    ).toEqual(['2025-01-01', '2026-01-01']);
+  });
+
+  it('uses latest 52 Monday week keys for default weekly analytics', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-06T12:00:00Z'));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(aggregateChain([{}]))
+          .mockReturnValueOnce(aggregateChain([])),
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    try {
+      const result = await service.getSummary({});
+
+      expect(result.weekly.period).toMatchObject({
+        effectiveStartDate: '2025-08-11',
+        effectiveEndDate: '2026-08-09',
+        source: 'default',
+      });
+      expect(result.weekly.applications).toHaveLength(52);
+      expect(result.weekly.applications[0].weekStart).toBe('2025-08-11');
+      expect(result.weekly.applications[51].weekStart).toBe('2026-08-03');
+      expect(result.weekly.sessions.map((row) => row.weekStart)).toEqual(
+        result.weekly.applications.map((row) => row.weekStart),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('applies request dates only to weekly applications and non-date request filters to weekly sessions', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(aggregateChain([{}]))
+      .mockReturnValueOnce(aggregateChain([]));
+    const sessionAggregate = jest.fn().mockReturnValue(aggregateChain([]));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: sessionAggregate,
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    await service.getSummary({
+      startDate: '2026-01-07',
+      endDate: '2026-01-20',
+      clientGender: 'female',
+      accepted: 'true',
+    });
+
+    const applicationPipeline = requestAggregate.mock.calls[1][0];
+    expect(applicationPipeline[0]).toEqual({
+      $match: {
+        clientGender: 'female',
+        accepted: true,
+        createdAt: {
+          $gte: new Date('2026-01-07T00:00:00.000Z'),
+          $lt: new Date('2026-01-21T00:00:00.000Z'),
+        },
+      },
+    });
+    expect(applicationPipeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          $lookup: expect.objectContaining({
+            from: 'therapysessions',
+            pipeline: expect.arrayContaining([{ $limit: 1 }]),
+          }),
+        }),
+      ]),
+    );
+
+    const sessionPipeline = sessionAggregate.mock.calls[0][0];
+    expect(sessionPipeline[0]).toEqual({
+      $match: {
+        therapyRequest: { $exists: true, $ne: null },
+        dateTime: {
+          $gte: new Date('2026-01-07T00:00:00.000Z').getTime(),
+          $lt: new Date('2026-01-21T00:00:00.000Z').getTime(),
+        },
+      },
+    });
+    expect(sessionPipeline).toEqual(
+      expect.arrayContaining([
+        { $match: { $expr: buildFiniteSessionDateExpression() } },
+      ]),
+    );
+    expect(sessionPipeline[2].$lookup.pipeline).toEqual([
+      {
+        $match: {
+          $expr: { $eq: ['$_id', '$$requestId'] },
+        },
+      },
+      { $match: { clientGender: 'female', accepted: true } },
+      { $project: { _id: 1 } },
+    ]);
+  });
+
+  it('bounds open weekly ranges with the current UTC date or 52 weeks from the provided side', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-06T12:00:00Z'));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(aggregateChain([{}]))
+          .mockReturnValueOnce(aggregateChain([])),
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    try {
+      const result = await service.getSummary({ startDate: '2026-01-07' });
+
+      expect(result.weekly.period).toMatchObject({
+        effectiveStartDate: '2026-01-07',
+        effectiveEndDate: '2026-08-06',
+        source: 'range',
+      });
+      expect(result.weekly.applications[0].weekStart).toBe('2026-01-05');
+      expect(result.weekly.applications.at(-1)?.weekStart).toBe('2026-08-03');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('returns paginated request-level list responses with projected fields', async () => {

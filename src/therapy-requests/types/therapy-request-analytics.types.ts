@@ -7,6 +7,7 @@ export interface TherapyRequestAnalyticsQuery {
   month?: string;
   startDate?: string;
   endDate?: string;
+  granularity?: AnalyticsGranularity | string;
   clientGender?: TherapyRequestClientGender | string;
   requestCategory?: TherapyRequestCategory | string;
   psychologist?: string;
@@ -80,6 +81,58 @@ export interface TherapyRequestAnalyticsSummaryResponse {
     gender: TherapyRequestClientGender;
     total: number;
   }>;
+  timeSeries: TherapyRequestAnalyticsTimeSeriesSummary;
+  weekly?: TherapyRequestAnalyticsWeeklySummary;
+}
+
+export type AnalyticsGranularity = 'day' | 'week' | 'month' | 'year';
+
+export interface TherapyRequestAnalyticsTimeSeriesSummary {
+  granularity: AnalyticsGranularity;
+  applications: TherapyRequestAnalyticsTimeSeriesApplicationsPoint[];
+  sessions: TherapyRequestAnalyticsTimeSeriesSessionsPoint[];
+  period: {
+    groupingTimezone: 'UTC';
+    effectiveStartDate: string;
+    effectiveEndDate: string;
+    source: 'month' | 'range' | 'default';
+  };
+}
+
+export interface TherapyRequestAnalyticsTimeSeriesApplicationsPoint {
+  bucketStart: string;
+  total: number;
+  withSessions: number;
+  withoutSessions: number;
+}
+
+export interface TherapyRequestAnalyticsTimeSeriesSessionsPoint {
+  bucketStart: string;
+  total: number;
+}
+
+export interface TherapyRequestAnalyticsWeeklySummary {
+  applications: TherapyRequestAnalyticsWeeklyApplicationsPoint[];
+  sessions: TherapyRequestAnalyticsWeeklySessionsPoint[];
+  period: {
+    groupingTimezone: 'UTC';
+    weekStartsOn: 'monday';
+    effectiveStartDate: string;
+    effectiveEndDate: string;
+    source: 'month' | 'range' | 'default';
+  };
+}
+
+export interface TherapyRequestAnalyticsWeeklyApplicationsPoint {
+  weekStart: string;
+  total: number;
+  withSessions: number;
+  withoutSessions: number;
+}
+
+export interface TherapyRequestAnalyticsWeeklySessionsPoint {
+  weekStart: string;
+  total: number;
 }
 
 export interface TherapyRequestAnalyticsLifecycleRow {

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import ExcelJS from 'exceljs';
@@ -21,6 +25,7 @@ import {
 } from './schemas/therapy-request.schema';
 import {
   PaginatedResponse,
+  AnalyticsGranularity,
   TherapyRequestAnalyticsMetricBreakdown,
   TherapyRequestAnalyticsMetricKey,
   TherapyRequestAnalyticsFiltersResponse,
@@ -31,12 +36,17 @@ import {
   TherapyRequestAnalyticsRequest,
   TherapyRequestAnalyticsRequestsResponse,
   TherapyRequestAnalyticsSummaryResponse,
+  TherapyRequestAnalyticsTimeSeriesSummary,
+  TherapyRequestAnalyticsWeeklySummary,
   TherapyRequestAnalyticsWarningKey,
 } from './types/therapy-request-analytics.types';
 
 const dayMs = 1000 * 60 * 60 * 24;
 const DEFAULT_REQUEST_LIMIT = 20;
 const MAX_REQUEST_LIMIT = 1000;
+const DEFAULT_WEEK_COUNT = 52;
+const DEFAULT_TIME_SERIES_DAYS = DEFAULT_WEEK_COUNT * 7;
+const MAX_TIME_SERIES_RANGE_DAYS = DEFAULT_TIME_SERIES_DAYS;
 const CONFIDENCE_THRESHOLD_CLIENTS = 5;
 const DOCUMENTATION_UNAVAILABLE_REASON =
   'No independent source for completed sessions exists; recorded session rows are the only evidence a session happened.';
@@ -200,6 +210,40 @@ function monthKey(date: Date): string {
   )}`;
 }
 
+function calendarDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * dayMs);
+}
+
+function utcDayStart(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function utcMondayStart(date: Date): Date {
+  const start = utcDayStart(date);
+  const day = start.getUTCDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  return addUtcDays(start, offset);
+}
+
+function parseUtcDate(value?: string): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return utcDayStart(date);
+}
+
 function normalizeGender(value?: string): TherapyRequestClientGender {
   return Object.values(TherapyRequestClientGender).includes(
     value as TherapyRequestClientGender,
@@ -266,6 +310,19 @@ type DateRangeFilter = {
   $lte?: Date;
   $lt?: Date;
 };
+
+type TimeSeriesPeriod = {
+  start: Date;
+  endExclusive: Date;
+  effectiveStartDate: string;
+  effectiveEndDate: string;
+  source: TherapyRequestAnalyticsTimeSeriesSummary['period']['source'];
+};
+
+type SummaryWithoutWeekly = Omit<
+  TherapyRequestAnalyticsSummaryResponse,
+  'timeSeries' | 'weekly'
+>;
 
 type ProjectedTherapyRequest = TherapyRequestAnalyticsRequest;
 
@@ -411,68 +468,79 @@ export class TherapyRequestAnalyticsService {
   async getSummary(
     query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsSummaryResponse> {
-    const [result] = await this.therapyRequestModel
-      .aggregate([
-        { $match: this.buildRequestFilter(query) },
-        {
-          $addFields: {
-            _clientGender: {
-              $ifNull: ['$clientGender', TherapyRequestClientGender.Unknown],
+    const granularity = this.parseGranularity(query.granularity);
+    const [summaryRows, timeSeries] = await Promise.all([
+      this.therapyRequestModel
+        .aggregate([
+          { $match: this.buildRequestFilter(query) },
+          {
+            $addFields: {
+              _clientGender: {
+                $ifNull: ['$clientGender', TherapyRequestClientGender.Unknown],
+              },
+              _requestCategory: {
+                $ifNull: ['$requestCategory', TherapyRequestCategory.Unknown],
+              },
+              _analyticsReviewRequired: {
+                $cond: [
+                  { $eq: ['$analyticsReviewRequired', false] },
+                  false,
+                  true,
+                ],
+              },
+              _month: {
+                $dateToString: { format: '%Y-%m', date: '$createdAt' },
+              },
             },
-            _requestCategory: {
-              $ifNull: ['$requestCategory', TherapyRequestCategory.Unknown],
-            },
-            _analyticsReviewRequired: {
-              $cond: [
-                { $eq: ['$analyticsReviewRequired', false] },
-                false,
-                true,
+          },
+          {
+            $facet: {
+              total: [{ $count: 'total' }],
+              reviewRequired: [
+                { $match: { _analyticsReviewRequired: true } },
+                { $count: 'total' },
+              ],
+              monthlyTotals: [
+                { $group: { _id: '$_month', total: { $sum: 1 } } },
+                { $sort: { _id: 1 } },
+              ],
+              monthlyCategories: [
+                {
+                  $group: {
+                    _id: { month: '$_month', category: '$_requestCategory' },
+                    total: { $sum: 1 },
+                  },
+                },
+              ],
+              monthlyGenders: [
+                {
+                  $group: {
+                    _id: { month: '$_month', gender: '$_clientGender' },
+                    total: { $sum: 1 },
+                  },
+                },
+              ],
+              categoryBreakdown: [
+                { $group: { _id: '$_requestCategory', total: { $sum: 1 } } },
+              ],
+              genderBreakdown: [
+                { $group: { _id: '$_clientGender', total: { $sum: 1 } } },
               ],
             },
-            _month: {
-              $dateToString: { format: '%Y-%m', date: '$createdAt' },
-            },
           },
-        },
-        {
-          $facet: {
-            total: [{ $count: 'total' }],
-            reviewRequired: [
-              { $match: { _analyticsReviewRequired: true } },
-              { $count: 'total' },
-            ],
-            monthlyTotals: [
-              { $group: { _id: '$_month', total: { $sum: 1 } } },
-              { $sort: { _id: 1 } },
-            ],
-            monthlyCategories: [
-              {
-                $group: {
-                  _id: { month: '$_month', category: '$_requestCategory' },
-                  total: { $sum: 1 },
-                },
-              },
-            ],
-            monthlyGenders: [
-              {
-                $group: {
-                  _id: { month: '$_month', gender: '$_clientGender' },
-                  total: { $sum: 1 },
-                },
-              },
-            ],
-            categoryBreakdown: [
-              { $group: { _id: '$_requestCategory', total: { $sum: 1 } } },
-            ],
-            genderBreakdown: [
-              { $group: { _id: '$_clientGender', total: { $sum: 1 } } },
-            ],
-          },
-        },
-      ])
-      .exec();
+        ])
+        .exec(),
+      this.buildTimeSeriesSummary(query, granularity),
+    ]);
+    const [result] = summaryRows;
 
-    return this.buildSummaryFromAggregation(result);
+    return {
+      ...this.buildSummaryFromAggregation(result),
+      timeSeries,
+      ...(granularity === 'week'
+        ? { weekly: this.buildWeeklyCompatibility(timeSeries) }
+        : {}),
+    };
   }
 
   async getLifecycle(
@@ -1185,6 +1253,367 @@ export class TherapyRequestAnalyticsService {
       .exec() as Promise<ProjectedTherapyRequest[]>;
   }
 
+  private parseGranularity(value: unknown): AnalyticsGranularity {
+    if (!value) {
+      return 'week';
+    }
+
+    if (
+      value === 'day' ||
+      value === 'week' ||
+      value === 'month' ||
+      value === 'year'
+    ) {
+      return value;
+    }
+
+    throw new BadRequestException('Unsupported analytics granularity');
+  }
+
+  private async buildTimeSeriesSummary(
+    query: TherapyRequestAnalyticsQuery,
+    granularity: AnalyticsGranularity,
+  ): Promise<TherapyRequestAnalyticsTimeSeriesSummary> {
+    const period = this.deriveTimeSeriesPeriod(query);
+    const bucketKeys = this.enumerateBucketKeys(period, granularity);
+    const [applicationRows, sessionRows] = await Promise.all([
+      this.aggregateTimeSeriesApplications(query, period, granularity),
+      this.aggregateTimeSeriesSessions(query, period, granularity),
+    ]);
+
+    return {
+      granularity,
+      applications: this.mergeTimeSeriesApplications(
+        bucketKeys,
+        applicationRows,
+      ),
+      sessions: this.mergeTimeSeriesSessions(bucketKeys, sessionRows),
+      period: {
+        groupingTimezone: 'UTC',
+        effectiveStartDate: period.effectiveStartDate,
+        effectiveEndDate: period.effectiveEndDate,
+        source: period.source,
+      },
+    };
+  }
+
+  private buildWeeklyCompatibility(
+    timeSeries: TherapyRequestAnalyticsTimeSeriesSummary,
+  ): TherapyRequestAnalyticsWeeklySummary {
+    return {
+      applications: timeSeries.applications.map((point) => ({
+        weekStart: point.bucketStart,
+        total: point.total,
+        withSessions: point.withSessions,
+        withoutSessions: point.withoutSessions,
+      })),
+      sessions: timeSeries.sessions.map((point) => ({
+        weekStart: point.bucketStart,
+        total: point.total,
+      })),
+      period: {
+        groupingTimezone: 'UTC',
+        weekStartsOn: 'monday',
+        effectiveStartDate: timeSeries.period.effectiveStartDate,
+        effectiveEndDate: timeSeries.period.effectiveEndDate,
+        source: timeSeries.period.source,
+      },
+    };
+  }
+
+  private deriveTimeSeriesPeriod(
+    query: TherapyRequestAnalyticsQuery,
+  ): TimeSeriesPeriod {
+    if (query.month && /^\d{4}-\d{2}$/.test(query.month)) {
+      const [year, month] = query.month.split('-').map(Number);
+      const start = new Date(Date.UTC(year, month - 1, 1));
+      const endExclusive = new Date(Date.UTC(year, month, 1));
+      return {
+        start,
+        endExclusive,
+        effectiveStartDate: calendarDateKey(start),
+        effectiveEndDate: calendarDateKey(addUtcDays(endExclusive, -1)),
+        source: 'month',
+      };
+    }
+
+    const explicitStart = parseUtcDate(query.startDate);
+    const explicitEnd = parseUtcDate(query.endDate);
+    if (explicitStart || explicitEnd) {
+      const currentUtcDay = utcDayStart(new Date());
+      const start = explicitStart
+        ? explicitStart
+        : addUtcDays(explicitEnd as Date, -(MAX_TIME_SERIES_RANGE_DAYS - 1));
+      const maxEnd = addUtcDays(start, MAX_TIME_SERIES_RANGE_DAYS - 1);
+      const requestedEnd = explicitEnd
+        ? explicitEnd
+        : new Date(Math.min(currentUtcDay.getTime(), maxEnd.getTime()));
+      const end = new Date(Math.min(requestedEnd.getTime(), maxEnd.getTime()));
+      const endExclusive = addUtcDays(end, 1);
+
+      return {
+        start,
+        endExclusive,
+        effectiveStartDate: calendarDateKey(start),
+        effectiveEndDate: calendarDateKey(addUtcDays(endExclusive, -1)),
+        source: 'range',
+      };
+    }
+
+    const currentWeekStart = utcMondayStart(new Date());
+    const start = addUtcDays(currentWeekStart, -(DEFAULT_WEEK_COUNT - 1) * 7);
+    const endExclusive = addUtcDays(currentWeekStart, 7);
+    return {
+      start,
+      endExclusive,
+      effectiveStartDate: calendarDateKey(start),
+      effectiveEndDate: calendarDateKey(addUtcDays(endExclusive, -1)),
+      source: 'default',
+    };
+  }
+
+  private bucketStart(date: Date, granularity: AnalyticsGranularity): Date {
+    if (granularity === 'week') {
+      return utcMondayStart(date);
+    }
+
+    if (granularity === 'month') {
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+    }
+
+    if (granularity === 'year') {
+      return new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    }
+
+    return utcDayStart(date);
+  }
+
+  private addBucket(date: Date, granularity: AnalyticsGranularity): Date {
+    if (granularity === 'week') {
+      return addUtcDays(date, 7);
+    }
+
+    if (granularity === 'month') {
+      return new Date(
+        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1),
+      );
+    }
+
+    if (granularity === 'year') {
+      return new Date(Date.UTC(date.getUTCFullYear() + 1, 0, 1));
+    }
+
+    return addUtcDays(date, 1);
+  }
+
+  private enumerateBucketKeys(
+    period: TimeSeriesPeriod,
+    granularity: AnalyticsGranularity,
+  ): string[] {
+    if (period.endExclusive <= period.start) {
+      return [];
+    }
+
+    const keys: string[] = [];
+    const lastBucketStart = this.bucketStart(
+      addUtcDays(period.endExclusive, -1),
+      granularity,
+    );
+    for (
+      let cursor = this.bucketStart(period.start, granularity);
+      cursor <= lastBucketStart;
+      cursor = this.addBucket(cursor, granularity)
+    ) {
+      keys.push(calendarDateKey(cursor));
+    }
+
+    return keys;
+  }
+
+  private getTherapyRequestCollectionName(): string {
+    return this.therapyRequestModel.collection?.name || 'therapyrequests';
+  }
+
+  private getTherapySessionCollectionName(): string {
+    return this.therapySessionModel.collection?.name || 'therapysessions';
+  }
+
+  private bucketDateExpression(
+    dateExpression: unknown,
+    granularity: AnalyticsGranularity,
+  ) {
+    const unit = granularity === 'week' ? 'week' : granularity;
+
+    return {
+      $dateToString: {
+        format: '%Y-%m-%d',
+        timezone: 'UTC',
+        date: {
+          $dateTrunc: {
+            date: dateExpression,
+            unit,
+            timezone: 'UTC',
+            ...(granularity === 'week' ? { startOfWeek: 'monday' } : {}),
+          },
+        },
+      },
+    };
+  }
+
+  private async aggregateTimeSeriesApplications(
+    query: TherapyRequestAnalyticsQuery,
+    period: TimeSeriesPeriod,
+    granularity: AnalyticsGranularity,
+  ): Promise<
+    Array<{
+      _id: string;
+      total: number;
+      withSessions: number;
+      withoutSessions: number;
+    }>
+  > {
+    const requestFilter = {
+      ...this.buildRequestFilter(query, { includeDateFilters: false }),
+      createdAt: {
+        $gte: period.start,
+        $lt: period.endExclusive,
+      },
+    };
+
+    return this.therapyRequestModel
+      .aggregate([
+        { $match: requestFilter },
+        {
+          $lookup: {
+            from: this.getTherapySessionCollectionName(),
+            let: { requestId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$therapyRequest', '$$requestId'] },
+                },
+              },
+              { $limit: 1 },
+              { $project: { _id: 1 } },
+            ],
+            as: '_linkedSession',
+          },
+        },
+        {
+          $addFields: {
+            _bucketStart: this.bucketDateExpression('$createdAt', granularity),
+            _hasLinkedSession: { $gt: [{ $size: '$_linkedSession' }, 0] },
+          },
+        },
+        {
+          $group: {
+            _id: '$_bucketStart',
+            total: { $sum: 1 },
+            withSessions: {
+              $sum: { $cond: ['$_hasLinkedSession', 1, 0] },
+            },
+            withoutSessions: {
+              $sum: { $cond: ['$_hasLinkedSession', 0, 1] },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ])
+      .exec();
+  }
+
+  private async aggregateTimeSeriesSessions(
+    query: TherapyRequestAnalyticsQuery,
+    period: TimeSeriesPeriod,
+    granularity: AnalyticsGranularity,
+  ): Promise<Array<{ _id: string; total: number }>> {
+    const requestFilter = this.buildRequestFilter(query, {
+      includeDateFilters: false,
+    });
+
+    return this.therapySessionModel
+      .aggregate([
+        {
+          $match: {
+            therapyRequest: { $exists: true, $ne: null },
+            dateTime: {
+              $gte: period.start.getTime(),
+              $lt: period.endExclusive.getTime(),
+            },
+          },
+        },
+        { $match: { $expr: buildFiniteSessionDateExpression() } },
+        {
+          $lookup: {
+            from: this.getTherapyRequestCollectionName(),
+            let: { requestId: '$therapyRequest' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$requestId'] },
+                },
+              },
+              { $match: requestFilter },
+              { $project: { _id: 1 } },
+            ],
+            as: '_request',
+          },
+        },
+        { $match: { '_request.0': { $exists: true } } },
+        {
+          $addFields: {
+            _bucketStart: this.bucketDateExpression(
+              { $toDate: '$dateTime' },
+              granularity,
+            ),
+          },
+        },
+        {
+          $group: {
+            _id: '$_bucketStart',
+            total: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ])
+      .exec();
+  }
+
+  private mergeTimeSeriesApplications(
+    bucketKeys: string[],
+    rows: Array<{
+      _id: string;
+      total?: number;
+      withSessions?: number;
+    }>,
+  ): TherapyRequestAnalyticsTimeSeriesSummary['applications'] {
+    const rowsByBucket = new Map(rows.map((row) => [row._id, row]));
+
+    return bucketKeys.map((bucketStart) => {
+      const row = rowsByBucket.get(bucketStart);
+      const total = row?.total || 0;
+      const withSessions = row?.withSessions || 0;
+      return {
+        bucketStart,
+        total,
+        withSessions,
+        withoutSessions: Math.max(0, total - withSessions),
+      };
+    });
+  }
+
+  private mergeTimeSeriesSessions(
+    bucketKeys: string[],
+    rows: Array<{ _id: string; total?: number }>,
+  ): TherapyRequestAnalyticsTimeSeriesSummary['sessions'] {
+    const rowsByBucket = new Map(rows.map((row) => [row._id, row]));
+
+    return bucketKeys.map((bucketStart) => ({
+      bucketStart,
+      total: rowsByBucket.get(bucketStart)?.total || 0,
+    }));
+  }
+
   private buildSummaryFromAggregation(result?: {
     total?: Array<{ total: number }>;
     reviewRequired?: Array<{ total: number }>;
@@ -1199,7 +1628,7 @@ export class TherapyRequestAnalyticsService {
     }>;
     categoryBreakdown?: Array<{ _id: string; total: number }>;
     genderBreakdown?: Array<{ _id: string; total: number }>;
-  }): TherapyRequestAnalyticsSummaryResponse {
+  }): SummaryWithoutWeekly {
     const monthlyMap = new Map<
       string,
       {
@@ -1272,7 +1701,7 @@ export class TherapyRequestAnalyticsService {
 
   private buildSummaryFromRequests(
     requests: SummaryInputRequest[],
-  ): TherapyRequestAnalyticsSummaryResponse {
+  ): SummaryWithoutWeekly {
     const monthlyMap = new Map<
       string,
       {
@@ -1332,12 +1761,15 @@ export class TherapyRequestAnalyticsService {
 
   private buildRequestFilter(
     query: TherapyRequestAnalyticsQuery,
+    options: { includeDateFilters?: boolean } = { includeDateFilters: true },
   ): FilterQuery<TherapyRequestDocument> {
     const filter: FilterQuery<TherapyRequestDocument> = {};
 
-    const dateRange = this.parseDateRange(query);
-    if (dateRange) {
-      filter.createdAt = dateRange;
+    if (options.includeDateFilters !== false) {
+      const dateRange = this.parseDateRange(query);
+      if (dateRange) {
+        filter.createdAt = dateRange;
+      }
     }
 
     if (

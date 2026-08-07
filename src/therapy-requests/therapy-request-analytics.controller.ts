@@ -6,6 +6,7 @@ import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
 import { UserDocument } from '@/users/schemas/user.schema';
 import { UpdateTherapyRequestAnalyticsDto } from './dto/update-therapy-request-analytics.dto';
+import { therapyRequestAnalyticsQuerySchema } from './schemas/joi.therapy-request-analytics-query.schema';
 import { joiUpdateTherapyRequestAnalyticsSchema } from './schemas/joi.update-therapy-request-analytics.schema';
 import { TherapyRequestAnalyticsService } from './therapy-request-analytics.service';
 import { TherapyRequestsService } from './therapy-requests.service';
@@ -35,7 +36,8 @@ export class TherapyRequestAnalyticsController {
   @Get('summary')
   @Roles(Role.Admin, Role.Editor)
   getSummary(
-    @Query() query: TherapyRequestAnalyticsQuery,
+    @Query(new JoiValidationPipe(therapyRequestAnalyticsQuerySchema))
+    query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsSummaryResponse> {
     return this.analyticsService.getSummary(query);
   }
