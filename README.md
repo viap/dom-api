@@ -310,6 +310,7 @@ npm run audit:auth-passwords
 - `auth-by-token` - Authenticate WebSocket connection
 - `notifications/get-my` - Get user notifications
 - `notifications/get-all` - Get all active notifications (API clients)
+- `notifications/get-all-batch` - Get all active notifications as ACK payload (API clients)
 - `notifications/add-received` - Mark notification as received
 
 ## 🧪 Testing

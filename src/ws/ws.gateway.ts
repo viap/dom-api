@@ -104,16 +104,18 @@ export class WsGateway implements OnModuleInit {
   async getAllActiveEvents(
     @ConnectedSocket() client: Socket,
   ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
-    const apiClient = socketToApiClient[client.id];
-
-    let notifications: Array<NotificationDocument> = [];
-    if (apiClient) {
-      notifications = await this.notificationsService.getAllActive();
-    }
+    const notifications = await this.getAllActiveNotifications(client);
 
     return from(notifications).pipe(
       map((event) => ({ event: 'notification', data: event })),
     );
+  }
+
+  @SubscribeMessage('notifications/get-all-batch')
+  async getAllActiveEventsBatch(
+    @ConnectedSocket() client: Socket,
+  ): Promise<Array<NotificationDocument>> {
+    return this.getAllActiveNotifications(client);
   }
 
   @SubscribeMessage('notifications/add-received')
@@ -137,5 +139,17 @@ export class WsGateway implements OnModuleInit {
     }
 
     return false;
+  }
+
+  private async getAllActiveNotifications(
+    client: Socket,
+  ): Promise<Array<NotificationDocument>> {
+    const apiClient = socketToApiClient[client.id];
+
+    if (apiClient) {
+      return this.notificationsService.getAllActive();
+    }
+
+    return [];
   }
 }
