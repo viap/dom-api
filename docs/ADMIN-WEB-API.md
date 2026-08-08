@@ -1142,7 +1142,9 @@ KPI analytics (`GET /therapy-request-analytics/lifecycle`):
 - Supported score weights are retention `36.84%`, start rate `26.32%`, time to first session `21.05%`, and regularity `15.79%`.
 - Documentation score is unavailable and excluded because there is no independent source for completed sessions; recorded session rows are the only evidence a session happened.
 - Confidence is informational only: `min(clientsWithAtLeastOneSession / 5, 1)`. Low confidence does not change score, ranking, or eligibility.
-- Specialists missing any supported metric get `baseScore: null`, `scoreStatus: "insufficient_data"`, and are returned outside Top 10 / Bottom 10.
+- `allPsychologists` contains every specialist produced by the KPI aggregation, including scored and `insufficient_data` rows. Legacy `topPsychologists`, `bottomPsychologists`, and `insufficientDataPsychologists` remain for compatibility.
+- Specialists missing any supported metric get `baseScore: null`, `scoreStatus: "insufficient_data"`, and are included in `allPsychologists` and `insufficientDataPsychologists`.
+- `dom-web` and `dom-api` deploy independently; frontend versions that support `allPsychologists` must keep the legacy Top/Bottom UI when this field is absent from an older API response.
 - No archived/deleted/cancelled/duplicate/test request status exists in the current schema, so those categories are not silently filtered.
 
 Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.

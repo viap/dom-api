@@ -207,8 +207,24 @@ export interface TherapyRequestAnalyticsPsychologistLifecycle {
 }
 
 export interface TherapyRequestAnalyticsLifecycleResponse {
+  allPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  /**
+   * @deprecated Compatibility field for deploy skew. Remove after one
+   * production release where dom-api emits allPsychologists and deployed
+   * dom-web no longer needs the legacy Top/Bottom fallback.
+   */
   topPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  /**
+   * @deprecated Compatibility field for deploy skew. Remove after one
+   * production release where dom-api emits allPsychologists and deployed
+   * dom-web no longer needs the legacy Top/Bottom fallback.
+   */
   bottomPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
+  /**
+   * @deprecated Compatibility field for deploy skew. Remove after one
+   * production release where dom-api emits allPsychologists and deployed
+   * dom-web no longer needs the legacy Top/Bottom fallback.
+   */
   insufficientDataPsychologists: TherapyRequestAnalyticsPsychologistLifecycle[];
   requestRows: TherapyRequestAnalyticsLifecycleRow[];
   requestRowsTotal: number;
