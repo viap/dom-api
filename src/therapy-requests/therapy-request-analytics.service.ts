@@ -679,6 +679,12 @@ export class TherapyRequestAnalyticsService {
     const scoredSpecialists = specialists.filter(
       (row) => row.scoreStatus === 'scored' && row.baseScore !== null,
     );
+    const sortedScoredSpecialists = [...scoredSpecialists].sort((a, b) =>
+      this.sortScoredSpecialists(a, b, 'desc'),
+    );
+    const insufficientDataPsychologists = specialists
+      .filter((row) => row.scoreStatus === 'insufficient_data')
+      .sort((a, b) => this.sortSpecialistsByName(a, b));
 
     const unlinkedSessionCount = await this.countUnlinkedSessions(query);
     const requestRowsTotal = requestRows.length;
@@ -692,9 +698,7 @@ export class TherapyRequestAnalyticsService {
       options.paginateRows === false
         ? requestRows
         : requestRows.slice(rowOffset, rowOffset + rowLimit);
-    const topPsychologists = [...scoredSpecialists]
-      .sort((a, b) => this.sortScoredSpecialists(a, b, 'desc'))
-      .slice(0, 10);
+    const topPsychologists = sortedScoredSpecialists.slice(0, 10);
     const bottomPsychologists =
       scoredSpecialists.length > 10
         ? [...scoredSpecialists]
@@ -709,11 +713,13 @@ export class TherapyRequestAnalyticsService {
         : [];
 
     return {
+      allPsychologists: [
+        ...sortedScoredSpecialists,
+        ...insufficientDataPsychologists,
+      ],
       topPsychologists,
       bottomPsychologists,
-      insufficientDataPsychologists: specialists
-        .filter((row) => row.scoreStatus === 'insufficient_data')
-        .sort((a, b) => this.sortSpecialistsByName(a, b)),
+      insufficientDataPsychologists,
       requestRows: paginatedRequestRows,
       requestRowsTotal,
       unlinkedSessionCount,
@@ -1152,12 +1158,8 @@ export class TherapyRequestAnalyticsService {
         missingMetrics: row.missingMetrics.join(', '),
         warnings: row.warnings.join(', '),
       });
-    lifecycle.topPsychologists.forEach((row) => addPsychologistRow('top', row));
-    lifecycle.bottomPsychologists.forEach((row) =>
-      addPsychologistRow('bottom', row),
-    );
-    lifecycle.insufficientDataPsychologists.forEach((row) =>
-      addPsychologistRow('insufficient_data', row),
+    lifecycle.allPsychologists.forEach((row) =>
+      addPsychologistRow(row.scoreStatus, row),
     );
 
     const requestLifecycleSheet = workbook.addWorksheet('KPI request audit');

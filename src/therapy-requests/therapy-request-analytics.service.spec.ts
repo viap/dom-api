@@ -5,6 +5,7 @@ import {
   buildSessionDatePipeline,
 } from './therapy-request-analytics.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import mongoose from 'mongoose';
 
 function chain(result: unknown) {
@@ -937,6 +938,7 @@ describe('TherapyRequestAnalyticsService', () => {
     });
 
     expect(result.topPsychologists).toHaveLength(1);
+    expect(result.allPsychologists).toEqual(result.topPsychologists);
     expect(result.bottomPsychologists).toEqual([]);
     expect(result.topPsychologists[0]).toMatchObject({
       psychologistName: 'Dr One',
@@ -998,6 +1000,65 @@ describe('TherapyRequestAnalyticsService', () => {
       .reduce((sum, contribution) => sum + contribution, 0);
     expect(result.topPsychologists[0].baseScore).toBe(
       Math.round(contributionTotal * 10) / 10,
+    );
+  });
+
+  it('returns all scored psychologists without top and bottom truncation', async () => {
+    const requests = Array.from({ length: 12 }, (_, index) => {
+      const ordinal = String(index + 1).padStart(2, '0');
+
+      return {
+        _id: id(`request-${ordinal}`),
+        createdAt: new Date(`2026-01-${ordinal}T00:00:00Z`),
+        name: `Client ${ordinal}`,
+        psychologist: {
+          _id: id(`psychologist-${ordinal}`),
+          user: { name: `Dr ${ordinal}` },
+        },
+      };
+    });
+    const sessionCountRows = requests.map((request) => ({
+      _id: request._id,
+      linkedSessionCount: 2,
+      invalidSessionDateCount: 0,
+    }));
+    const sessionDateRows = requests.map((request, index) => {
+      const day = String(index + 1).padStart(2, '0');
+
+      return {
+        _id: request._id,
+        firstSessionAt: new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        latestSessionAt: new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        firstTenSessionDates: [
+          new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+          new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        ],
+      };
+    });
+    const service = new TherapyRequestAnalyticsService(
+      {
+        find: jest.fn().mockReturnValue(chain(requests)),
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        distinct: jest.fn(),
+      } as any,
+      {
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(aggregateChain(sessionCountRows))
+          .mockReturnValueOnce(aggregateChain(sessionDateRows)),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getLifecycle({});
+
+    expect(result.topPsychologists).toHaveLength(10);
+    expect(result.bottomPsychologists).toHaveLength(2);
+    expect(result.insufficientDataPsychologists).toHaveLength(0);
+    expect(result.allPsychologists).toHaveLength(12);
+    expect(result.allPsychologists.map((row) => row.psychologistName)).toEqual(
+      requests.map((request) => request.psychologist.user.name),
     );
   });
 
@@ -1282,6 +1343,13 @@ describe('TherapyRequestAnalyticsService', () => {
 
     expect(result.requestRowsTotal).toBe(3);
     expect(result.topPsychologists).toHaveLength(0);
+    expect(result.allPsychologists).toEqual([
+      expect.objectContaining({
+        psychologistName: 'Dr One',
+        baseScore: null,
+        missingMetrics: ['timeToFirstSession', 'regularity'],
+      }),
+    ]);
     expect(result.insufficientDataPsychologists).toEqual([
       expect.objectContaining({
         psychologistName: 'Dr One',
@@ -1296,8 +1364,46 @@ describe('TherapyRequestAnalyticsService', () => {
     ]);
   });
 
-  it('exports an xlsx workbook buffer from a single request fetch', async () => {
-    const find = jest.fn().mockReturnValue(chain([]));
+  it('exports an xlsx workbook buffer with every KPI psychologist row', async () => {
+    const requests = Array.from({ length: 21 }, (_, index) => {
+      const ordinal = String(index + 1).padStart(2, '0');
+
+      return {
+        _id: id(`request-${ordinal}`),
+        createdAt: new Date(`2026-01-${ordinal}T00:00:00Z`),
+        updatedAt: new Date(`2026-01-${ordinal}T00:00:00Z`),
+        name: `Client ${ordinal}`,
+        descr: `Description ${ordinal}`,
+        accepted: true,
+        clientGender: 'unknown',
+        requestCategory: 'individual',
+        analyticsReviewRequired: false,
+        analyticsInference: {},
+        psychologist: {
+          _id: id(`psychologist-${ordinal}`),
+          user: { name: `Dr ${ordinal}` },
+        },
+      };
+    });
+    const sessionCountRows = requests.map((request) => ({
+      _id: request._id,
+      linkedSessionCount: 2,
+      invalidSessionDateCount: 0,
+    }));
+    const sessionDateRows = requests.map((request, index) => {
+      const day = String(index + 1).padStart(2, '0');
+
+      return {
+        _id: request._id,
+        firstSessionAt: new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        latestSessionAt: new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        firstTenSessionDates: [
+          new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+          new Date(`2026-02-${day}T00:00:00Z`).getTime(),
+        ],
+      };
+    });
+    const find = jest.fn().mockReturnValue(chain(requests));
     const service = new TherapyRequestAnalyticsService(
       {
         find,
@@ -1305,7 +1411,10 @@ describe('TherapyRequestAnalyticsService', () => {
         distinct: jest.fn(),
       } as any,
       {
-        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        aggregate: jest
+          .fn()
+          .mockReturnValueOnce(aggregateChain(sessionCountRows))
+          .mockReturnValueOnce(aggregateChain(sessionDateRows)),
         countDocuments: jest.fn().mockReturnValue(countChain(0)),
       } as any,
       { find: jest.fn() } as any,
@@ -1316,5 +1425,28 @@ describe('TherapyRequestAnalyticsService', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.subarray(0, 2).toString()).toBe('PK');
     expect(find).toHaveBeenCalledTimes(2);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const psychologistSheet = workbook.getWorksheet('Psychologist KPI scores');
+    expect(psychologistSheet).toBeDefined();
+    const psychologistRows: Array<{
+      group: ExcelJS.CellValue;
+      psychologistName: ExcelJS.CellValue;
+    }> = [];
+    psychologistSheet?.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        return;
+      }
+
+      psychologistRows.push({
+        group: row.getCell(1).value,
+        psychologistName: row.getCell(2).value,
+      });
+    });
+    expect(psychologistRows).toContainEqual({
+      group: 'scored',
+      psychologistName: 'Dr 11',
+    });
+    expect(psychologistRows).toHaveLength(21);
   });
 });

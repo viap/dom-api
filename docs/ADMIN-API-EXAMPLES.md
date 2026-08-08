@@ -2504,6 +2504,7 @@ Response:
 
 Admin/editor. Returns KPI-based psychologist rankings and request-level audit rows. The route name is kept for compatibility.
 The KPI session aggregation uses MongoDB `$firstN`; production MongoDB must be 5.2+.
+Newer responses include additive `allPsychologists` with every specialist produced by the KPI aggregation, including `insufficient_data` rows. Legacy `topPsychologists`, `bottomPsychologists`, and `insufficientDataPsychologists` remain for independent deployment compatibility; older API responses may omit `allPsychologists`.
 
 Response:
 
