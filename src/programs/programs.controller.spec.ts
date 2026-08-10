@@ -14,10 +14,15 @@ describe('ProgramsController', () => {
       findAllAdmin: jest.fn(),
       findOne: jest.fn(),
       findManyByIds: jest.fn(),
+      findManyAdminByIds: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as ProgramsService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
   it('should mark public reads as public', () => {
@@ -35,6 +40,12 @@ describe('ProgramsController', () => {
   it('should restrict writes to admin/editor', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, ProgramsController.prototype.findAllAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        ProgramsController.prototype.findManyAdmin,
+      ),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, ProgramsController.prototype.create),

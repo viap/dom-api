@@ -9,6 +9,11 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
+import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
+import {
+  prepareBulkIds,
+  toBulkResolveResponse,
+} from '@/common/utils/bulk-resolve';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { LocationQueryParams } from './types/query-params.interface';
@@ -63,6 +68,28 @@ export class LocationsService {
     }
 
     return location as LocationDocument;
+  }
+
+  async findManyByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<LocationDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const locations = await this.locationModel
+      .find({ _id: { $in: preparedIds.validIds } })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: locations as LocationDocument[],
+      getId: (location) => location._id.toString(),
+    });
   }
 
   async update(

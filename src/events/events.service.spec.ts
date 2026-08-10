@@ -259,6 +259,35 @@ describe('EventsService', () => {
     });
   });
 
+  it('bulk resolves draft admin events without public status filtering', async () => {
+    const firstEvent = {
+      ...mockEvent,
+      _id: '507f1f77bcf86cd799439051',
+      status: 'draft',
+      title: 'Draft Event',
+    };
+    const secondEvent = {
+      ...mockEvent,
+      _id: '507f1f77bcf86cd799439052',
+      status: 'cancelled',
+      title: 'Cancelled Event',
+    };
+    const findQuery = createFindQueryMock([secondEvent, firstEvent]);
+    mockEventModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findManyAdminByIds([
+      firstEvent._id,
+      'invalid',
+      secondEvent._id,
+    ]);
+
+    expect(mockEventModel.find).toHaveBeenCalledWith({
+      _id: { $in: [firstEvent._id, secondEvent._id] },
+    });
+    expect(mockMediaService.findManyByIds).not.toHaveBeenCalled();
+    expect(result).toEqual({ items: [firstEvent, secondEvent] });
+  });
+
   it('filters public events by speaker or organizer personId', async () => {
     const findQuery = createFindQueryMock([mockEvent]);
     mockEventModel.find.mockReturnValue(findQuery);

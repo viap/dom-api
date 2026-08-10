@@ -182,6 +182,34 @@ export class PagesService {
     });
   }
 
+  async findManyAdminByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PageDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const pages = await this.pageModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+      })
+      .lean()
+      .exec();
+
+    const normalizedPages = pages.map((page) =>
+      this.normalizePageTitleVisibility(page as Record<string, unknown>),
+    );
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: normalizedPages,
+      getId: (page) => page._id.toString(),
+    });
+  }
+
   async findOneByDomainSlugAndPageSlug(
     domainSlug: string,
     pageSlug: string,

@@ -40,6 +40,14 @@ export class EventsController {
     return this.eventsService.findAll(query);
   }
 
+  @Post('admin/bulk')
+  @Roles(Role.Admin, Role.Editor)
+  findManyAdmin(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+  ) {
+    return this.eventsService.findManyAdminByIds(body.ids);
+  }
+
   @Get('domain/:domainSlug/:eventSlug')
   @Public()
   findOneByDomainSlugAndEventSlug(

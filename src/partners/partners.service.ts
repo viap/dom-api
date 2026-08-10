@@ -129,6 +129,28 @@ export class PartnersService {
     });
   }
 
+  async findManyAdminByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PartnerDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const partners = await this.partnerModel
+      .find({ _id: { $in: preparedIds.validIds } })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: partners as PartnerDocument[],
+      getId: (partner) => partner._id.toString(),
+    });
+  }
+
   async findAllAdmin(
     queryParams: PartnerQueryParams = {},
   ): Promise<PartnerDocument[]> {

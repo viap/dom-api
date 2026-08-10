@@ -12,6 +12,7 @@ describe('PartnersController', () => {
     controller = new PartnersController({
       findAll: jest.fn(),
       findManyByIds: jest.fn(),
+      findManyAdminByIds: jest.fn(),
       findOne: jest.fn(),
       findOneBySlug: jest.fn(),
       findAllAdmin: jest.fn(),
@@ -20,6 +21,10 @@ describe('PartnersController', () => {
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as PartnersService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
   it('should mark public reads as public', () => {
@@ -46,6 +51,12 @@ describe('PartnersController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PartnersController.prototype.findOneAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        PartnersController.prototype.findManyAdmin,
+      ),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PartnersController.prototype.create),

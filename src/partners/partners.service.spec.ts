@@ -152,6 +152,32 @@ describe('PartnersService', () => {
     expect(partner.contacts).toBeDefined();
   });
 
+  it('should bulk resolve unpublished admin partners without public filters', async () => {
+    const firstId = '507f1f77bcf86cd799439041';
+    const secondId = '507f1f77bcf86cd799439042';
+    const firstPartner = {
+      _id: firstId,
+      title: 'Draft Partner',
+      isPublished: false,
+      contacts: [{ network: 'telegram', username: '@draft' }],
+    };
+    const secondPartner = {
+      _id: secondId,
+      title: 'Published Partner',
+      isPublished: true,
+      contacts: [{ network: 'telegram', username: '@published' }],
+    };
+    mockAdminListExec.mockResolvedValueOnce([secondPartner, firstPartner]);
+
+    const result = await service.findManyAdminByIds([firstId, secondId]);
+
+    expect(mockPartnerModel.find).toHaveBeenCalledWith({
+      _id: { $in: [firstId, secondId] },
+    });
+    expect(mockPublicListChain.select).not.toHaveBeenCalled();
+    expect(result).toEqual({ items: [firstPartner, secondPartner] });
+  });
+
   it('should reject duplicate slug on create', async () => {
     mockFindOneExec.mockResolvedValue({
       _id: '507f1f77bcf86cd799439042',
