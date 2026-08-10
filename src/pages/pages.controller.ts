@@ -90,6 +90,14 @@ export class PagesController {
     return this.pagesService.findAdminOne(id);
   }
 
+  @Post('admin/bulk')
+  @Roles(Role.Admin, Role.Editor)
+  findManyAdmin(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+  ) {
+    return this.pagesService.findManyAdminByIds(body.ids);
+  }
+
   @Get('domain/:domainSlug')
   @Public()
   findAllByDomainSlug(

@@ -55,6 +55,14 @@ export class PeopleController {
     return this.peopleService.findOneAdmin(id);
   }
 
+  @Post('admin/bulk')
+  @Roles(Role.Admin, Role.Editor)
+  findManyAdmin(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+  ) {
+    return this.peopleService.findManyAdminByIds(body.ids);
+  }
+
   // Keep this specific slug route above the ObjectId route below.
   @Get('slug/:slug')
   @Public()

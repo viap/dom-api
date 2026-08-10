@@ -151,6 +151,29 @@ export class PeopleService {
     });
   }
 
+  async findManyAdminByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<PersonDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const people = await this.personModel
+      .find({ _id: { $in: preparedIds.validIds } })
+      .populate('workLocationId')
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: people as PersonDocument[],
+      getId: (person) => person._id.toString(),
+    });
+  }
+
   async findOneBySlug(slug: string): Promise<PersonDocument> {
     const person = await this.personModel
       .findOne({ slug, isPublished: true })

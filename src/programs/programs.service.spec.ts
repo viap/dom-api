@@ -160,6 +160,34 @@ describe('ProgramsService', () => {
     expect(result).toEqual([mockProgram]);
   });
 
+  it('should bulk resolve draft admin programs without public status filtering', async () => {
+    const firstProgram = {
+      ...mockProgram,
+      _id: '507f1f77bcf86cd799439031',
+      status: ProgramStatus.Draft,
+      title: 'Draft Program',
+    };
+    const secondProgram = {
+      ...mockProgram,
+      _id: '507f1f77bcf86cd799439032',
+      status: ProgramStatus.Cancelled,
+      title: 'Cancelled Program',
+    };
+    const findQuery = createFindQueryMock([secondProgram, firstProgram]);
+    mockProgramModel.find.mockReturnValue(findQuery);
+
+    const result = await service.findManyAdminByIds([
+      firstProgram._id,
+      'invalid',
+      secondProgram._id,
+    ]);
+
+    expect(mockProgramModel.find).toHaveBeenCalledWith({
+      _id: { $in: [firstProgram._id, secondProgram._id] },
+    });
+    expect(result).toEqual({ items: [firstProgram, secondProgram] });
+  });
+
   it('should reject duplicate slug within the same domain', async () => {
     mockProgramModel.findOne.mockResolvedValue(mockProgram);
 

@@ -12,6 +12,7 @@ describe('PeopleController', () => {
     controller = new PeopleController({
       findAll: jest.fn(),
       findManyByIds: jest.fn(),
+      findManyAdminByIds: jest.fn(),
       findAllAdmin: jest.fn(),
       findOneAdmin: jest.fn(),
       findOneBySlug: jest.fn(),
@@ -20,6 +21,10 @@ describe('PeopleController', () => {
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as PeopleService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
   it('should mark public reads as public', () => {
@@ -46,6 +51,9 @@ describe('PeopleController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PeopleController.prototype.findOneAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, PeopleController.prototype.findManyAdmin),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PeopleController.prototype.create),

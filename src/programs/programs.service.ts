@@ -137,6 +137,30 @@ export class ProgramsService {
     });
   }
 
+  async findManyAdminByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<ProgramDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const programs = await this.programModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+      })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: programs as ProgramDocument[],
+      getId: (program) => program._id.toString(),
+    });
+  }
+
   async update(
     id: string,
     updateProgramDto: UpdateProgramDto,

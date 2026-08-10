@@ -559,6 +559,45 @@ describe('PagesService', () => {
     );
   });
 
+  it('should bulk resolve draft admin pages without published filtering', async () => {
+    const draftPage = {
+      ...mockPage,
+      _id: '507f1f77bcf86cd799439121',
+      status: PageStatus.Draft,
+      isTitleVisible: undefined,
+    };
+    const publishedPage = {
+      ...mockGlobalPage,
+      _id: '507f1f77bcf86cd799439122',
+      status: PageStatus.Published,
+    };
+    mockPageModel.find.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue([publishedPage, draftPage]),
+      }),
+    });
+
+    const result = await service.findManyAdminByIds([
+      draftPage._id,
+      'invalid',
+      publishedPage._id,
+    ]);
+
+    expect(mockPageModel.find).toHaveBeenCalledWith({
+      _id: { $in: [draftPage._id, publishedPage._id] },
+    });
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          _id: draftPage._id,
+          status: PageStatus.Draft,
+          isTitleVisible: true,
+        }),
+        publishedPage,
+      ],
+    });
+  });
+
   it('should return a published global page by slug', async () => {
     mockPageModel.findOne.mockReturnValue({
       lean: jest.fn().mockReturnValue({

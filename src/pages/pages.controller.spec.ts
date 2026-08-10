@@ -13,6 +13,7 @@ describe('PagesController', () => {
     controller = new PagesController({
       findAll: jest.fn(),
       findManyByIds: jest.fn(),
+      findManyAdminByIds: jest.fn(),
       findAllGlobal: jest.fn(),
       findAllAdmin: jest.fn(),
       findAllByDomainIdAdmin: jest.fn(),
@@ -99,6 +100,9 @@ describe('PagesController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PagesController.prototype.findAdminOne),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, PagesController.prototype.findManyAdmin),
     ).toEqual([Role.Admin, Role.Editor]);
   });
 

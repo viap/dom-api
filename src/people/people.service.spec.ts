@@ -161,6 +161,33 @@ describe('PeopleService', () => {
     expect(result).toEqual(person);
   });
 
+  it('should bulk resolve unpublished admin people in input order', async () => {
+    const firstId = '507f1f77bcf86cd799439032';
+    const secondId = '507f1f77bcf86cd799439033';
+    const firstPerson = {
+      _id: firstId,
+      fullName: 'Draft Person',
+      isPublished: false,
+    };
+    const secondPerson = {
+      _id: secondId,
+      fullName: 'Published Person',
+      isPublished: true,
+    };
+    mockQueryExec.mockResolvedValueOnce([secondPerson, firstPerson]);
+
+    const result = await service.findManyAdminByIds([
+      firstId,
+      'not-an-id',
+      secondId,
+    ]);
+
+    expect(mockPersonModel.find).toHaveBeenCalledWith({
+      _id: { $in: [firstId, secondId] },
+    });
+    expect(result).toEqual({ items: [firstPerson, secondPerson] });
+  });
+
   it('should throw NotFoundException for invalid admin read id', async () => {
     await expect(service.findOneAdmin('invalid-id')).rejects.toThrow(
       NotFoundException,

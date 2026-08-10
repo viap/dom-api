@@ -242,6 +242,30 @@ export class EventsService {
     });
   }
 
+  async findManyAdminByIds(
+    ids: string[],
+  ): Promise<BulkResolveResponse<DomainEventDocument>> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) {
+      return {
+        items: [],
+      };
+    }
+
+    const events = await this.eventModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+      })
+      .lean()
+      .exec();
+
+    return toBulkResolveResponse({
+      preparedIds,
+      items: events as DomainEventDocument[],
+      getId: (event) => event._id.toString(),
+    });
+  }
+
   async update(
     id: string,
     updateEventDto: UpdateEventDto,

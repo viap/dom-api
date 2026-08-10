@@ -49,6 +49,14 @@ export class ProgramsController {
     return this.programsService.findAllAdmin(query);
   }
 
+  @Post('admin/bulk')
+  @Roles(Role.Admin, Role.Editor)
+  findManyAdmin(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+  ) {
+    return this.programsService.findManyAdminByIds(body.ids);
+  }
+
   @Get(':id')
   @Public()
   findOne(@Param('id') id: string) {

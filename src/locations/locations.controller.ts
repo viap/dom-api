@@ -10,6 +10,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
+import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
@@ -31,6 +33,12 @@ export class LocationsController {
     query: LocationQueryParams,
   ) {
     return this.locationsService.findAll(query);
+  }
+
+  @Post('bulk')
+  @Roles(Role.Admin, Role.Editor)
+  findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
+    return this.locationsService.findManyByIds(body.ids);
   }
 
   @Get(':id')

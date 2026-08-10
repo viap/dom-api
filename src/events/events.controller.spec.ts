@@ -14,10 +14,15 @@ describe('EventsController', () => {
       findOne: jest.fn(),
       findOneByDomainSlugAndEventSlug: jest.fn(),
       findManyByIds: jest.fn(),
+      findManyAdminByIds: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as EventsService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
   it('should mark public reads as public', () => {
@@ -39,6 +44,9 @@ describe('EventsController', () => {
   });
 
   it('should restrict writes to admin/editor', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, EventsController.prototype.findManyAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, EventsController.prototype.create),
     ).toEqual([Role.Admin, Role.Editor]);
