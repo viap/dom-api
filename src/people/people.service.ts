@@ -312,6 +312,10 @@ export class PeopleService {
       delete createData.title;
     }
 
+    if (createData.intro === null) {
+      delete createData.intro;
+    }
+
     if (createData.workLocationId === null) {
       delete createData.workLocationId;
     }
@@ -328,6 +332,11 @@ export class PeopleService {
     if (updatePersonDto.title === null) {
       delete updateData.title;
       unsetData.title = '';
+    }
+
+    if (updatePersonDto.intro === null) {
+      delete updateData.intro;
+      unsetData.intro = '';
     }
 
     if (updatePersonDto.workLocationId === null) {

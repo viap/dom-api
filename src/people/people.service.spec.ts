@@ -100,6 +100,20 @@ describe('PeopleService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('should create a person with intro copy', async () => {
+    const result = await service.create({
+      slug: 'john-doe',
+      fullName: 'John Doe',
+      intro: 'Short website intro',
+    });
+
+    expect(result).toEqual({
+      slug: 'john-doe',
+      fullName: 'John Doe',
+      intro: 'Short website intro',
+    });
+  });
+
   it('should validate refs before checking slug uniqueness on create', async () => {
     mockMediaService.existsPublished.mockResolvedValue(false);
 
@@ -184,6 +198,32 @@ describe('PeopleService', () => {
 
     expect(mockPersonModel.find).toHaveBeenCalledWith({
       _id: { $in: [firstId, secondId] },
+    });
+    expect(result).toEqual({ items: [firstPerson, secondPerson] });
+  });
+
+  it('should bulk resolve public people with intro copy', async () => {
+    const firstId = '507f1f77bcf86cd799439032';
+    const secondId = '507f1f77bcf86cd799439033';
+    const firstPerson = {
+      _id: firstId,
+      fullName: 'First Person',
+      intro: 'First intro',
+      isPublished: true,
+    };
+    const secondPerson = {
+      _id: secondId,
+      fullName: 'Second Person',
+      intro: 'Second intro',
+      isPublished: true,
+    };
+    mockQueryExec.mockResolvedValueOnce([secondPerson, firstPerson]);
+
+    const result = await service.findManyByIds([firstId, secondId]);
+
+    expect(mockPersonModel.find).toHaveBeenCalledWith({
+      _id: { $in: [firstId, secondId] },
+      isPublished: true,
     });
     expect(result).toEqual({ items: [firstPerson, secondPerson] });
   });
@@ -277,6 +317,32 @@ describe('PeopleService', () => {
     expect(result).toEqual(updatedPerson);
   });
 
+  it('should update intro copy', async () => {
+    const updatedPerson = {
+      _id: '507f1f77bcf86cd799439032',
+      slug: 'john-doe',
+      fullName: 'John Doe',
+      intro: 'Updated intro',
+    };
+
+    mockPersonModel.findByIdAndUpdate.mockReturnValue(
+      createLeanExecChain(updatedPerson),
+    );
+
+    const result = await service.update('507f1f77bcf86cd799439032', {
+      intro: 'Updated intro',
+    });
+
+    expect(mockPersonModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439032',
+      {
+        intro: 'Updated intro',
+      },
+      { new: true },
+    );
+    expect(result).toEqual(updatedPerson);
+  });
+
   it('should skip slug prefetch when patch payload has no slug', async () => {
     const updatedPerson = {
       _id: '507f1f77bcf86cd799439032',
@@ -311,6 +377,7 @@ describe('PeopleService', () => {
 
     const result = await service.update('507f1f77bcf86cd799439032', {
       title: null,
+      intro: null,
       workLocationId: null,
     });
 
@@ -320,6 +387,7 @@ describe('PeopleService', () => {
       {
         $unset: {
           title: '',
+          intro: '',
           workLocationId: '',
         },
       },
@@ -362,6 +430,21 @@ describe('PeopleService', () => {
       slug: 'john-doe',
       isPublished: true,
     });
+    expect(result).toEqual(person);
+  });
+
+  it('should return intro from public read by id', async () => {
+    const person = {
+      _id: '507f1f77bcf86cd799439032',
+      slug: 'john-doe',
+      fullName: 'John Doe',
+      intro: 'Public intro',
+      isPublished: true,
+    };
+    mockPersonModel.findOne.mockReturnValue(createLeanExecChain(person));
+
+    const result = await service.findOne('507f1f77bcf86cd799439032');
+
     expect(result).toEqual(person);
   });
 

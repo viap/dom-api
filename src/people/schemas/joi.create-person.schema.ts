@@ -63,6 +63,10 @@ export const createPersonSchema = Joi.object({
 
   title: Joi.string().trim().max(150).allow('', null).optional(),
 
+  intro: Joi.string().trim().max(300).allow('', null).optional().messages({
+    'string.max': 'Intro cannot exceed 300 characters',
+  }),
+
   roles: Joi.array()
     .items(
       Joi.string()

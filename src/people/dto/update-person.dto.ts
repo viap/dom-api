@@ -15,6 +15,7 @@ export interface UpdatePersonDto {
   slug?: string;
   fullName?: string;
   title?: string | null;
+  intro?: string | null;
   roles?: PersonRole[];
   bio?: string;
   education?: string;
