@@ -196,6 +196,7 @@ describe('Person role Joi validation', () => {
       slug: 'jane-doe',
       fullName: 'Jane Doe',
       title: 'Clinical psychologist',
+      intro: 'Short website intro',
       workLocationId: '660900000000000000000099',
       specializations: ['Family therapy'],
       educationItems: [
@@ -221,6 +222,7 @@ describe('Person role Joi validation', () => {
     expect(
       updatePersonSchema.validate({
         title: payload.title,
+        intro: payload.intro,
         workLocationId: payload.workLocationId,
         specializations: payload.specializations,
         educationItems: payload.educationItems,
@@ -236,6 +238,7 @@ describe('Person role Joi validation', () => {
         slug: 'jane-doe',
         fullName: 'Jane Doe',
         title: null,
+        intro: null,
         workLocationId: null,
       }).error,
     ).toBeUndefined();
@@ -243,9 +246,26 @@ describe('Person role Joi validation', () => {
     expect(
       updatePersonSchema.validate({
         title: null,
+        intro: null,
         workLocationId: null,
       }).error,
     ).toBeUndefined();
+  });
+
+  it('rejects over-limit intro copy', () => {
+    expect(
+      createPersonSchema.validate({
+        slug: 'jane-doe',
+        fullName: 'Jane Doe',
+        intro: 'a'.repeat(301),
+      }).error,
+    ).toBeDefined();
+
+    expect(
+      updatePersonSchema.validate({
+        intro: 'a'.repeat(301),
+      }).error,
+    ).toBeDefined();
   });
 
   it('rejects invalid specialist profile fields', () => {

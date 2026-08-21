@@ -29,6 +29,9 @@ export class Person {
   @Prop({ trim: true, maxlength: 150 })
   title?: string;
 
+  @Prop({ trim: true, maxlength: 300 })
+  intro?: string;
+
   @Prop({ type: [String], enum: Object.values(PersonRole), default: [] })
   roles: PersonRole[];
 
