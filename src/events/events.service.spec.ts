@@ -47,6 +47,19 @@ describe('EventsService', () => {
     isPublished: true,
   };
 
+  const mockLocation = {
+    _id: '507f1f77bcf86cd799439112',
+    title: 'DOM Hall',
+    address: 'Rustaveli 10',
+    city: 'Tbilisi',
+    country: 'Georgia',
+    geo: { lat: 41.7151, lng: 44.8271 },
+    notes: 'Internal venue notes',
+    schemaVersion: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   const mockSave = jest.fn().mockResolvedValue(mockEvent);
   const mockInstance = { save: mockSave };
   const mockEventModel = Object.assign(
@@ -66,7 +79,10 @@ describe('EventsService', () => {
     getActiveBySlug: jest.fn(),
     findManyByIds: jest.fn(),
   };
-  const mockLocationsService = { exists: jest.fn() };
+  const mockLocationsService = {
+    exists: jest.fn(),
+    findManyByIds: jest.fn(),
+  };
   const mockMediaService = {
     existsPublished: jest.fn(),
     existingPublishedIds: jest.fn(),
@@ -92,6 +108,16 @@ describe('EventsService', () => {
       sort,
       skip,
       limit,
+      lean,
+      exec,
+    };
+  };
+
+  const createFindOneQueryMock = (result: unknown) => {
+    const exec = jest.fn().mockResolvedValue(result);
+    const lean = jest.fn().mockReturnValue({ exec });
+
+    return {
       lean,
       exec,
     };
@@ -129,6 +155,7 @@ describe('EventsService', () => {
       items: [{ _id: mockEvent.domainId, slug: 'psych-center' }],
     });
     mockLocationsService.exists.mockResolvedValue(true);
+    mockLocationsService.findManyByIds.mockResolvedValue({ items: [] });
     mockMediaService.existsPublished.mockResolvedValue(true);
     mockMediaService.findManyByIds.mockResolvedValue({ items: [] });
     mockPeopleService.exists.mockResolvedValue(true);
@@ -161,6 +188,7 @@ describe('EventsService', () => {
     expect(findQuery.skip).toHaveBeenCalledWith(0);
     expect(findQuery.limit).toHaveBeenCalledWith(20);
     expect(mockMediaService.findManyByIds).not.toHaveBeenCalled();
+    expect(mockLocationsService.findManyByIds).not.toHaveBeenCalled();
     expect(result).toEqual([
       { ...mockEvent, domainSlug: 'psych-center', registeredCount: 0 },
     ]);
@@ -188,6 +216,65 @@ describe('EventsService', () => {
         registeredCount: 0,
       },
     ]);
+  });
+
+  it('populates safe public event location in public lists', async () => {
+    const eventWithLocation = {
+      ...mockEvent,
+      locationId: mockLocation._id,
+    };
+    const findQuery = createFindQueryMock([eventWithLocation]);
+    mockEventModel.find.mockReturnValue(findQuery);
+    mockLocationsService.findManyByIds.mockResolvedValue({
+      items: [mockLocation],
+    });
+
+    const result = await service.findAll({});
+    const event = result[0] as unknown as Record<string, unknown>;
+
+    expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+      mockLocation._id,
+    ]);
+    expect(event.locationId).toEqual({
+      _id: mockLocation._id,
+      title: mockLocation.title,
+      address: mockLocation.address,
+      city: mockLocation.city,
+      country: mockLocation.country,
+      geo: mockLocation.geo,
+    });
+    expect(event.locationId).not.toHaveProperty('notes');
+  });
+
+  it('omits sparse optional public event location fields without exposing notes', async () => {
+    const sparseLocation = {
+      _id: mockLocation._id,
+      title: mockLocation.title,
+      address: mockLocation.address,
+      notes: 'Internal sparse notes',
+    };
+    const eventWithLocation = {
+      ...mockEvent,
+      locationId: mockLocation._id,
+    };
+    const findQuery = createFindQueryMock([eventWithLocation]);
+    mockEventModel.find.mockReturnValue(findQuery);
+    mockLocationsService.findManyByIds.mockResolvedValue({
+      items: [sparseLocation],
+    });
+
+    const result = await service.findAll({});
+    const event = result[0] as unknown as Record<string, unknown>;
+
+    expect(event.locationId).toEqual({
+      _id: mockLocation._id,
+      title: mockLocation.title,
+      address: mockLocation.address,
+    });
+    expect(event.locationId).not.toHaveProperty('city');
+    expect(event.locationId).not.toHaveProperty('country');
+    expect(event.locationId).not.toHaveProperty('geo');
+    expect(event.locationId).not.toHaveProperty('notes');
   });
 
   it('resolves domain slugs for events with ObjectId domain ids', async () => {
@@ -234,6 +321,63 @@ describe('EventsService', () => {
         registeredCount: 0,
       },
     ]);
+  });
+
+  it('populates safe public event location in public detail responses', async () => {
+    const eventWithLocation = {
+      ...mockEvent,
+      locationId: mockLocation._id,
+    };
+    mockEventModel.findOne.mockReturnValue(
+      createFindOneQueryMock(eventWithLocation),
+    );
+    mockLocationsService.findManyByIds.mockResolvedValue({
+      items: [mockLocation],
+    });
+
+    const result = await service.findOne(mockEvent._id);
+    const event = result as unknown as Record<string, unknown>;
+
+    expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+      mockLocation._id,
+    ]);
+    expect(event.locationId).toEqual({
+      _id: mockLocation._id,
+      title: mockLocation.title,
+      address: mockLocation.address,
+      city: mockLocation.city,
+      country: mockLocation.country,
+      geo: mockLocation.geo,
+    });
+    expect(event.locationId).not.toHaveProperty('notes');
+  });
+
+  it('populates safe public event location in public bulk responses', async () => {
+    const eventWithLocation = {
+      ...mockEvent,
+      locationId: mockLocation._id,
+    };
+    const findQuery = createFindQueryMock([eventWithLocation]);
+    mockEventModel.find.mockReturnValue(findQuery);
+    mockLocationsService.findManyByIds.mockResolvedValue({
+      items: [mockLocation],
+    });
+
+    const result = await service.findManyByIds([mockEvent._id]);
+    const event = result.items[0] as unknown as Record<string, unknown>;
+
+    expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+      mockLocation._id,
+    ]);
+    expect(event.locationId).toEqual({
+      _id: mockLocation._id,
+      title: mockLocation.title,
+      address: mockLocation.address,
+      city: mockLocation.city,
+      country: mockLocation.country,
+      geo: mockLocation.geo,
+    });
+    expect(event.locationId).not.toHaveProperty('notes');
   });
 
   it('with domainId validates domain and filters by that domain', async () => {
@@ -467,6 +611,41 @@ describe('EventsService', () => {
         },
       });
       expect(result.title).toBe(mockEvent.title);
+    });
+
+    it('populates safe public event location by domain slug and event slug', async () => {
+      const domain = { _id: mockEvent.domainId, slug: 'academy' };
+      const eventWithLocation = {
+        ...mockEvent,
+        locationId: mockLocation._id,
+      };
+      mockDomainsService.getActiveBySlug.mockResolvedValue(domain);
+      mockPeopleService.findPublishedSummariesByIds.mockResolvedValue([]);
+      mockEventModel.findOne.mockReturnValue(
+        createFindOneQueryMock(eventWithLocation),
+      );
+      mockLocationsService.findManyByIds.mockResolvedValue({
+        items: [mockLocation],
+      });
+
+      const result = await service.findOneByDomainSlugAndEventSlug(
+        'academy',
+        'event',
+      );
+      const event = result as unknown as Record<string, unknown>;
+
+      expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+        mockLocation._id,
+      ]);
+      expect(event.locationId).toEqual({
+        _id: mockLocation._id,
+        title: mockLocation.title,
+        address: mockLocation.address,
+        city: mockLocation.city,
+        country: mockLocation.country,
+        geo: mockLocation.geo,
+      });
+      expect(event.locationId).not.toHaveProperty('notes');
     });
 
     it('throws NotFoundException for draft events', async () => {

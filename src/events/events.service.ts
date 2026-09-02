@@ -27,6 +27,7 @@ import {
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
+import { LocationDocument } from '@/locations/schemas/location.schema';
 import { MediaService } from '@/media/media.service';
 import { MediaDocument } from '@/media/schemas/media.schema';
 import {
@@ -53,6 +54,11 @@ const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Completed,
   EventStatus.Cancelled,
 ];
+
+type PublicEventLocation = Pick<
+  LocationDocument,
+  '_id' | 'title' | 'address' | 'city' | 'country' | 'geo'
+>;
 
 @Injectable()
 export class EventsService {
@@ -121,11 +127,13 @@ export class EventsService {
 
     const eventDocuments = events as DomainEventDocument[];
     const eventIds = eventDocuments.map((event) => event._id.toString());
-    const [domainSlugById, countsMap, mediaById] = await Promise.all([
-      this.resolveDomainSlugsForEvents(eventDocuments),
-      this.countRegistrationsByEventIds(eventIds),
-      this.resolveEventMediaById(eventDocuments),
-    ]);
+    const [domainSlugById, countsMap, mediaById, locationById] =
+      await Promise.all([
+        this.resolveDomainSlugsForEvents(eventDocuments),
+        this.countRegistrationsByEventIds(eventIds),
+        this.resolveEventMediaById(eventDocuments),
+        this.resolveEventLocationsById(eventDocuments),
+      ]);
 
     return Promise.all(
       events.map((event) => {
@@ -138,6 +146,7 @@ export class EventsService {
           countsMap.get(id) ?? 0,
           domainId ? domainSlugById.get(domainId) : undefined,
           mediaById,
+          locationById,
         );
       }),
     );
@@ -157,8 +166,10 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    const mediaById = await this.resolveEventMediaById([
-      event as DomainEventDocument,
+    const eventDocuments = [event as DomainEventDocument];
+    const [mediaById, locationById] = await Promise.all([
+      this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
@@ -166,6 +177,7 @@ export class EventsService {
       undefined,
       undefined,
       mediaById,
+      locationById,
     );
   }
 
@@ -187,8 +199,10 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    const mediaById = await this.resolveEventMediaById([
-      event as DomainEventDocument,
+    const eventDocuments = [event as DomainEventDocument];
+    const [mediaById, locationById] = await Promise.all([
+      this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
@@ -196,6 +210,7 @@ export class EventsService {
       undefined,
       undefined,
       mediaById,
+      locationById,
     );
   }
 
@@ -219,9 +234,10 @@ export class EventsService {
 
     const eventDocuments = events as DomainEventDocument[];
     const eventIds = eventDocuments.map((event) => event._id.toString());
-    const [countsMap, mediaById] = await Promise.all([
+    const [countsMap, mediaById, locationById] = await Promise.all([
       this.countRegistrationsByEventIds(eventIds),
       this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     const publicEvents = await Promise.all(
@@ -231,6 +247,7 @@ export class EventsService {
           countsMap.get(event._id.toString()) ?? 0,
           undefined,
           mediaById,
+          locationById,
         ),
       ),
     );
@@ -358,6 +375,7 @@ export class EventsService {
     registeredCount?: number,
     domainSlug?: string,
     mediaById: Map<string, MediaDocument> = new Map(),
+    locationById: Map<string, PublicEventLocation> = new Map(),
   ): Promise<DomainEventDocument> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
@@ -380,10 +398,13 @@ export class EventsService {
 
     const mediaId = this.toIdString(eventObj.mediaId);
     const media = mediaId ? mediaById.get(mediaId) : undefined;
+    const locationId = this.toIdString(eventObj.locationId);
+    const location = locationId ? locationById.get(locationId) : undefined;
 
     return {
       ...eventObj,
       ...(media ? { mediaId: media } : {}),
+      ...(location ? { locationId: location } : {}),
       ...(domainSlug ? { domainSlug } : {}),
       blocks: publicBlocks,
       registeredCount: count,
@@ -469,6 +490,49 @@ export class EventsService {
     return new Map(
       media.items.map((item) => [item._id.toString(), item as MediaDocument]),
     );
+  }
+
+  private async resolveEventLocationsById(
+    events: DomainEventDocument[],
+  ): Promise<Map<string, PublicEventLocation>> {
+    const locationIds = Array.from(
+      new Set(
+        events
+          .map((event) =>
+            this.toIdString(
+              (event as unknown as Record<string, unknown>).locationId,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    if (!locationIds.length) {
+      return new Map();
+    }
+
+    const locations = await this.locationsService.findManyByIds(locationIds);
+    return new Map(
+      locations.items.map((location) => [
+        location._id.toString(),
+        this.toPublicEventLocation(location),
+      ]),
+    );
+  }
+
+  private toPublicEventLocation(
+    location: LocationDocument,
+  ): PublicEventLocation {
+    const { _id, title, address, city, country, geo } = location;
+
+    return {
+      _id,
+      title,
+      address,
+      ...(city ? { city } : {}),
+      ...(country ? { country } : {}),
+      ...(geo ? { geo } : {}),
+    };
   }
 
   private async countRegistrationsByEventIds(
