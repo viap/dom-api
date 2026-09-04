@@ -504,6 +504,278 @@ describe('EventsService', () => {
     expect(result.description).toBe('');
   });
 
+  it('derives compatibility timing when creating with a schedule', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await service.create({
+      domainId: mockEvent.domainId,
+      type: 'seminar' as any,
+      title: 'Scheduled event',
+      slug: 'scheduled-event',
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+          { date: '2026-04-22', startTime: '15:00', endTime: '17:00' },
+        ],
+      },
+    });
+
+    expect(mockEventModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: {
+          timezone: 'Asia/Tbilisi',
+          days: [
+            { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+            { date: '2026-04-22', startTime: '15:00', endTime: '17:00' },
+          ],
+        },
+        startAt: '2026-04-20T10:00:00.000Z',
+        endAt: '2026-04-22T13:00:00.000Z',
+      }),
+    );
+  });
+
+  it('rejects legacy PATCH requests that update only one timing field', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockEvent),
+      }),
+    });
+
+    await expect(
+      service.update(mockEvent._id, {
+        startAt: '2026-04-20T12:00:00.000Z',
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockEventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('allows paired legacy timing PATCH requests for legacy-only events', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockEvent,
+          startAt: '2026-04-20T12:00:00.000Z',
+          endAt: '2026-04-20T13:00:00.000Z',
+        }),
+      }),
+    });
+
+    await service.update(mockEvent._id, {
+      startAt: '2026-04-20T12:00:00.000Z',
+      endAt: '2026-04-20T13:00:00.000Z',
+    });
+
+    expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockEvent._id,
+      {
+        startAt: '2026-04-20T12:00:00.000Z',
+        endAt: '2026-04-20T13:00:00.000Z',
+      },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('rejects legacy timing PATCH requests for scheduled events', async () => {
+    const scheduledEvent = {
+      ...mockEvent,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+        ],
+      },
+    };
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(scheduledEvent),
+      }),
+    });
+
+    await expect(
+      service.update(mockEvent._id, {
+        startAt: '2026-04-20T12:00:00.000Z',
+        endAt: '2026-04-20T13:00:00.000Z',
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockEventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('allows non-timing PATCH requests for scheduled events', async () => {
+    const scheduledEvent = {
+      ...mockEvent,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+        ],
+      },
+    };
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(scheduledEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...scheduledEvent,
+          description: 'Updated',
+        }),
+      }),
+    });
+
+    await service.update(mockEvent._id, {
+      description: 'Updated',
+    });
+
+    expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockEvent._id,
+      { description: 'Updated' },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('derives compatibility timing when patching with a schedule', async () => {
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockEvent,
+          schedule: {
+            timezone: 'Asia/Tbilisi',
+            days: [
+              {
+                date: '2026-04-20',
+                startTime: '14:00',
+                endTime: '16:00',
+              },
+              {
+                date: '2026-04-22',
+                startTime: '15:00',
+                endTime: '17:00',
+              },
+            ],
+          },
+          startAt: '2026-04-20T10:00:00.000Z',
+          endAt: '2026-04-22T13:00:00.000Z',
+        }),
+      }),
+    });
+
+    await service.update(mockEvent._id, {
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+          { date: '2026-04-22', startTime: '15:00', endTime: '17:00' },
+        ],
+      },
+    });
+
+    expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockEvent._id,
+      {
+        schedule: {
+          timezone: 'Asia/Tbilisi',
+          days: [
+            { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+            { date: '2026-04-22', startTime: '15:00', endTime: '17:00' },
+          ],
+        },
+        startAt: '2026-04-20T10:00:00.000Z',
+        endAt: '2026-04-22T13:00:00.000Z',
+      },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('rejects deadline-only PATCH requests after a scheduled event start', async () => {
+    const scheduledEvent = {
+      ...mockEvent,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
+        ],
+      },
+    };
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(scheduledEvent),
+      }),
+    });
+
+    await expect(
+      service.update(mockEvent._id, {
+        registration: {
+          deadline: '2026-04-20T10:00:01.000Z',
+        },
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockEventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('uses the stored event envelope for registration-only PATCH on scheduled events', async () => {
+    const scheduledEvent = {
+      ...mockEvent,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [
+          { date: '2026-04-20', startTime: '16:00', endTime: '14:00' },
+        ],
+      },
+    };
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(scheduledEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...scheduledEvent,
+          registration: {
+            deadline: '2026-04-20T10:00:00.000Z',
+          },
+        }),
+      }),
+    });
+
+    await service.update(mockEvent._id, {
+      registration: {
+        deadline: '2026-04-20T10:00:00.000Z',
+      },
+    });
+
+    expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockEvent._id,
+      {
+        registration: {
+          deadline: '2026-04-20T10:00:00.000Z',
+        },
+      },
+      { new: true, runValidators: true },
+    );
+  });
+
   it('should reject duplicate slug within the same domain', async () => {
     mockEventModel.findOne.mockResolvedValue(mockEvent);
 

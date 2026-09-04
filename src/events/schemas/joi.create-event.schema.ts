@@ -7,6 +7,11 @@ import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { pageBlocksSchema } from '@/pages/schemas/joi.page-block.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
+import {
+  EventScheduleValidationError,
+  normalizeEventSchedule,
+} from '../utils/event-schedule';
+import { joiEventScheduleSchema } from './joi.event-schedule.schema';
 
 export const createEventSchema = Joi.object({
   domainId: joiObjectId.required(),
@@ -26,8 +31,9 @@ export const createEventSchema = Joi.object({
 
   slug: joiSlugSchema.required(),
 
-  startAt: joiUtcIsoDateTime.required(),
-  endAt: joiUtcIsoDateTime.required(),
+  startAt: joiUtcIsoDateTime.optional(),
+  endAt: joiUtcIsoDateTime.optional(),
+  schedule: joiEventScheduleSchema.optional(),
 
   locationId: joiObjectId.optional(),
   mediaId: joiObjectId.optional(),
@@ -69,10 +75,32 @@ export const createEventSchema = Joi.object({
   blocks: pageBlocksSchema.optional(),
 })
   .custom((value, helpers) => {
-    const startAt = new Date(value.startAt).getTime();
+    const hasSchedule = value.schedule !== undefined;
+    const hasStartAt = value.startAt !== undefined;
+    const hasEndAt = value.endAt !== undefined;
+    let activeStartAt = value.startAt;
+
+    if (hasSchedule) {
+      if (hasStartAt || hasEndAt) {
+        return helpers.error('any.invalid');
+      }
+
+      try {
+        activeStartAt = normalizeEventSchedule(value.schedule).startAt;
+      } catch (error) {
+        if (error instanceof EventScheduleValidationError) {
+          return helpers.error('any.invalid');
+        }
+        throw error;
+      }
+    } else if (!hasStartAt || !hasEndAt) {
+      return helpers.error('any.invalid');
+    }
+
+    const startAt = new Date(activeStartAt).getTime();
     const endAt = new Date(value.endAt).getTime();
 
-    if (endAt <= startAt) {
+    if (!hasSchedule && endAt <= startAt) {
       return helpers.error('any.invalid');
     }
 
