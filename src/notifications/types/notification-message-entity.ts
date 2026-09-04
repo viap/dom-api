@@ -10,4 +10,3 @@ export type NotificationMessageEntity =
       length: number;
       url: string;
     };
-

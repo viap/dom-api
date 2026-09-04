@@ -2,6 +2,7 @@ import { Price } from '@/common/schemas/price.schema';
 import { PageBlock } from '@/pages/types/page-block.interface';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
+import { EventSchedule } from '../types/event-schedule.interface';
 
 export interface UpdateEventDto {
   domainId?: string;
@@ -12,6 +13,7 @@ export interface UpdateEventDto {
   slug?: string;
   startAt?: string;
   endAt?: string;
+  schedule?: EventSchedule;
   locationId?: string;
   mediaId?: string;
   speakerIds?: string[];

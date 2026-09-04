@@ -7,6 +7,11 @@ import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { pageBlocksSchema } from '@/pages/schemas/joi.page-block.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
+import {
+  EventScheduleValidationError,
+  normalizeEventSchedule,
+} from '../utils/event-schedule';
+import { joiEventScheduleSchema } from './joi.event-schedule.schema';
 
 export const updateEventSchema = Joi.object({
   domainId: joiObjectId.optional(),
@@ -27,6 +32,7 @@ export const updateEventSchema = Joi.object({
 
   startAt: joiUtcIsoDateTime.optional(),
   endAt: joiUtcIsoDateTime.optional(),
+  schedule: joiEventScheduleSchema.optional(),
 
   locationId: joiObjectId.optional(),
   mediaId: joiObjectId.optional(),
@@ -64,7 +70,29 @@ export const updateEventSchema = Joi.object({
   blocks: pageBlocksSchema.optional(),
 })
   .custom((value, helpers) => {
-    if (value.startAt && value.endAt) {
+    const hasSchedule = value.schedule !== undefined;
+    const hasStartAt = value.startAt !== undefined;
+    const hasEndAt = value.endAt !== undefined;
+    let activeStartAt = value.startAt;
+
+    if (hasSchedule) {
+      if (hasStartAt || hasEndAt) {
+        return helpers.error('any.invalid');
+      }
+
+      try {
+        activeStartAt = normalizeEventSchedule(value.schedule).startAt;
+      } catch (error) {
+        if (error instanceof EventScheduleValidationError) {
+          return helpers.error('any.invalid');
+        }
+        throw error;
+      }
+    } else if (hasStartAt !== hasEndAt) {
+      return helpers.error('any.invalid');
+    }
+
+    if (hasStartAt && hasEndAt) {
       const startAt = new Date(value.startAt).getTime();
       const endAt = new Date(value.endAt).getTime();
 
@@ -73,8 +101,8 @@ export const updateEventSchema = Joi.object({
       }
     }
 
-    if (value.registration?.deadline && value.startAt) {
-      const startAt = new Date(value.startAt).getTime();
+    if (value.registration?.deadline && activeStartAt) {
+      const startAt = new Date(activeStartAt).getTime();
       const deadline = new Date(value.registration.deadline).getTime();
 
       if (deadline > startAt) {

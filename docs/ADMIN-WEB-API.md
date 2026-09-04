@@ -804,8 +804,17 @@ Public reads allow only statuses:
   title: string;
   description?: string;
   slug: string;
-  startAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
-  endAt: string; // UTC ISO datetime (YYYY-MM-DDTHH:mm:ss.sssZ)
+  startAt: string; // UTC ISO datetime; legacy timing owner or schedule-derived compatibility envelope
+  endAt: string; // UTC ISO datetime; legacy timing owner or schedule-derived compatibility envelope
+  schedule?: {
+    timezone: 'Asia/Tbilisi';
+    days: Array<{
+      date: string; // YYYY-MM-DD local event date
+      startTime: string; // HH:mm local event time
+      endTime: string; // HH:mm local event time, same-day and after startTime
+      description?: string; // max 500 chars
+    }>; // max 366 days, ordered by date
+  };
   locationId?: string; // Location._id
   mediaId?: string; // Media._id, optional event cover media
   speakerIds: string[];
@@ -845,6 +854,7 @@ Public reads allow only statuses:
 - slug is unique within a domain
 - `locationId`, `mediaId`, `speakerIds`, `organizerIds`, `partnerIds` must reference existing records
 - `endAt` must be after `startAt`
+- when `schedule` is present, the API derives `startAt` and `endAt` from it and rejects simultaneous client `startAt` or `endAt`
 - when provided with `startAt`, `registration.deadline` must be before or equal to `startAt`
 
 ---

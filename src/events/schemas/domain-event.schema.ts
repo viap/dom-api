@@ -17,6 +17,10 @@ import {
 } from '@/pages/schemas/page-block.schema';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
+import {
+  EVENT_SCHEDULE_TIMEZONE,
+  EventSchedule,
+} from '../types/event-schedule.interface';
 
 export type DomainEventDocument = DomainEvent &
   Document & { createdAt: Date; updatedAt: Date };
@@ -50,6 +54,31 @@ export class DomainEvent {
 
   @Prop({ required: true })
   endAt: string;
+
+  @Prop({
+    type: {
+      timezone: {
+        type: String,
+        enum: [EVENT_SCHEDULE_TIMEZONE],
+        required: true,
+        default: EVENT_SCHEDULE_TIMEZONE,
+      },
+      days: {
+        type: [
+          {
+            date: { type: String, required: true, trim: true },
+            startTime: { type: String, required: true, trim: true },
+            endTime: { type: String, required: true, trim: true },
+            description: { type: String, trim: true },
+            _id: false,
+          },
+        ],
+        required: true,
+      },
+    },
+    _id: false,
+  })
+  schedule?: EventSchedule;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Location' })
   locationId?: mongoose.Schema.Types.ObjectId;

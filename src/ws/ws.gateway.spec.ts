@@ -71,9 +71,9 @@ describe('WsGateway', () => {
 
     await connectionHandler(client);
 
-    await expect(gateway.getAllActiveEventsBatch(client as never)).resolves.toBe(
-      notifications,
-    );
+    await expect(
+      gateway.getAllActiveEventsBatch(client as never),
+    ).resolves.toBe(notifications);
     expect(mockNotificationsService.getAllActive).toHaveBeenCalledTimes(1);
   });
 
@@ -106,9 +106,9 @@ describe('WsGateway', () => {
 
     await connectionHandler(client);
 
-    await expect(gateway.getAllActiveEventsBatch(client as never)).resolves.toEqual(
-      [],
-    );
+    await expect(
+      gateway.getAllActiveEventsBatch(client as never),
+    ).resolves.toEqual([]);
 
     const result = await gateway.getAllActiveEvents(client as never);
     await expect(collectObservable(result)).resolves.toEqual([]);

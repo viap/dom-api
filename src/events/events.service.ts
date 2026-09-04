@@ -27,6 +27,7 @@ import {
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
+import { LocationDocument } from '@/locations/schemas/location.schema';
 import { MediaService } from '@/media/media.service';
 import { MediaDocument } from '@/media/schemas/media.schema';
 import {
@@ -45,6 +46,10 @@ import {
   DomainEvent,
   DomainEventDocument,
 } from './schemas/domain-event.schema';
+import {
+  EventScheduleValidationError,
+  normalizeEventSchedule,
+} from './utils/event-schedule';
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Planned,
@@ -53,6 +58,15 @@ const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Completed,
   EventStatus.Cancelled,
 ];
+
+type PublicEventLocation = Pick<
+  LocationDocument,
+  '_id' | 'title' | 'address' | 'city' | 'country' | 'geo'
+>;
+
+function hasOwnProperty(value: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
 
 @Injectable()
 export class EventsService {
@@ -69,18 +83,20 @@ export class EventsService {
   ) {}
 
   async create(createEventDto: CreateEventDto): Promise<DomainEventDocument> {
-    await this.validateDomainAndRefs(createEventDto);
-    await this.ensureUniqueSlug(createEventDto.domainId, createEventDto.slug);
+    const createData = this.prepareCreateTiming(createEventDto);
 
-    const normalizedBlocks = createEventDto.blocks?.length
+    await this.validateDomainAndRefs(createData);
+    await this.ensureUniqueSlug(createData.domainId, createData.slug);
+
+    const normalizedBlocks = createData.blocks?.length
       ? await prepareBlocksForWrite(
-          createEventDto.blocks,
+          createData.blocks,
           this.getBlockValidationServices(),
         )
-      : createEventDto.blocks;
+      : createData.blocks;
 
     const event = new this.eventModel({
-      ...createEventDto,
+      ...createData,
       blocks: normalizedBlocks ?? [],
     });
     return event.save();
@@ -121,11 +137,13 @@ export class EventsService {
 
     const eventDocuments = events as DomainEventDocument[];
     const eventIds = eventDocuments.map((event) => event._id.toString());
-    const [domainSlugById, countsMap, mediaById] = await Promise.all([
-      this.resolveDomainSlugsForEvents(eventDocuments),
-      this.countRegistrationsByEventIds(eventIds),
-      this.resolveEventMediaById(eventDocuments),
-    ]);
+    const [domainSlugById, countsMap, mediaById, locationById] =
+      await Promise.all([
+        this.resolveDomainSlugsForEvents(eventDocuments),
+        this.countRegistrationsByEventIds(eventIds),
+        this.resolveEventMediaById(eventDocuments),
+        this.resolveEventLocationsById(eventDocuments),
+      ]);
 
     return Promise.all(
       events.map((event) => {
@@ -138,6 +156,7 @@ export class EventsService {
           countsMap.get(id) ?? 0,
           domainId ? domainSlugById.get(domainId) : undefined,
           mediaById,
+          locationById,
         );
       }),
     );
@@ -157,8 +176,10 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    const mediaById = await this.resolveEventMediaById([
-      event as DomainEventDocument,
+    const eventDocuments = [event as DomainEventDocument];
+    const [mediaById, locationById] = await Promise.all([
+      this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
@@ -166,6 +187,7 @@ export class EventsService {
       undefined,
       undefined,
       mediaById,
+      locationById,
     );
   }
 
@@ -187,8 +209,10 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
-    const mediaById = await this.resolveEventMediaById([
-      event as DomainEventDocument,
+    const eventDocuments = [event as DomainEventDocument];
+    const [mediaById, locationById] = await Promise.all([
+      this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
@@ -196,6 +220,7 @@ export class EventsService {
       undefined,
       undefined,
       mediaById,
+      locationById,
     );
   }
 
@@ -219,9 +244,10 @@ export class EventsService {
 
     const eventDocuments = events as DomainEventDocument[];
     const eventIds = eventDocuments.map((event) => event._id.toString());
-    const [countsMap, mediaById] = await Promise.all([
+    const [countsMap, mediaById, locationById] = await Promise.all([
       this.countRegistrationsByEventIds(eventIds),
       this.resolveEventMediaById(eventDocuments),
+      this.resolveEventLocationsById(eventDocuments),
     ]);
 
     const publicEvents = await Promise.all(
@@ -231,6 +257,7 @@ export class EventsService {
           countsMap.get(event._id.toString()) ?? 0,
           undefined,
           mediaById,
+          locationById,
         ),
       ),
     );
@@ -309,7 +336,10 @@ export class EventsService {
           )
         : undefined;
 
-    const updateData: Record<string, unknown> = { ...updateEventDto };
+    const updateData: Record<string, unknown> = this.prepareUpdateTiming(
+      updateEventDto,
+      existingEvent as DomainEventDocument,
+    );
     if (normalizedBlocks !== undefined) {
       updateData.blocks = normalizedBlocks;
     }
@@ -358,6 +388,7 @@ export class EventsService {
     registeredCount?: number,
     domainSlug?: string,
     mediaById: Map<string, MediaDocument> = new Map(),
+    locationById: Map<string, PublicEventLocation> = new Map(),
   ): Promise<DomainEventDocument> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
@@ -380,10 +411,13 @@ export class EventsService {
 
     const mediaId = this.toIdString(eventObj.mediaId);
     const media = mediaId ? mediaById.get(mediaId) : undefined;
+    const locationId = this.toIdString(eventObj.locationId);
+    const location = locationId ? locationById.get(locationId) : undefined;
 
     return {
       ...eventObj,
       ...(media ? { mediaId: media } : {}),
+      ...(location ? { locationId: location } : {}),
       ...(domainSlug ? { domainSlug } : {}),
       blocks: publicBlocks,
       registeredCount: count,
@@ -471,6 +505,49 @@ export class EventsService {
     );
   }
 
+  private async resolveEventLocationsById(
+    events: DomainEventDocument[],
+  ): Promise<Map<string, PublicEventLocation>> {
+    const locationIds = Array.from(
+      new Set(
+        events
+          .map((event) =>
+            this.toIdString(
+              (event as unknown as Record<string, unknown>).locationId,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    if (!locationIds.length) {
+      return new Map();
+    }
+
+    const locations = await this.locationsService.findManyByIds(locationIds);
+    return new Map(
+      locations.items.map((location) => [
+        location._id.toString(),
+        this.toPublicEventLocation(location),
+      ]),
+    );
+  }
+
+  private toPublicEventLocation(
+    location: LocationDocument,
+  ): PublicEventLocation {
+    const { _id, title, address, city, country, geo } = location;
+
+    return {
+      _id,
+      title,
+      address,
+      ...(city ? { city } : {}),
+      ...(country ? { country } : {}),
+      ...(geo ? { geo } : {}),
+    };
+  }
+
   private async countRegistrationsByEventIds(
     eventIds: string[],
   ): Promise<Map<string, number>> {
@@ -525,6 +602,139 @@ export class EventsService {
       findPublishedPeopleSummariesByIds: (ids) =>
         this.peopleService.findPublishedSummariesByIds(ids),
     };
+  }
+
+  private prepareCreateTiming(
+    createEventDto: CreateEventDto,
+  ): CreateEventDto & { startAt: string; endAt: string } {
+    if (createEventDto.schedule === undefined) {
+      this.assertRegistrationDeadlineBeforeStart(
+        createEventDto.registration?.deadline,
+        createEventDto.startAt,
+      );
+      return createEventDto as CreateEventDto & {
+        startAt: string;
+        endAt: string;
+      };
+    }
+
+    if (
+      createEventDto.startAt !== undefined ||
+      createEventDto.endAt !== undefined
+    ) {
+      throw new BadRequestException(
+        'schedule cannot be combined with startAt or endAt',
+      );
+    }
+
+    const envelope = this.normalizeScheduleForWrite(createEventDto.schedule);
+    this.assertRegistrationDeadlineBeforeStart(
+      createEventDto.registration?.deadline,
+      envelope.startAt,
+    );
+
+    return {
+      ...createEventDto,
+      schedule: envelope.schedule,
+      startAt: envelope.startAt,
+      endAt: envelope.endAt,
+    };
+  }
+
+  private prepareUpdateTiming(
+    updateEventDto: UpdateEventDto,
+    existingEvent: DomainEventDocument,
+  ): Record<string, unknown> {
+    const updateData: Record<string, unknown> = { ...updateEventDto };
+    const hasSchedule = hasOwnProperty(updateEventDto, 'schedule');
+    const hasStartAt = hasOwnProperty(updateEventDto, 'startAt');
+    const hasEndAt = hasOwnProperty(updateEventDto, 'endAt');
+
+    if (hasSchedule) {
+      if (hasStartAt || hasEndAt) {
+        throw new BadRequestException(
+          'schedule cannot be combined with startAt or endAt',
+        );
+      }
+
+      const envelope = this.normalizeScheduleForWrite(updateEventDto.schedule);
+      updateData.schedule = envelope.schedule;
+      updateData.startAt = envelope.startAt;
+      updateData.endAt = envelope.endAt;
+    } else if (hasStartAt !== hasEndAt) {
+      throw new BadRequestException(
+        'startAt and endAt must be updated together',
+      );
+    } else if (hasStartAt && hasEndAt && existingEvent.schedule) {
+      throw new BadRequestException(
+        'scheduled events must be updated with schedule timing',
+      );
+    }
+
+    if (
+      hasSchedule ||
+      hasStartAt ||
+      hasEndAt ||
+      hasOwnProperty(updateEventDto, 'registration')
+    ) {
+      const activeStartAt =
+        typeof updateData.startAt === 'string'
+          ? updateData.startAt
+          : existingEvent.startAt;
+      const deadline = this.getEffectiveRegistrationDeadline(
+        updateEventDto,
+        existingEvent,
+      );
+      this.assertRegistrationDeadlineBeforeStart(deadline, activeStartAt);
+    }
+
+    return updateData;
+  }
+
+  private getEffectiveRegistrationDeadline(
+    updateEventDto: UpdateEventDto,
+    existingEvent: DomainEventDocument,
+  ): string | undefined {
+    if (!hasOwnProperty(updateEventDto, 'registration')) {
+      return existingEvent.registration?.deadline;
+    }
+
+    const registration = updateEventDto.registration;
+    if (
+      registration &&
+      hasOwnProperty(registration, 'deadline') &&
+      registration.deadline
+    ) {
+      return registration.deadline;
+    }
+
+    return undefined;
+  }
+
+  private normalizeScheduleForWrite(schedule: unknown) {
+    try {
+      return normalizeEventSchedule(schedule);
+    } catch (error) {
+      if (error instanceof EventScheduleValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  private assertRegistrationDeadlineBeforeStart(
+    deadline: string | undefined,
+    startAt: string | undefined,
+  ): void {
+    if (!deadline || !startAt) {
+      return;
+    }
+
+    if (new Date(deadline).getTime() > new Date(startAt).getTime()) {
+      throw new BadRequestException(
+        'registration.deadline must be before or equal to event start',
+      );
+    }
   }
 
   private async validateDomainAndRefs(data: {
