@@ -95,8 +95,8 @@ export interface TherapyRequestAnalyticsTimeSeriesSummary {
   ltv: TherapyRequestAnalyticsLtvSummary;
   period: {
     groupingTimezone: 'UTC';
-    effectiveStartDate: string;
-    effectiveEndDate: string;
+    effectiveStartDate: string | null;
+    effectiveEndDate: string | null;
     source: 'month' | 'range' | 'default';
   };
 }
@@ -152,8 +152,8 @@ export interface TherapyRequestAnalyticsWeeklySummary {
   period: {
     groupingTimezone: 'UTC';
     weekStartsOn: 'monday';
-    effectiveStartDate: string;
-    effectiveEndDate: string;
+    effectiveStartDate: string | null;
+    effectiveEndDate: string | null;
     source: 'month' | 'range' | 'default';
   };
 }

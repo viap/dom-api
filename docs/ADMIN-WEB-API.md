@@ -1190,6 +1190,16 @@ projected session records and the bucket stage emits ten scalar counters, so
 there is no unbounded per-bucket array; the pipeline does not enable
 `allowDiskUse`.
 
+When no `month`, `startDate`, or `endDate` filter is selected, all matching
+historical requests and valid linked Sessions-series records participate. The
+API derives one continuous, ordered, zero-filled bucket domain from the union
+of request-created and Sessions-series buckets, using `source: "default"` to
+identify the absence of an explicit temporal filter. If no matching data
+exists, the time-series arrays are empty and `effectiveStartDate` and
+`effectiveEndDate` are `null`. Grouping granularity changes bucket size only;
+it does not add a hidden retention window. Explicit temporal filters retain
+their existing request-date and session-date semantics.
+
 Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
 
 Backfill:

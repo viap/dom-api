@@ -360,6 +360,207 @@ describe('TherapyRequestAnalyticsService', () => {
     },
   );
 
+  mongoBackedIt(
+    'includes all historical psychologist requests in bucket-aware unbounded cohorts',
+    async () => {
+      const connection = await mongoose
+        .createConnection(process.env.MONGO_URL as string, {
+          dbName: process.env.MONGO_DBNAME,
+          user: process.env.MONGO_INITDB_ROOT_USERNAME,
+          pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+        })
+        .asPromise();
+      const requestName = `therapy_request_unbounded_cohort_test_${Date.now()}`;
+      const sessionName = `therapy_session_unbounded_cohort_test_${Date.now()}`;
+      const requestCollection = connection.db.collection(requestName);
+      const sessionCollection = connection.db.collection(sessionName);
+      const psychologistId = new mongoose.Types.ObjectId();
+      const requests = [
+        {
+          _id: new mongoose.Types.ObjectId(),
+          createdAt: new Date('2024-12-15T12:00:00Z'),
+          sessionCount: 6,
+          sessionDate: new Date('2024-12-16T12:00:00Z'),
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          createdAt: new Date('2025-06-15T12:00:00Z'),
+          sessionCount: 10,
+          sessionDate: new Date('2025-06-16T12:00:00Z'),
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          createdAt: new Date('2025-09-15T12:00:00Z'),
+          sessionCount: 10,
+          sessionDate: new Date('2025-09-16T12:00:00Z'),
+        },
+      ];
+
+      try {
+        await requestCollection.insertMany(
+          requests.map(({ _id, createdAt }) => ({
+            _id,
+            createdAt,
+            psychologist: psychologistId,
+          })),
+        );
+        await sessionCollection.insertMany(
+          requests.flatMap(({ _id, sessionCount, sessionDate }) =>
+            Array.from({ length: sessionCount }, () => ({
+              _id: new mongoose.Types.ObjectId(),
+              therapyRequest: _id,
+              dateTime: sessionDate.getTime(),
+              commission: { currency: 'gel', value: 1 },
+            })),
+          ),
+        );
+
+        const service = new TherapyRequestAnalyticsService(
+          {
+            aggregate: (pipeline: unknown[]) => ({
+              exec: () =>
+                requestCollection.aggregate(pipeline as any[]).toArray(),
+            }),
+            collection: { name: requestName },
+          } as any,
+          {
+            aggregate: (pipeline: unknown[]) => ({
+              exec: () =>
+                sessionCollection.aggregate(pipeline as any[]).toArray(),
+            }),
+            collection: { name: sessionName },
+          } as any,
+          {} as any,
+        );
+
+        const expectations = [
+          {
+            granularity: 'day' as const,
+            applicationBuckets: [
+              { bucketStart: '2024-12-15', total: 1 },
+              { bucketStart: '2025-06-15', total: 1 },
+              { bucketStart: '2025-09-15', total: 1 },
+            ],
+            sessionBuckets: [
+              { bucketStart: '2024-12-16', total: 6 },
+              { bucketStart: '2025-06-16', total: 10 },
+              { bucketStart: '2025-09-16', total: 10 },
+            ],
+            sessionsPerApplication: [
+              { bucketStart: '2024-12-15', median: 6, sampleSize: 1 },
+              { bucketStart: '2025-06-15', median: 10, sampleSize: 1 },
+              { bucketStart: '2025-09-15', median: 10, sampleSize: 1 },
+            ],
+            period: ['2024-12-15', '2025-09-16'],
+          },
+          {
+            granularity: 'week' as const,
+            applicationBuckets: [
+              { bucketStart: '2024-12-09', total: 1 },
+              { bucketStart: '2025-06-09', total: 1 },
+              { bucketStart: '2025-09-15', total: 1 },
+            ],
+            sessionBuckets: [
+              { bucketStart: '2024-12-16', total: 6 },
+              { bucketStart: '2025-06-16', total: 10 },
+              { bucketStart: '2025-09-15', total: 10 },
+            ],
+            sessionsPerApplication: [
+              { bucketStart: '2024-12-09', median: 6, sampleSize: 1 },
+              { bucketStart: '2025-06-09', median: 10, sampleSize: 1 },
+              { bucketStart: '2025-09-15', median: 10, sampleSize: 1 },
+            ],
+            period: ['2024-12-09', '2025-09-21'],
+          },
+          {
+            granularity: 'month' as const,
+            applicationBuckets: [
+              { bucketStart: '2024-12-01', total: 1 },
+              { bucketStart: '2025-06-01', total: 1 },
+              { bucketStart: '2025-09-01', total: 1 },
+            ],
+            sessionBuckets: [
+              { bucketStart: '2024-12-01', total: 6 },
+              { bucketStart: '2025-06-01', total: 10 },
+              { bucketStart: '2025-09-01', total: 10 },
+            ],
+            sessionsPerApplication: [
+              { bucketStart: '2024-12-01', median: 6, sampleSize: 1 },
+              { bucketStart: '2025-06-01', median: 10, sampleSize: 1 },
+              { bucketStart: '2025-09-01', median: 10, sampleSize: 1 },
+            ],
+            period: ['2024-12-01', '2025-09-30'],
+          },
+          {
+            granularity: 'year' as const,
+            applicationBuckets: [
+              { bucketStart: '2024-01-01', total: 1 },
+              { bucketStart: '2025-01-01', total: 2 },
+            ],
+            sessionBuckets: [
+              { bucketStart: '2024-01-01', total: 6 },
+              { bucketStart: '2025-01-01', total: 20 },
+            ],
+            sessionsPerApplication: [
+              { bucketStart: '2024-01-01', median: 6, sampleSize: 1 },
+              { bucketStart: '2025-01-01', median: 10, sampleSize: 2 },
+            ],
+            period: ['2024-01-01', '2025-12-31'],
+          },
+        ];
+
+        for (const expectation of expectations) {
+          const result = await service.getSummary({
+            psychologist: psychologistId.toHexString(),
+            granularity: expectation.granularity,
+          });
+
+          expect(result.totalRequests).toBe(3);
+          expect(
+            result.timeSeries.applications
+              .filter((point) => point.total > 0)
+              .map(({ bucketStart, total }) => ({ bucketStart, total })),
+          ).toEqual(expectation.applicationBuckets);
+          expect(
+            result.timeSeries.sessions
+              .filter((point) => point.total > 0)
+              .map(({ bucketStart, total }) => ({ bucketStart, total })),
+          ).toEqual(expectation.sessionBuckets);
+          expect(
+            result.timeSeries.sessionsPerApplication
+              .filter((point) => point.sampleSize > 0)
+              .map(({ bucketStart, median, sampleSize }) => ({
+                bucketStart,
+                median,
+                sampleSize,
+              })),
+          ).toEqual(expectation.sessionsPerApplication);
+          const timeSeriesKeys = [
+            result.timeSeries.applications.map((point) => point.bucketStart),
+            result.timeSeries.sessions.map((point) => point.bucketStart),
+            result.timeSeries.sessionsPerApplication.map(
+              (point) => point.bucketStart,
+            ),
+            result.timeSeries.ltv.points.map((point) => point.bucketStart),
+          ];
+          timeSeriesKeys.slice(1).forEach((keys) => {
+            expect(keys).toEqual(timeSeriesKeys[0]);
+          });
+          expect(result.timeSeries.period).toEqual({
+            groupingTimezone: 'UTC',
+            effectiveStartDate: expectation.period[0],
+            effectiveEndDate: expectation.period[1],
+            source: 'default',
+          });
+        }
+      } finally {
+        await requestCollection.drop().catch(() => undefined);
+        await sessionCollection.drop().catch(() => undefined);
+        await connection.close();
+      }
+    },
+  );
+
   it('returns summary from aggregation with legacy-safe review defaults', async () => {
     const aggregate = jest.fn().mockReturnValue(
       aggregateChain([
@@ -427,14 +628,14 @@ describe('TherapyRequestAnalyticsService', () => {
       ],
     });
     expect(result.weekly.period.groupingTimezone).toBe('UTC');
-    expect(result.weekly.applications).toHaveLength(52);
+    expect(result.weekly.applications).toHaveLength(0);
     expect(result.weekly.applications).toHaveLength(
       result.weekly.sessions.length,
     );
     expect(result.timeSeries.granularity).toBe('week');
-    expect(result.timeSeries.applications[0].bucketStart).toBe(
-      result.weekly.applications[0].weekStart,
-    );
+    expect(
+      result.timeSeries.applications.map((row) => row.bucketStart),
+    ).toEqual(result.weekly.applications.map((row) => row.weekStart));
   });
 
   it('rejects unsupported summary granularities', async () => {
@@ -656,6 +857,132 @@ describe('TherapyRequestAnalyticsService', () => {
     );
   });
 
+  it('derives one continuous shared domain from unbounded request and session buckets', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            total: [{ total: 2 }],
+            reviewRequired: [],
+            monthlyTotals: [],
+            monthlyCategories: [],
+            monthlyGenders: [],
+            categoryBreakdown: [],
+            genderBreakdown: [],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(
+        aggregateChain([
+          { _id: '2024-12-01', total: 1, withSessions: 1 },
+          { _id: '2025-03-01', total: 1, withSessions: 1 },
+        ]),
+      );
+    const sessionAggregate = jest
+      .fn()
+      .mockReturnValue(aggregateChain([{ _id: '2025-01-01', total: 2 }]));
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: sessionAggregate,
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({ granularity: 'month' });
+    const expectedKeys = [
+      '2024-12-01',
+      '2025-01-01',
+      '2025-02-01',
+      '2025-03-01',
+    ];
+
+    expect(
+      result.timeSeries.applications.map((row) => row.bucketStart),
+    ).toEqual(expectedKeys);
+    expect(result.timeSeries.sessions.map((row) => row.bucketStart)).toEqual(
+      expectedKeys,
+    );
+    expect(
+      result.timeSeries.sessionsPerApplication.map((row) => row.bucketStart),
+    ).toEqual(expectedKeys);
+    expect(result.timeSeries.ltv.points.map((row) => row.bucketStart)).toEqual(
+      expectedKeys,
+    );
+    expect(result.timeSeries.applications[1]).toEqual({
+      bucketStart: '2025-01-01',
+      total: 0,
+      withSessions: 0,
+      withoutSessions: 0,
+    });
+    expect(result.timeSeries.period).toEqual({
+      groupingTimezone: 'UTC',
+      effectiveStartDate: '2024-12-01',
+      effectiveEndDate: '2025-03-31',
+      source: 'default',
+    });
+
+    expect(requestAggregate.mock.calls[1][0][0]).toEqual({
+      $match: {},
+    });
+    expect(sessionAggregate.mock.calls[0][0][0]).toEqual({
+      $match: { therapyRequest: { $exists: true, $ne: null } },
+    });
+  });
+
+  it('aggregates a same-bucket [10, 10, 6] sample with exact median and LTV denominators', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(aggregateChain([{}]))
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            _id: '2025-01-01',
+            total: 3,
+            withSessions: 3,
+            sessionCount6: 1,
+            sessionCount10: 2,
+            eligibleRevenue: 26,
+            eligibleApplicationCount: 3,
+          },
+        ]),
+      );
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({ granularity: 'year' });
+
+    expect(result.timeSeries.sessionsPerApplication).toEqual([
+      { bucketStart: '2025-01-01', median: 10, sampleSize: 3 },
+    ]);
+    expect(result.timeSeries.ltv.points[0].acquired).toMatchObject({
+      applicationsIncluded: 3,
+      applicationsWithEligibleSessions: 3,
+    });
+    expect(result.timeSeries.ltv.points[0].activated).toMatchObject({
+      applicationsIncluded: 3,
+      applicationsWithEligibleSessions: 3,
+    });
+  });
+
   it('returns ordered zero-filled daily applications and sessions for a selected month', async () => {
     const requestAggregate = jest
       .fn()
@@ -828,7 +1155,7 @@ describe('TherapyRequestAnalyticsService', () => {
     ).toEqual(['2025-01-01', '2026-01-01']);
   });
 
-  it('uses latest 52 Monday week keys for default weekly analytics', async () => {
+  it('returns empty unbounded analytics with nullable period boundaries', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-06T12:00:00Z'));
     const service = new TherapyRequestAnalyticsService(
       {
@@ -851,13 +1178,11 @@ describe('TherapyRequestAnalyticsService', () => {
       const result = await service.getSummary({});
 
       expect(result.weekly.period).toMatchObject({
-        effectiveStartDate: '2025-08-11',
-        effectiveEndDate: '2026-08-09',
+        effectiveStartDate: null,
+        effectiveEndDate: null,
         source: 'default',
       });
-      expect(result.weekly.applications).toHaveLength(52);
-      expect(result.weekly.applications[0].weekStart).toBe('2025-08-11');
-      expect(result.weekly.applications[51].weekStart).toBe('2026-08-03');
+      expect(result.weekly.applications).toHaveLength(0);
       expect(result.weekly.sessions.map((row) => row.weekStart)).toEqual(
         result.weekly.applications.map((row) => row.weekStart),
       );

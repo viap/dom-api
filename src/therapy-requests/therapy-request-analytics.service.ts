@@ -47,9 +47,7 @@ import {
 const dayMs = 1000 * 60 * 60 * 24;
 const DEFAULT_REQUEST_LIMIT = 20;
 const MAX_REQUEST_LIMIT = 1000;
-const DEFAULT_WEEK_COUNT = 52;
-const DEFAULT_TIME_SERIES_DAYS = DEFAULT_WEEK_COUNT * 7;
-const MAX_TIME_SERIES_RANGE_DAYS = DEFAULT_TIME_SERIES_DAYS;
+const MAX_TIME_SERIES_RANGE_DAYS = 52 * 7;
 const LTV_RATES_TO_GEL = {
   gel: 1,
   usd: 2.6,
@@ -331,6 +329,11 @@ type TimeSeriesPeriod = {
   effectiveEndDate: string;
   source: TherapyRequestAnalyticsTimeSeriesSummary['period']['source'];
 };
+
+type TimeSeriesPeriodMetadata = Pick<
+  TherapyRequestAnalyticsTimeSeriesSummary['period'],
+  'effectiveStartDate' | 'effectiveEndDate' | 'source'
+>;
 
 type SummaryWithoutWeekly = Omit<
   TherapyRequestAnalyticsSummaryResponse,
@@ -1341,12 +1344,25 @@ export class TherapyRequestAnalyticsService {
     query: TherapyRequestAnalyticsQuery,
     granularity: AnalyticsGranularity,
   ): Promise<TherapyRequestAnalyticsTimeSeriesSummary> {
-    const period = this.deriveTimeSeriesPeriod(query);
-    const bucketKeys = this.enumerateBucketKeys(period, granularity);
+    const boundedPeriod = this.deriveTimeSeriesPeriod(query);
     const [applicationRows, sessionRows] = await Promise.all([
-      this.aggregateTimeSeriesApplications(query, period, granularity),
-      this.aggregateTimeSeriesSessions(query, period, granularity),
+      this.aggregateTimeSeriesApplications(query, boundedPeriod, granularity),
+      this.aggregateTimeSeriesSessions(query, boundedPeriod, granularity),
     ]);
+    const bucketKeys = boundedPeriod
+      ? this.enumerateBucketKeys(boundedPeriod, granularity)
+      : this.enumerateUnboundedBucketKeys(
+          applicationRows,
+          sessionRows,
+          granularity,
+        );
+    const periodMetadata = boundedPeriod
+      ? {
+          effectiveStartDate: boundedPeriod.effectiveStartDate,
+          effectiveEndDate: boundedPeriod.effectiveEndDate,
+          source: boundedPeriod.source,
+        }
+      : this.deriveUnboundedPeriodMetadata(bucketKeys, granularity);
 
     return {
       granularity,
@@ -1362,9 +1378,7 @@ export class TherapyRequestAnalyticsService {
       ltv: this.mergeLtv(bucketKeys, applicationRows),
       period: {
         groupingTimezone: 'UTC',
-        effectiveStartDate: period.effectiveStartDate,
-        effectiveEndDate: period.effectiveEndDate,
-        source: period.source,
+        ...periodMetadata,
       },
     };
   }
@@ -1395,7 +1409,7 @@ export class TherapyRequestAnalyticsService {
 
   private deriveTimeSeriesPeriod(
     query: TherapyRequestAnalyticsQuery,
-  ): TimeSeriesPeriod {
+  ): TimeSeriesPeriod | undefined {
     if (query.month && /^\d{4}-\d{2}$/.test(query.month)) {
       const [year, month] = query.month.split('-').map(Number);
       const start = new Date(Date.UTC(year, month - 1, 1));
@@ -1432,16 +1446,7 @@ export class TherapyRequestAnalyticsService {
       };
     }
 
-    const currentWeekStart = utcMondayStart(new Date());
-    const start = addUtcDays(currentWeekStart, -(DEFAULT_WEEK_COUNT - 1) * 7);
-    const endExclusive = addUtcDays(currentWeekStart, 7);
-    return {
-      start,
-      endExclusive,
-      effectiveStartDate: calendarDateKey(start),
-      effectiveEndDate: calendarDateKey(addUtcDays(endExclusive, -1)),
-      source: 'default',
-    };
+    return undefined;
   }
 
   private bucketStart(date: Date, granularity: AnalyticsGranularity): Date {
@@ -1502,6 +1507,71 @@ export class TherapyRequestAnalyticsService {
     return keys;
   }
 
+  private enumerateUnboundedBucketKeys(
+    applicationRows: Array<{ _id: string }>,
+    sessionRows: Array<{ _id: string }>,
+    granularity: AnalyticsGranularity,
+  ): string[] {
+    const bucketStarts = Array.from(
+      new Set(
+        [...applicationRows, ...sessionRows]
+          .map((row) => row._id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort();
+    if (!bucketStarts.length) {
+      return [];
+    }
+
+    const firstBucket = parseUtcDate(bucketStarts[0]);
+    const lastBucket = parseUtcDate(bucketStarts[bucketStarts.length - 1]);
+    if (!firstBucket || !lastBucket) {
+      return [];
+    }
+
+    const keys: string[] = [];
+    for (
+      let cursor = this.bucketStart(firstBucket, granularity);
+      cursor <= lastBucket;
+      cursor = this.addBucket(cursor, granularity)
+    ) {
+      keys.push(calendarDateKey(cursor));
+    }
+
+    return keys;
+  }
+
+  private deriveUnboundedPeriodMetadata(
+    bucketKeys: string[],
+    granularity: AnalyticsGranularity,
+  ): TimeSeriesPeriodMetadata {
+    if (!bucketKeys.length) {
+      return {
+        effectiveStartDate: null,
+        effectiveEndDate: null,
+        source: 'default',
+      };
+    }
+
+    const firstBucket = parseUtcDate(bucketKeys[0]);
+    const lastBucket = parseUtcDate(bucketKeys[bucketKeys.length - 1]);
+    if (!firstBucket || !lastBucket) {
+      return {
+        effectiveStartDate: null,
+        effectiveEndDate: null,
+        source: 'default',
+      };
+    }
+
+    return {
+      effectiveStartDate: calendarDateKey(firstBucket),
+      effectiveEndDate: calendarDateKey(
+        addUtcDays(this.addBucket(lastBucket, granularity), -1),
+      ),
+      source: 'default',
+    };
+  }
+
   private getTherapyRequestCollectionName(): string {
     return this.therapyRequestModel.collection?.name || 'therapyrequests';
   }
@@ -1534,7 +1604,7 @@ export class TherapyRequestAnalyticsService {
 
   private async aggregateTimeSeriesApplications(
     query: TherapyRequestAnalyticsQuery,
-    period: TimeSeriesPeriod,
+    period: TimeSeriesPeriod | undefined,
     granularity: AnalyticsGranularity,
   ): Promise<
     Array<{
@@ -1548,10 +1618,14 @@ export class TherapyRequestAnalyticsService {
   > {
     const requestFilter = {
       ...this.buildRequestFilter(query, { includeDateFilters: false }),
-      createdAt: {
-        $gte: period.start,
-        $lt: period.endExclusive,
-      },
+      ...(period
+        ? {
+            createdAt: {
+              $gte: period.start,
+              $lt: period.endExclusive,
+            },
+          }
+        : {}),
     };
 
     return this.therapyRequestModel
@@ -1709,24 +1783,28 @@ export class TherapyRequestAnalyticsService {
 
   private async aggregateTimeSeriesSessions(
     query: TherapyRequestAnalyticsQuery,
-    period: TimeSeriesPeriod,
+    period: TimeSeriesPeriod | undefined,
     granularity: AnalyticsGranularity,
   ): Promise<Array<{ _id: string; total: number }>> {
     const requestFilter = this.buildRequestFilter(query, {
       includeDateFilters: false,
     });
 
-    return this.therapySessionModel
-      .aggregate([
-        {
-          $match: {
-            therapyRequest: { $exists: true, $ne: null },
+    const sessionMatch = {
+      therapyRequest: { $exists: true, $ne: null },
+      ...(period
+        ? {
             dateTime: {
               $gte: period.start.getTime(),
               $lt: period.endExclusive.getTime(),
             },
-          },
-        },
+          }
+        : {}),
+    };
+
+    return this.therapySessionModel
+      .aggregate([
+        { $match: sessionMatch },
         { $match: { $expr: buildFiniteSessionDateExpression() } },
         {
           $lookup: {
