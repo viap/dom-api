@@ -38,6 +38,9 @@ import {
   TherapyRequestAnalyticsSummaryResponse,
   TherapyRequestAnalyticsTimeSeriesSummary,
   TherapyRequestAnalyticsWeeklySummary,
+  TherapyRequestAnalyticsSessionsPerApplicationPoint,
+  TherapyRequestAnalyticsLtvSummary,
+  TherapyRequestAnalyticsLtvPoint,
   TherapyRequestAnalyticsWarningKey,
 } from './types/therapy-request-analytics.types';
 
@@ -47,6 +50,12 @@ const MAX_REQUEST_LIMIT = 1000;
 const DEFAULT_WEEK_COUNT = 52;
 const DEFAULT_TIME_SERIES_DAYS = DEFAULT_WEEK_COUNT * 7;
 const MAX_TIME_SERIES_RANGE_DAYS = DEFAULT_TIME_SERIES_DAYS;
+const LTV_RATES_TO_GEL = {
+  gel: 1,
+  usd: 2.6,
+  eur: 3.04,
+  rub: 0.03,
+} as const;
 const CONFIDENCE_THRESHOLD_CLIENTS = 5;
 const DOCUMENTATION_UNAVAILABLE_REASON =
   'No independent source for completed sessions exists; recorded session rows are the only evidence a session happened.';
@@ -292,6 +301,10 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function median(values: number[]): number {
   if (!values.length) {
     return 0;
@@ -348,6 +361,58 @@ export function buildFiniteSessionDateExpression(field = '$dateTime') {
       { $gt: [field, -Infinity] },
       { $lt: [field, Infinity] },
     ],
+  };
+}
+
+export function buildEligibleCommissionExpression() {
+  return {
+    $and: [
+      buildFiniteSessionDateExpression('$dateTime'),
+      {
+        $in: ['$commission.currency', ['gel', 'usd', 'eur', 'rub']],
+      },
+      {
+        $in: [
+          { $type: '$commission.value' },
+          ['int', 'long', 'double', 'decimal'],
+        ],
+      },
+      { $gte: ['$commission.value', 0] },
+      { $lt: ['$commission.value', Infinity] },
+    ],
+  };
+}
+
+export function deriveExactMedianFromHistogram(histogram: number[]) {
+  const counts = Array.from({ length: 10 }, (_, index) => {
+    const value = histogram[index];
+    return Number.isInteger(value) && value > 0 ? value : 0;
+  });
+  const sampleSize = counts.reduce((sum, count) => sum + count, 0);
+  if (!sampleSize) {
+    return { median: null, sampleSize: 0 };
+  }
+
+  const valueAtRank = (rank: number) => {
+    let cumulative = 0;
+    for (let index = 0; index < counts.length; index += 1) {
+      cumulative += counts[index];
+      if (cumulative >= rank) {
+        return index + 1;
+      }
+    }
+    return 10;
+  };
+
+  if (sampleSize % 2 === 1) {
+    return { median: valueAtRank((sampleSize + 1) / 2), sampleSize };
+  }
+
+  return {
+    median: round1(
+      (valueAtRank(sampleSize / 2) + valueAtRank(sampleSize / 2 + 1)) / 2,
+    ),
+    sampleSize,
   };
 }
 
@@ -1290,6 +1355,11 @@ export class TherapyRequestAnalyticsService {
         applicationRows,
       ),
       sessions: this.mergeTimeSeriesSessions(bucketKeys, sessionRows),
+      sessionsPerApplication: this.mergeSessionsPerApplication(
+        bucketKeys,
+        applicationRows,
+      ),
+      ltv: this.mergeLtv(bucketKeys, applicationRows),
       period: {
         groupingTimezone: 'UTC',
         effectiveStartDate: period.effectiveStartDate,
@@ -1472,6 +1542,8 @@ export class TherapyRequestAnalyticsService {
       total: number;
       withSessions: number;
       withoutSessions: number;
+      eligibleRevenue?: number;
+      eligibleApplicationCount?: number;
     }>
   > {
     const requestFilter = {
@@ -1502,9 +1574,86 @@ export class TherapyRequestAnalyticsService {
           },
         },
         {
+          $lookup: {
+            from: this.getTherapySessionCollectionName(),
+            let: { requestId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$therapyRequest', '$$requestId'] },
+                      buildEligibleCommissionExpression(),
+                    ],
+                  },
+                },
+              },
+              { $sort: { dateTime: 1, _id: 1 } },
+              { $limit: 10 },
+              {
+                $project: {
+                  _id: 1,
+                  dateTime: 1,
+                  commissionCurrency: '$commission.currency',
+                  commissionValue: '$commission.value',
+                },
+              },
+            ],
+            as: '_eligibleSessions',
+          },
+        },
+        {
           $addFields: {
             _bucketStart: this.bucketDateExpression('$createdAt', granularity),
             _hasLinkedSession: { $gt: [{ $size: '$_linkedSession' }, 0] },
+            _eligibleSessionCount: { $size: '$_eligibleSessions' },
+            _eligibleRevenue: {
+              $reduce: {
+                input: '$_eligibleSessions',
+                initialValue: 0,
+                in: {
+                  $add: [
+                    '$$value',
+                    {
+                      $multiply: [
+                        '$$this.commissionValue',
+                        {
+                          $switch: {
+                            branches: [
+                              {
+                                case: {
+                                  $eq: ['$$this.commissionCurrency', 'gel'],
+                                },
+                                then: LTV_RATES_TO_GEL.gel,
+                              },
+                              {
+                                case: {
+                                  $eq: ['$$this.commissionCurrency', 'usd'],
+                                },
+                                then: LTV_RATES_TO_GEL.usd,
+                              },
+                              {
+                                case: {
+                                  $eq: ['$$this.commissionCurrency', 'eur'],
+                                },
+                                then: LTV_RATES_TO_GEL.eur,
+                              },
+                              {
+                                case: {
+                                  $eq: ['$$this.commissionCurrency', 'rub'],
+                                },
+                                then: LTV_RATES_TO_GEL.rub,
+                              },
+                            ],
+                            default: 0,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
           },
         },
         {
@@ -1516,6 +1665,40 @@ export class TherapyRequestAnalyticsService {
             },
             withoutSessions: {
               $sum: { $cond: ['$_hasLinkedSession', 0, 1] },
+            },
+            sessionCount1: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 1] }, 1, 0] },
+            },
+            sessionCount2: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 2] }, 1, 0] },
+            },
+            sessionCount3: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 3] }, 1, 0] },
+            },
+            sessionCount4: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 4] }, 1, 0] },
+            },
+            sessionCount5: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 5] }, 1, 0] },
+            },
+            sessionCount6: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 6] }, 1, 0] },
+            },
+            sessionCount7: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 7] }, 1, 0] },
+            },
+            sessionCount8: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 8] }, 1, 0] },
+            },
+            sessionCount9: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 9] }, 1, 0] },
+            },
+            sessionCount10: {
+              $sum: { $cond: [{ $eq: ['$_eligibleSessionCount', 10] }, 1, 0] },
+            },
+            eligibleRevenue: { $sum: '$_eligibleRevenue' },
+            eligibleApplicationCount: {
+              $sum: { $cond: [{ $gt: ['$_eligibleSessionCount', 0] }, 1, 0] },
             },
           },
         },
@@ -1614,6 +1797,93 @@ export class TherapyRequestAnalyticsService {
       bucketStart,
       total: rowsByBucket.get(bucketStart)?.total || 0,
     }));
+  }
+
+  private mergeSessionsPerApplication(
+    bucketKeys: string[],
+    rows: Array<{
+      _id: string;
+      sessionCount1?: number;
+      sessionCount2?: number;
+      sessionCount3?: number;
+      sessionCount4?: number;
+      sessionCount5?: number;
+      sessionCount6?: number;
+      sessionCount7?: number;
+      sessionCount8?: number;
+      sessionCount9?: number;
+      sessionCount10?: number;
+    }>,
+  ): TherapyRequestAnalyticsSessionsPerApplicationPoint[] {
+    const rowsByBucket = new Map(rows.map((row) => [row._id, row]));
+
+    return bucketKeys.map((bucketStart) => {
+      const row = rowsByBucket.get(bucketStart);
+      const histogram = [
+        row?.sessionCount1 || 0,
+        row?.sessionCount2 || 0,
+        row?.sessionCount3 || 0,
+        row?.sessionCount4 || 0,
+        row?.sessionCount5 || 0,
+        row?.sessionCount6 || 0,
+        row?.sessionCount7 || 0,
+        row?.sessionCount8 || 0,
+        row?.sessionCount9 || 0,
+        row?.sessionCount10 || 0,
+      ];
+      return { bucketStart, ...deriveExactMedianFromHistogram(histogram) };
+    });
+  }
+
+  private mergeLtv(
+    bucketKeys: string[],
+    rows: Array<{
+      _id: string;
+      total?: number;
+      eligibleRevenue?: number;
+      eligibleApplicationCount?: number;
+    }>,
+  ): TherapyRequestAnalyticsLtvSummary {
+    const rowsByBucket = new Map(rows.map((row) => [row._id, row]));
+    const makePoint = (
+      total: number,
+      applicationsIncluded: number,
+      applicationsWithEligibleSessions: number,
+    ) => ({
+      mean: applicationsIncluded
+        ? roundMoney(total / applicationsIncluded)
+        : null,
+      total: roundMoney(total),
+      applicationsIncluded,
+      applicationsWithEligibleSessions,
+    });
+
+    const points: TherapyRequestAnalyticsLtvPoint[] = bucketKeys.map(
+      (bucketStart) => {
+        const row = rowsByBucket.get(bucketStart);
+        const total = row?.total || 0;
+        const eligibleRevenue = row?.eligibleRevenue || 0;
+        const eligibleApplications = row?.eligibleApplicationCount || 0;
+        return {
+          bucketStart,
+          acquired: makePoint(eligibleRevenue, total, eligibleApplications),
+          activated: makePoint(
+            eligibleRevenue,
+            eligibleApplications,
+            eligibleApplications,
+          ),
+        };
+      },
+    );
+
+    return {
+      currency: 'gel',
+      conversion: {
+        method: 'fixed_approximate',
+        ratesToGel: { ...LTV_RATES_TO_GEL },
+      },
+      points,
+    };
   }
 
   private buildSummaryFromAggregation(result?: {

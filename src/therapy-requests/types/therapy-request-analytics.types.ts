@@ -91,12 +91,47 @@ export interface TherapyRequestAnalyticsTimeSeriesSummary {
   granularity: AnalyticsGranularity;
   applications: TherapyRequestAnalyticsTimeSeriesApplicationsPoint[];
   sessions: TherapyRequestAnalyticsTimeSeriesSessionsPoint[];
+  sessionsPerApplication: TherapyRequestAnalyticsSessionsPerApplicationPoint[];
+  ltv: TherapyRequestAnalyticsLtvSummary;
   period: {
     groupingTimezone: 'UTC';
     effectiveStartDate: string;
     effectiveEndDate: string;
     source: 'month' | 'range' | 'default';
   };
+}
+
+export interface TherapyRequestAnalyticsSessionsPerApplicationPoint {
+  bucketStart: string;
+  median: number | null;
+  sampleSize: number;
+}
+
+export interface TherapyRequestAnalyticsLtvSummary {
+  currency: 'gel';
+  conversion: {
+    method: 'fixed_approximate';
+    ratesToGel: {
+      gel: number;
+      usd: number;
+      eur: number;
+      rub: number;
+    };
+  };
+  points: TherapyRequestAnalyticsLtvPoint[];
+}
+
+export interface TherapyRequestAnalyticsLtvPoint {
+  bucketStart: string;
+  acquired: TherapyRequestAnalyticsLtvModePoint;
+  activated: TherapyRequestAnalyticsLtvModePoint;
+}
+
+export interface TherapyRequestAnalyticsLtvModePoint {
+  mean: number | null;
+  total: number;
+  applicationsIncluded: number;
+  applicationsWithEligibleSessions: number;
 }
 
 export interface TherapyRequestAnalyticsTimeSeriesApplicationsPoint {

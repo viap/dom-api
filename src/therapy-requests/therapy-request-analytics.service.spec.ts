@@ -1,8 +1,10 @@
 import {
   TherapyRequestAnalyticsService,
+  buildEligibleCommissionExpression,
   buildFiniteSessionDateExpression,
   buildSessionCountPipeline,
   buildSessionDatePipeline,
+  deriveExactMedianFromHistogram,
 } from './therapy-request-analytics.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
@@ -72,6 +74,41 @@ describe('TherapyRequestAnalyticsService', () => {
     });
   });
 
+  it('derives an exact median from the bounded 1..10 histogram', () => {
+    expect(deriveExactMedianFromHistogram([0, 2, 0, 1])).toEqual({
+      median: 2,
+      sampleSize: 3,
+    });
+    expect(deriveExactMedianFromHistogram([1, 0, 0, 1])).toEqual({
+      median: 2.5,
+      sampleSize: 2,
+    });
+    expect(
+      deriveExactMedianFromHistogram([0, 0, 0, 0, 0, 0, 0, 0, 0, 4]),
+    ).toEqual({ median: 10, sampleSize: 4 });
+    expect(deriveExactMedianFromHistogram([])).toEqual({
+      median: null,
+      sampleSize: 0,
+    });
+  });
+
+  it('uses finite non-negative persisted commission for analytics eligibility while keeping zero valid', () => {
+    expect(buildEligibleCommissionExpression()).toEqual({
+      $and: [
+        buildFiniteSessionDateExpression('$dateTime'),
+        { $in: ['$commission.currency', ['gel', 'usd', 'eur', 'rub']] },
+        {
+          $in: [
+            { $type: '$commission.value' },
+            ['int', 'long', 'double', 'decimal'],
+          ],
+        },
+        { $gte: ['$commission.value', 0] },
+        { $lt: ['$commission.value', Infinity] },
+      ],
+    });
+  });
+
   mongoBackedIt(
     'rejects NaN session dates in a live Mongo aggregation',
     async () => {
@@ -118,6 +155,206 @@ describe('TherapyRequestAnalyticsService', () => {
         ]);
       } finally {
         await collection.drop().catch(() => undefined);
+        await connection.close();
+      }
+    },
+  );
+
+  mongoBackedIt(
+    'runs the cohort commission pipeline with deterministic first-ten eligibility',
+    async () => {
+      const connection = await mongoose
+        .createConnection(process.env.MONGO_URL as string, {
+          dbName: process.env.MONGO_DBNAME,
+          user: process.env.MONGO_INITDB_ROOT_USERNAME,
+          pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+        })
+        .asPromise();
+      const requestName = `therapy_request_cohort_test_${Date.now()}`;
+      const sessionName = `therapy_session_cohort_test_${Date.now()}`;
+      const requestCollection = connection.db.collection(requestName);
+      const sessionCollection = connection.db.collection(sessionName);
+      const requestId = new mongoose.Types.ObjectId();
+
+      try {
+        await requestCollection.insertOne({
+          _id: requestId,
+          createdAt: new Date('2026-01-05T12:00:00Z'),
+          clientGender: 'female',
+        });
+        await sessionCollection.insertMany(
+          Array.from({ length: 11 }, (_, index) => ({
+            _id: new mongoose.Types.ObjectId(
+              `0000000000000000000000${String(index + 1).padStart(2, '0')}`,
+            ),
+            therapyRequest: requestId,
+            dateTime: Date.parse('2026-01-06T12:00:00Z'),
+            commission: {
+              currency: ['gel', 'usd', 'eur', 'rub'][index] || 'gel',
+              value: index + 1,
+            },
+          })),
+        );
+
+        const service = new TherapyRequestAnalyticsService(
+          {
+            aggregate: (pipeline: unknown[]) => ({
+              exec: () =>
+                requestCollection.aggregate(pipeline as any[]).toArray(),
+            }),
+            collection: { name: requestName },
+          } as any,
+          { collection: { name: sessionName } } as any,
+          {} as any,
+        );
+
+        const rows = await (service as any).aggregateTimeSeriesApplications(
+          {},
+          {
+            start: new Date('2026-01-05T00:00:00Z'),
+            endExclusive: new Date('2026-01-06T00:00:00Z'),
+          },
+          'week',
+        );
+
+        expect(rows).toEqual([
+          expect.objectContaining({
+            _id: '2026-01-05',
+            total: 1,
+            withSessions: 1,
+            sessionCount10: 1,
+            eligibleRevenue: 60.44,
+            eligibleApplicationCount: 1,
+          }),
+        ]);
+      } finally {
+        await requestCollection.drop().catch(() => undefined);
+        await sessionCollection.drop().catch(() => undefined);
+        await connection.close();
+      }
+    },
+  );
+
+  mongoBackedIt(
+    'aggregates cohort samples, excludes negative/invalid commissions, keeps zero valid, and shares LTV denominators',
+    async () => {
+      const connection = await mongoose
+        .createConnection(process.env.MONGO_URL as string, {
+          dbName: process.env.MONGO_DBNAME,
+          user: process.env.MONGO_INITDB_ROOT_USERNAME,
+          pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+        })
+        .asPromise();
+      const requestName = `therapy_request_cohort_edge_test_${Date.now()}`;
+      const sessionName = `therapy_session_cohort_edge_test_${Date.now()}`;
+      const requestCollection = connection.db.collection(requestName);
+      const sessionCollection = connection.db.collection(sessionName);
+      const requestIds = [
+        new mongoose.Types.ObjectId(),
+        new mongoose.Types.ObjectId(),
+        new mongoose.Types.ObjectId(),
+      ];
+      const sessionDate = Date.parse('2026-03-01T12:00:00Z');
+
+      try {
+        await requestCollection.insertMany(
+          requestIds.map((_id, index) => ({
+            _id,
+            createdAt: new Date(`2026-01-0${5 + index}T12:00:00Z`),
+          })),
+        );
+        await sessionCollection.insertMany([
+          {
+            _id: new mongoose.Types.ObjectId('000000000000000000000001'),
+            therapyRequest: requestIds[0],
+            dateTime: sessionDate,
+            commission: { currency: 'rub', value: 15 },
+          },
+          {
+            _id: new mongoose.Types.ObjectId('000000000000000000000002'),
+            therapyRequest: requestIds[0],
+            dateTime: sessionDate,
+            commission: { currency: 'gel', value: 0 },
+          },
+          ...[1, 2, 3, 4].map((value) => ({
+            _id: new mongoose.Types.ObjectId(
+              `00000000000000000000000${value + 2}`,
+            ),
+            therapyRequest: requestIds[1],
+            dateTime: sessionDate,
+            commission: { currency: 'gel', value },
+          })),
+          {
+            _id: new mongoose.Types.ObjectId('000000000000000000000007'),
+            therapyRequest: requestIds[2],
+            dateTime: sessionDate,
+            commission: { currency: 'gel', value: -10 },
+          },
+          {
+            _id: new mongoose.Types.ObjectId('000000000000000000000008'),
+            therapyRequest: requestIds[2],
+            dateTime: Number.NaN,
+            commission: { currency: 'gel', value: 10 },
+          },
+          {
+            _id: new mongoose.Types.ObjectId('000000000000000000000009'),
+            therapyRequest: requestIds[2],
+            dateTime: sessionDate,
+          },
+        ]);
+
+        const service = new TherapyRequestAnalyticsService(
+          {
+            aggregate: (pipeline: unknown[]) => ({
+              exec: () =>
+                requestCollection.aggregate(pipeline as any[]).toArray(),
+            }),
+            collection: { name: requestName },
+          } as any,
+          { collection: { name: sessionName } } as any,
+          {} as any,
+        );
+        const rows = await (service as any).aggregateTimeSeriesApplications(
+          {},
+          {
+            start: new Date('2026-01-05T00:00:00Z'),
+            endExclusive: new Date('2026-01-12T00:00:00Z'),
+          },
+          'week',
+        );
+
+        expect(rows).toEqual([
+          expect.objectContaining({
+            _id: '2026-01-05',
+            total: 3,
+            eligibleRevenue: 10.45,
+            eligibleApplicationCount: 2,
+            sessionCount2: 1,
+            sessionCount4: 1,
+          }),
+        ]);
+        const ltv = (service as any).mergeLtv(['2026-01-05'], rows);
+        expect(ltv.points[0]).toEqual({
+          bucketStart: '2026-01-05',
+          acquired: {
+            mean: 3.48,
+            total: 10.45,
+            applicationsIncluded: 3,
+            applicationsWithEligibleSessions: 2,
+          },
+          activated: {
+            mean: 5.23,
+            total: 10.45,
+            applicationsIncluded: 2,
+            applicationsWithEligibleSessions: 2,
+          },
+        });
+        expect(
+          (service as any).mergeSessionsPerApplication(['2026-01-05'], rows),
+        ).toEqual([{ bucketStart: '2026-01-05', median: 3, sampleSize: 2 }]);
+      } finally {
+        await requestCollection.drop().catch(() => undefined);
+        await sessionCollection.drop().catch(() => undefined);
         await connection.close();
       }
     },
@@ -331,6 +568,92 @@ describe('TherapyRequestAnalyticsService', () => {
       weekStart: '2026-01-12',
       total: 0,
     });
+  });
+
+  it('merges cohort histogram and both LTV denominators without changing old series', async () => {
+    const requestAggregate = jest
+      .fn()
+      .mockReturnValueOnce(aggregateChain([{}]))
+      .mockReturnValueOnce(
+        aggregateChain([
+          {
+            _id: '2026-01-05',
+            total: 4,
+            withSessions: 3,
+            withoutSessions: 1,
+            sessionCount1: 1,
+            sessionCount2: 2,
+            sessionCount4: 1,
+            eligibleRevenue: 100,
+            eligibleApplicationCount: 3,
+          },
+        ]),
+      );
+    const service = new TherapyRequestAnalyticsService(
+      {
+        aggregate: requestAggregate,
+        distinct: jest.fn(),
+        collection: { name: 'therapyrequests' },
+      } as any,
+      {
+        aggregate: jest.fn().mockReturnValue(aggregateChain([])),
+        countDocuments: jest.fn().mockReturnValue(countChain(0)),
+        collection: { name: 'therapysessions' },
+      } as any,
+      { find: jest.fn() } as any,
+    );
+
+    const result = await service.getSummary({
+      startDate: '2026-01-05',
+      endDate: '2026-01-05',
+      granularity: 'week',
+    });
+
+    expect(result.timeSeries.applications[0]).toEqual({
+      bucketStart: '2026-01-05',
+      total: 4,
+      withSessions: 3,
+      withoutSessions: 1,
+    });
+    expect(result.timeSeries.sessionsPerApplication[0]).toEqual({
+      bucketStart: '2026-01-05',
+      median: 2,
+      sampleSize: 4,
+    });
+    expect(result.timeSeries.ltv.points[0]).toEqual({
+      bucketStart: '2026-01-05',
+      acquired: {
+        mean: 25,
+        total: 100,
+        applicationsIncluded: 4,
+        applicationsWithEligibleSessions: 3,
+      },
+      activated: {
+        mean: 33.33,
+        total: 100,
+        applicationsIncluded: 3,
+        applicationsWithEligibleSessions: 3,
+      },
+    });
+    expect(result.timeSeries.ltv.conversion).toEqual({
+      method: 'fixed_approximate',
+      ratesToGel: { gel: 1, usd: 2.6, eur: 3.04, rub: 0.03 },
+    });
+
+    const pipeline = requestAggregate.mock.calls[1][0];
+    expect(pipeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          $lookup: expect.objectContaining({
+            as: '_eligibleSessions',
+            pipeline: expect.arrayContaining([
+              { $sort: { dateTime: 1, _id: 1 } },
+              { $limit: 10 },
+            ]),
+          }),
+        }),
+      ]),
+    );
   });
 
   it('returns ordered zero-filled daily applications and sessions for a selected month', async () => {
