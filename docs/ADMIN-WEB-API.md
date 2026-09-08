@@ -1157,6 +1157,39 @@ KPI analytics (`GET /therapy-request-analytics/lifecycle`):
 - `dom-web` and `dom-api` deploy independently; frontend versions that support `allPsychologists` must keep the legacy Top/Bottom UI when this field is absent from an older API response.
 - No archived/deleted/cancelled/duplicate/test request status exists in the current schema, so those categories are not silently filtered.
 
+Time-series summary analytics (`GET /therapy-request-analytics/summary`) retain
+`timeSeries.applications`, `timeSeries.sessions`, and the weekly compatibility
+field. The additive `sessionsPerApplication` series groups matching
+`TherapyRequest.createdAt` cohorts and returns the exact median of each
+application's eligible linked-session count, capped at ten; applications with
+zero eligible sessions are excluded and `median` is `null` when the sample is
+empty. The additive `ltv` series reports acquired and activated mean/total
+center commission per application in GEL. It uses persisted
+`TherapySession.commission`. Negative commission values may exist in persisted
+schema/storage data and are intentionally ineligible specifically for cohort
+analytics: they contribute to neither Sessions per Application nor LTV. This
+is an analytics eligibility rule, not a schema-wide prohibition; persisted zero
+commission remains valid. Missing, invalid, and unsupported commission data is
+also excluded. Eligible sessions are capped at the first ten by `dateTime`,
+`_id`. GEL totals and means are normalized to two decimal places in the
+response; intermediate per-session conversion retains full calculation
+precision.
+
+LTV conversion is intentionally fixed and approximate: GEL `1`, USD `2.60`,
+EUR `3.04`, and RUB `0.03`. The response returns this metadata as
+`conversion.method: "fixed_approximate"` and `conversion.ratesToGel`. Acquired
+includes every matching application (including zero-revenue applications),
+while activated includes only applications with at least one eligible session;
+each mode returns `mean: null` with `total: 0` when its denominator is zero.
+These are current-to-date cohort values, so older cohorts can change as later
+eligible sessions are recorded. The aggregation uses MongoDB `$lookup`,
+`$dateTrunc`, and bounded ten-item session arrays; production is pinned to
+MongoDB 8.0 in `dom-db/docker-compose.yml` (and therefore supports the
+existing `$firstN` 5.2+ requirement). Each request retains at most ten
+projected session records and the bucket stage emits ten scalar counters, so
+there is no unbounded per-bucket array; the pipeline does not enable
+`allowDiskUse`.
+
 Export returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
 
 Backfill:

@@ -2475,7 +2475,39 @@ Response:
   ],
   "genderBreakdown": [
     { "gender": "unknown", "total": 8 }
-  ]
+  ],
+  "timeSeries": {
+    "granularity": "week",
+    "applications": [],
+    "sessions": [],
+    "sessionsPerApplication": [
+      { "bucketStart": "2026-01-05", "median": 2.5, "sampleSize": 4 }
+    ],
+    "ltv": {
+      "currency": "gel",
+      "conversion": {
+        "method": "fixed_approximate",
+        "ratesToGel": { "gel": 1, "usd": 2.6, "eur": 3.04, "rub": 0.03 }
+      },
+      "points": [
+        {
+          "bucketStart": "2026-01-05",
+          "acquired": {
+            "mean": 25,
+            "total": 100,
+            "applicationsIncluded": 5,
+            "applicationsWithEligibleSessions": 4
+          },
+          "activated": {
+            "mean": 25,
+            "total": 100,
+            "applicationsIncluded": 4,
+            "applicationsWithEligibleSessions": 4
+          }
+        }
+      ]
+    }
+  }
 }
 ```
 
