@@ -49,6 +49,12 @@ export class PeopleController {
     return this.peopleService.findAllAdmin(query);
   }
 
+  @Get('admin/specializations')
+  @Roles(Role.Admin, Role.Editor)
+  findSpecializations() {
+    return this.peopleService.findSpecializations();
+  }
+
   @Get('admin/:id')
   @Roles(Role.Admin, Role.Editor)
   findOneAdmin(@Param('id') id: string) {

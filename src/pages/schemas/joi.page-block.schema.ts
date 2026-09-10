@@ -6,6 +6,11 @@ import { EntityCollectionEntityType } from '../enums/entity-collection-entity-ty
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
+import { PersonAvailability } from '@/people/enums/person-availability.enum';
+import { PersonRole } from '@/people/enums/person-role.enum';
+import { WorkFormat } from '@/people/enums/work-format.enum';
+import { PartnerType } from '@/partners/enums/partner-type.enum';
+import { EventType } from '@/events/enums/event-type.enum';
 
 const stringSchema = Joi.string().trim().max(5000);
 const spacingSchema = Joi.string().valid('none', 'sm', 'md', 'lg', 'xl');
@@ -181,7 +186,7 @@ const richTextBlockSchema = Joi.object({
   relatedPeople: relatedPeopleGroupSchema.optional(),
 });
 
-const entityCollectionBlockSchema = Joi.object({
+const entityCollectionBaseSchema = {
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.EntityCollection).required(),
   entityType: Joi.string()
@@ -190,9 +195,101 @@ const entityCollectionBlockSchema = Joi.object({
   layout: Joi.string()
     .valid(...Object.values(EntityCollectionLayout))
     .required(),
-  items: Joi.array().items(joiObjectId).min(1).max(50).required(),
   cardVariant: Joi.string().trim().max(120).optional(),
-});
+};
+
+const selectedValues = <T extends string>(values: T[]) =>
+  Joi.array()
+    .items(Joi.string().valid(...values))
+    .min(1)
+    .max(20)
+    .optional();
+const objectIdValues = Joi.array().items(joiObjectId).min(1).max(20).optional();
+const dateOnlySchema = Joi.string()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+  .custom((value, helpers) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== value
+      ? helpers.error('any.invalid')
+      : value;
+  });
+const customTemporalSchema = Joi.object({
+  mode: Joi.string().valid('custom').required(),
+  from: dateOnlySchema.optional(),
+  to: dateOnlySchema.optional(),
+})
+  .custom((value, helpers) => {
+    if (!value.from && !value.to) return helpers.error('any.invalid');
+    if (value.from && value.to && value.from > value.to) {
+      return helpers.error('any.invalid');
+    }
+    return value;
+  })
+  .messages({ 'any.invalid': 'Custom temporal range is invalid' });
+
+const peopleFiltersSchema = Joi.object({
+  roles: selectedValues(Object.values(PersonRole)),
+  specializations: Joi.array()
+    .items(Joi.string().trim().min(1).max(120))
+    .min(1)
+    .max(20)
+    .optional(),
+  availability: selectedValues(Object.values(PersonAvailability)),
+  workFormats: selectedValues(Object.values(WorkFormat)),
+  workLocationIds: objectIdValues,
+}).unknown(false);
+const partnerFiltersSchema = Joi.object({
+  types: selectedValues(Object.values(PartnerType)),
+}).unknown(false);
+const eventFiltersSchema = Joi.object({
+  types: selectedValues(Object.values(EventType)),
+  lifecycle: Joi.string().valid('active').optional(),
+  temporal: Joi.alternatives()
+    .try(
+      Joi.object({ mode: Joi.string().valid('upcoming').required() }).unknown(
+        false,
+      ),
+      Joi.object({ mode: Joi.string().valid('past').required() }).unknown(
+        false,
+      ),
+      customTemporalSchema,
+    )
+    .optional(),
+  locationIds: objectIdValues,
+  peopleIds: objectIdValues,
+}).unknown(false);
+
+const manualEntityCollectionBlockSchema = Joi.object({
+  ...entityCollectionBaseSchema,
+  source: Joi.string().valid('manual').optional(),
+  items: Joi.array().items(joiObjectId).min(1).max(50).required(),
+}).unknown(false);
+
+const dynamicEntityCollectionBlockSchema = Joi.object({
+  ...entityCollectionBaseSchema,
+  source: Joi.string().valid('dynamic').required(),
+  items: Joi.array().length(0).required(),
+  filters: Joi.alternatives()
+    .conditional('entityType', {
+      is: EntityCollectionEntityType.People,
+      then: peopleFiltersSchema.required(),
+    })
+    .conditional('entityType', {
+      is: EntityCollectionEntityType.Partners,
+      then: partnerFiltersSchema.required(),
+    })
+    .conditional('entityType', {
+      is: EntityCollectionEntityType.Events,
+      then: eventFiltersSchema.required(),
+    }),
+  limit: Joi.number().integer().min(1).max(24).default(12).optional(),
+}).unknown(false);
+
+const entityCollectionBlockSchema = Joi.alternatives().try(
+  manualEntityCollectionBlockSchema,
+  dynamicEntityCollectionBlockSchema,
+);
 
 const heroItemSchema = Joi.object({
   icon: Joi.string().trim().max(120).optional(),

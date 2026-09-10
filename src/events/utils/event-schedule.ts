@@ -144,6 +144,10 @@ function eventWallClockToUtcIsoString(date: string, time: string): string {
   return result.toISOString();
 }
 
+export function eventDateToUtcStartIsoString(date: string): string {
+  return eventWallClockToUtcIsoString(date, '00:00');
+}
+
 function normalizeScheduleDay(day: unknown): EventScheduleDay {
   if (!day || typeof day !== 'object' || Array.isArray(day)) {
     throw new EventScheduleValidationError('Schedule day must be an object');
@@ -153,8 +157,7 @@ function normalizeScheduleDay(day: unknown): EventScheduleDay {
   const date = typeof value.date === 'string' ? value.date.trim() : '';
   const startTime =
     typeof value.startTime === 'string' ? value.startTime.trim() : '';
-  const endTime =
-    typeof value.endTime === 'string' ? value.endTime.trim() : '';
+  const endTime = typeof value.endTime === 'string' ? value.endTime.trim() : '';
 
   if (!parseDateParts(date)) {
     throw new EventScheduleValidationError(

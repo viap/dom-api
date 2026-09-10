@@ -14,6 +14,7 @@ import { Application } from '@/applications/schemas/application.schema';
 import { PeopleService } from '@/people/people.service';
 import { DomainEvent } from './schemas/domain-event.schema';
 import { EventsService } from './events.service';
+import { EventType } from './enums/event-type.enum';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -78,6 +79,7 @@ describe('EventsService', () => {
     getActiveById: jest.fn(),
     getActiveBySlug: jest.fn(),
     findManyByIds: jest.fn(),
+    findAll: jest.fn(),
   };
   const mockLocationsService = {
     exists: jest.fn(),
@@ -154,6 +156,7 @@ describe('EventsService', () => {
     mockDomainsService.findManyByIds.mockResolvedValue({
       items: [{ _id: mockEvent.domainId, slug: 'psych-center' }],
     });
+    mockDomainsService.findAll.mockResolvedValue([]);
     mockLocationsService.exists.mockResolvedValue(true);
     mockLocationsService.findManyByIds.mockResolvedValue({ items: [] });
     mockMediaService.existsPublished.mockResolvedValue(true);
@@ -164,6 +167,86 @@ describe('EventsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('builds public, domain-scoped upcoming dynamic Event queries', async () => {
+    const exec = jest
+      .fn()
+      .mockResolvedValue([
+        { _id: '507f1f77bcf86cd799439099', title: 'Upcoming' },
+      ]);
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec,
+    };
+    mockEventModel.find.mockReturnValue(chain);
+
+    await expect(
+      service.findDynamicSummaries(
+        {
+          types: [EventType.Seminar],
+          lifecycle: 'active',
+          temporal: { mode: 'upcoming' },
+          locationIds: ['507f1f77bcf86cd799439112'],
+          peopleIds: ['507f1f77bcf86cd799439113'],
+        },
+        6,
+        {
+          domainId: mockEvent.domainId,
+          now: new Date('2026-09-10T12:00:00.000Z'),
+        },
+      ),
+    ).resolves.toEqual([{ id: '507f1f77bcf86cd799439099', label: 'Upcoming' }]);
+
+    expect(mockEventModel.find).toHaveBeenCalledWith({
+      domainId: { $in: [mockEvent.domainId] },
+      status: { $in: ['planned', 'registration_open', 'ongoing'] },
+      type: { $in: ['seminar'] },
+      locationId: { $in: ['507f1f77bcf86cd799439112'] },
+      $or: [
+        { speakerIds: { $in: ['507f1f77bcf86cd799439113'] } },
+        { organizerIds: { $in: ['507f1f77bcf86cd799439113'] } },
+      ],
+      endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+    });
+    expect(chain.sort).toHaveBeenCalledWith({ startAt: 1, title: 1, _id: 1 });
+    expect(chain.limit).toHaveBeenCalledWith(6);
+  });
+
+  it('fills Any-time results from current/upcoming before recent past', async () => {
+    const chainFor = (items: unknown[]) => ({
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(items),
+    });
+    const upcoming = chainFor([
+      { _id: '507f1f77bcf86cd799439090', title: 'Current' },
+    ]);
+    const past = chainFor([{ _id: '507f1f77bcf86cd799439091', title: 'Past' }]);
+    mockEventModel.find.mockReturnValueOnce(upcoming).mockReturnValueOnce(past);
+    mockDomainsService.findAll.mockResolvedValue([{ _id: mockEvent.domainId }]);
+
+    await expect(
+      service.findDynamicSummaries({}, 2, {
+        now: new Date('2026-09-10T12:00:00.000Z'),
+      }),
+    ).resolves.toEqual([
+      { id: '507f1f77bcf86cd799439090', label: 'Current' },
+      { id: '507f1f77bcf86cd799439091', label: 'Past' },
+    ]);
+
+    expect(upcoming.sort).toHaveBeenCalledWith({
+      startAt: 1,
+      title: 1,
+      _id: 1,
+    });
+    expect(past.sort).toHaveBeenCalledWith({ startAt: -1, title: 1, _id: 1 });
+    expect(past.limit).toHaveBeenCalledWith(1);
   });
 
   it('returns events without domainId and does not validate domain', async () => {
@@ -589,9 +672,7 @@ describe('EventsService', () => {
       ...mockEvent,
       schedule: {
         timezone: 'Asia/Tbilisi',
-        days: [
-          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
-        ],
+        days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
       },
     };
     mockEventModel.findOne.mockResolvedValue(null);
@@ -615,9 +696,7 @@ describe('EventsService', () => {
       ...mockEvent,
       schedule: {
         timezone: 'Asia/Tbilisi',
-        days: [
-          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
-        ],
+        days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
       },
     };
     mockEventModel.findOne.mockResolvedValue(null);
@@ -710,9 +789,7 @@ describe('EventsService', () => {
       ...mockEvent,
       schedule: {
         timezone: 'Asia/Tbilisi',
-        days: [
-          { date: '2026-04-20', startTime: '14:00', endTime: '16:00' },
-        ],
+        days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
       },
     };
     mockEventModel.findOne.mockResolvedValue(null);
@@ -737,9 +814,7 @@ describe('EventsService', () => {
       ...mockEvent,
       schedule: {
         timezone: 'Asia/Tbilisi',
-        days: [
-          { date: '2026-04-20', startTime: '16:00', endTime: '14:00' },
-        ],
+        days: [{ date: '2026-04-20', startTime: '16:00', endTime: '14:00' }],
       },
     };
     mockEventModel.findOne.mockResolvedValue(null);

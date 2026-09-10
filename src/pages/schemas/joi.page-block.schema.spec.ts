@@ -46,6 +46,91 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should keep legacy entity collections manual and allow dynamic empty filters', () => {
+    const legacy = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'team',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          items: [objectId],
+        },
+      ],
+    });
+    const dynamic = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'team',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          source: 'dynamic',
+          items: [],
+          filters: {},
+        },
+      ],
+    });
+
+    expect(legacy.error).toBeUndefined();
+    expect(dynamic.error).toBeUndefined();
+    expect(dynamic.value.blocks[0].limit).toBe(12);
+  });
+
+  it('should reject invalid Dynamic entity collection branches and limits', () => {
+    for (const block of [
+      {
+        id: 'team',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        source: 'dynamic',
+        items: [objectId],
+        filters: {},
+      },
+      {
+        id: 'team',
+        type: 'entityCollection',
+        entityType: 'partners',
+        layout: 'grid',
+        source: 'dynamic',
+        items: [],
+        filters: { roles: ['team'] },
+      },
+      {
+        id: 'team',
+        type: 'entityCollection',
+        entityType: 'events',
+        layout: 'grid',
+        source: 'dynamic',
+        items: [],
+        filters: { temporal: { mode: 'custom' } },
+      },
+      {
+        id: 'team',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        source: 'dynamic',
+        items: [],
+        filters: {},
+        limit: 25,
+      },
+    ]) {
+      expect(
+        createPageSchema.validate({
+          title: 'About',
+          slug: 'about',
+          blocks: [block],
+        }).error,
+      ).toBeDefined();
+    }
+  });
+
   it('should reject invalid page button target ids at the joi layer', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

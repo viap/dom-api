@@ -27,6 +27,7 @@ describe('PagesController', () => {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      previewEntityCollection: jest.fn(),
     } as unknown as PagesService);
   });
 
@@ -103,6 +104,12 @@ describe('PagesController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PagesController.prototype.findManyAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        PagesController.prototype.previewEntityCollection,
+      ),
     ).toEqual([Role.Admin, Role.Editor]);
   });
 

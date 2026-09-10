@@ -20,7 +20,7 @@ import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
-import { PagesService } from './pages.service';
+import { EntityCollectionPreviewInput, PagesService } from './pages.service';
 import { createPageSchema } from './schemas/joi.create-page.schema';
 import {
   pageDomainPageParamsSchema,
@@ -32,6 +32,7 @@ import { pageDomainQuerySchema } from './schemas/joi.page-domain-query.schema';
 import { pageGlobalQuerySchema } from './schemas/joi.page-global-query.schema';
 import { pageQuerySchema } from './schemas/joi.page-query.schema';
 import { updatePageSchema } from './schemas/joi.update-page.schema';
+import { entityCollectionPreviewSchema } from './schemas/joi.entity-collection-preview.schema';
 import { PageQueryParams } from './types/query-params.interface';
 
 @Controller('pages')
@@ -96,6 +97,15 @@ export class PagesController {
     @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
   ) {
     return this.pagesService.findManyAdminByIds(body.ids);
+  }
+
+  @Post('admin/entity-collection/preview')
+  @Roles(Role.Admin, Role.Editor)
+  previewEntityCollection(
+    @Body(new JoiValidationPipe(entityCollectionPreviewSchema))
+    body: EntityCollectionPreviewInput,
+  ) {
+    return this.pagesService.previewEntityCollection(body);
   }
 
   @Get('domain/:domainSlug')

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -48,8 +48,11 @@ import {
 } from './schemas/domain-event.schema';
 import {
   EventScheduleValidationError,
+  eventDateToUtcStartIsoString,
   normalizeEventSchedule,
 } from './utils/event-schedule';
+import { DynamicEntityCollectionResolutionContext } from '@/pages/types/page-block.interface';
+import { EventEntityCollectionFilters } from './types/entity-collection-filters.interface';
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Planned,
@@ -57,6 +60,11 @@ const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Ongoing,
   EventStatus.Completed,
   EventStatus.Cancelled,
+];
+const ACTIVE_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.Planned,
+  EventStatus.RegistrationOpen,
+  EventStatus.Ongoing,
 ];
 
 type PublicEventLocation = Pick<
@@ -383,6 +391,110 @@ export class EventsService {
     return resolveExistingIds(this.eventModel, ids);
   }
 
+  async findDynamicSummaries(
+    filters: EventEntityCollectionFilters,
+    limit: number,
+    context: DynamicEntityCollectionResolutionContext,
+  ): Promise<Array<{ id: string; label: string }>> {
+    const domainIds = context.domainId
+      ? [context.domainId]
+      : (await this.domainsService.findAll()).map((domain) =>
+          domain._id.toString(),
+        );
+    if (!domainIds.length) return [];
+
+    const query = this.buildDynamicSummaryQuery(filters, domainIds);
+    const now = context.now.toISOString();
+    const temporal = filters.temporal;
+    if (temporal?.mode === 'upcoming') {
+      query.endAt = { $gte: now };
+      return this.findDynamicSummaryQuery(
+        query,
+        { startAt: 1, title: 1, _id: 1 },
+        limit,
+      );
+    }
+    if (temporal?.mode === 'past') {
+      query.endAt = { $lt: now };
+      return this.findDynamicSummaryQuery(
+        query,
+        { startAt: -1, title: 1, _id: 1 },
+        limit,
+      );
+    }
+    if (temporal?.mode === 'custom') {
+      if (temporal.from)
+        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
+      if (temporal.to) {
+        const toExclusive = new Date(`${temporal.to}T12:00:00.000Z`);
+        toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+        const nextDate = toExclusive.toISOString().slice(0, 10);
+        query.startAt = { $lt: eventDateToUtcStartIsoString(nextDate) };
+      }
+      return this.findDynamicSummaryQuery(
+        query,
+        { startAt: 1, title: 1, _id: 1 },
+        limit,
+      );
+    }
+
+    const upcoming = await this.findDynamicSummaryQuery(
+      { ...query, endAt: { $gte: now } },
+      { startAt: 1, title: 1, _id: 1 },
+      limit,
+    );
+    if (upcoming.length >= limit) return upcoming;
+    const past = await this.findDynamicSummaryQuery(
+      { ...query, endAt: { $lt: now } },
+      { startAt: -1, title: 1, _id: 1 },
+      limit - upcoming.length,
+    );
+    return [...upcoming, ...past];
+  }
+
+  private buildDynamicSummaryQuery(
+    filters: EventEntityCollectionFilters,
+    domainIds: string[],
+  ): FilterQuery<DomainEventDocument> {
+    const query: FilterQuery<DomainEventDocument> = {
+      domainId: { $in: domainIds },
+      status: {
+        $in:
+          filters.lifecycle === 'active'
+            ? ACTIVE_EVENT_STATUSES
+            : PUBLIC_EVENT_STATUSES,
+      },
+    };
+    if (filters.types?.length) query.type = { $in: filters.types };
+    if (filters.locationIds?.length)
+      query.locationId = { $in: filters.locationIds };
+    if (filters.peopleIds?.length) {
+      query.$or = [
+        { speakerIds: { $in: filters.peopleIds } },
+        { organizerIds: { $in: filters.peopleIds } },
+      ];
+    }
+    return query;
+  }
+
+  private async findDynamicSummaryQuery(
+    query: FilterQuery<DomainEventDocument>,
+    sort: Record<string, 1 | -1>,
+    limit: number,
+  ): Promise<Array<{ id: string; label: string }>> {
+    const events = await this.eventModel
+      .find(query)
+      .select({ _id: 1, title: 1 })
+      .sort(sort)
+      .limit(limit)
+      .lean()
+      .exec();
+    return events.map((event) => ({
+      id: event._id.toString(),
+      label: event.title,
+    }));
+  }
+
   private async toPublicEvent(
     event: DomainEventDocument,
     registeredCount?: number,
@@ -397,6 +509,10 @@ export class EventsService {
     const publicBlocks = await toPublicBlocks(
       blocks,
       this.getPublicBlockServices(),
+      {
+        domainId: this.toIdString(eventObj.domainId),
+        now: new Date(),
+      },
     );
 
     let count = registeredCount;
@@ -601,6 +717,12 @@ export class EventsService {
     return {
       findPublishedPeopleSummariesByIds: (ids) =>
         this.peopleService.findPublishedSummariesByIds(ids),
+      findDynamicPeopleSummaries: (filters, limit) =>
+        this.peopleService.findDynamicSummaries(filters, limit),
+      findDynamicPartnerSummaries: (filters, limit) =>
+        this.partnersService.findDynamicSummaries(filters, limit),
+      findDynamicEventSummaries: (filters, limit, context) =>
+        this.findDynamicSummaries(filters, limit, context),
     };
   }
 

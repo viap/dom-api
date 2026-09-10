@@ -6,12 +6,17 @@ import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import {
   CtaBlock,
+  DynamicEntityCollectionBlock,
+  DynamicEntityCollectionResolutionContext,
   EntityCollectionBlock,
   GalleryBlock,
   HeroBlock,
   PageBlock,
   RichTextBlock,
 } from '../types/page-block.interface';
+import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
+import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
+import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
 import {
   sanitizeHtmlBlockContent,
   sanitizeRichTextHtml,
@@ -39,6 +44,19 @@ export interface PublicBlockServices {
   findPublishedPeopleSummariesByIds: (
     ids: string[],
   ) => Promise<Array<{ _id: string; fullName: string }>>;
+  findDynamicPeopleSummaries: (
+    filters: PeopleEntityCollectionFilters,
+    limit: number,
+  ) => Promise<Array<{ id: string; label: string }>>;
+  findDynamicPartnerSummaries: (
+    filters: PartnerEntityCollectionFilters,
+    limit: number,
+  ) => Promise<Array<{ id: string; label: string }>>;
+  findDynamicEventSummaries: (
+    filters: EventEntityCollectionFilters,
+    limit: number,
+    context: DynamicEntityCollectionResolutionContext,
+  ) => Promise<Array<{ id: string; label: string }>>;
 }
 
 function createValidationRefs(): ValidationRefs {
@@ -163,6 +181,15 @@ function validateEntityCollectionBlock(
   block: EntityCollectionBlock,
   refs: ValidationRefs,
 ): void {
+  if (block.source === 'dynamic') {
+    if (block.items.length !== 0) {
+      throw new BadRequestException(
+        'Dynamic entity collections must have an empty items array',
+      );
+    }
+    return;
+  }
+
   ensureBlockHasItems(
     block.items,
     'entityCollection.items must contain at least one item',
@@ -333,6 +360,13 @@ export async function prepareBlocksForWrite(
       };
     }
 
+    if (
+      block.type === PageBlockType.EntityCollection &&
+      block.source === 'dynamic'
+    ) {
+      return normalizeDynamicEntityCollectionBlock(block);
+    }
+
     if (block.type !== PageBlockType.RichText) {
       return block;
     }
@@ -353,34 +387,112 @@ export async function prepareBlocksForWrite(
   });
 }
 
+function normalizeDynamicEntityCollectionBlock(
+  block: DynamicEntityCollectionBlock,
+): DynamicEntityCollectionBlock {
+  const filters = Object.fromEntries(
+    Object.entries(block.filters).flatMap(([key, value]) => {
+      if (Array.isArray(value)) {
+        const normalized = value
+          .map((item) => (typeof item === 'string' ? item.trim() : item))
+          .filter(Boolean);
+        return normalized.length ? [[key, normalized]] : [];
+      }
+      return value === undefined ? [] : [[key, value]];
+    }),
+  );
+
+  return {
+    ...block,
+    items: [],
+    filters: filters as DynamicEntityCollectionBlock['filters'],
+    limit: block.limit ?? 12,
+  };
+}
+
 export async function toPublicBlocks(
   blocks: Array<PageBlock | Record<string, unknown>>,
   services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
 ): Promise<Array<PageBlock | Record<string, unknown>>> {
-  const publicBlocks: Array<PageBlock | Record<string, unknown>> = [];
-
-  for (const block of blocks) {
+  const visibleBlocks = blocks.filter((block) => {
     if (!block || typeof block !== 'object') {
-      continue;
+      return false;
     }
-
     const typedBlock = block as Record<string, unknown>;
-    if (typedBlock.isVisible === false) {
-      continue;
-    }
-
-    if (typedBlock.type === PageBlockType.RichText) {
-      const processedBlock = await toPublicRichTextBlock(typedBlock, services);
-      if (processedBlock) {
-        publicBlocks.push(processedBlock);
+    return typedBlock.isVisible !== false;
+  });
+  const resolvedBlocks = await Promise.all(
+    visibleBlocks.map(async (block) => {
+      const typedBlock = block as Record<string, unknown>;
+      if (typedBlock.type === PageBlockType.RichText) {
+        return toPublicRichTextBlock(typedBlock, services);
       }
-      continue;
-    }
+      if (
+        typedBlock.type === PageBlockType.EntityCollection &&
+        typedBlock.source === 'dynamic'
+      ) {
+        return toPublicDynamicEntityCollectionBlock(
+          typedBlock,
+          services,
+          context,
+        );
+      }
+      if (typedBlock.type === PageBlockType.EntityCollection) {
+        const publicBlock = { ...typedBlock };
+        delete publicBlock.source;
+        return publicBlock;
+      }
+      return typedBlock;
+    }),
+  );
+  return resolvedBlocks.filter(Boolean) as Array<
+    PageBlock | Record<string, unknown>
+  >;
+}
 
-    publicBlocks.push(typedBlock);
+async function toPublicDynamicEntityCollectionBlock(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+): Promise<Record<string, unknown>> {
+  const entityType = block.entityType as EntityCollectionEntityType;
+  const filters = (block.filters ||
+    {}) as DynamicEntityCollectionBlock['filters'];
+  const limit = typeof block.limit === 'number' ? block.limit : 12;
+  let summaries: Array<{ id: string; label: string }>;
+
+  switch (entityType) {
+    case EntityCollectionEntityType.People:
+      summaries = await services.findDynamicPeopleSummaries(
+        filters as PeopleEntityCollectionFilters,
+        limit,
+      );
+      break;
+    case EntityCollectionEntityType.Partners:
+      summaries = await services.findDynamicPartnerSummaries(
+        filters as PartnerEntityCollectionFilters,
+        limit,
+      );
+      break;
+    case EntityCollectionEntityType.Events:
+      summaries = await services.findDynamicEventSummaries(
+        filters as EventEntityCollectionFilters,
+        limit,
+        context,
+      );
+      break;
+    default:
+      throw new BadRequestException(
+        `Unsupported entity collection type: ${entityType}`,
+      );
   }
 
-  return publicBlocks;
+  const publicBlock = { ...block };
+  delete publicBlock.source;
+  delete publicBlock.filters;
+  delete publicBlock.limit;
+  return { ...publicBlock, items: summaries.map((summary) => summary.id) };
 }
 
 async function toPublicRichTextBlock(
@@ -419,7 +531,8 @@ async function toPublicRichTextBlock(
   const visiblePeopleIds = people.map((person) => person._id);
 
   if (!people.length) {
-    const { relatedPeople: _relatedPeople, ...rest } = block;
+    const rest = { ...block };
+    delete rest.relatedPeople;
     return rest;
   }
 
