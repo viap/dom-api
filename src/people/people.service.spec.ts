@@ -37,6 +37,7 @@ describe('PeopleService', () => {
   const mockSave = jest.fn().mockImplementation(async (payload) => payload);
   const mockQueryExec = jest.fn().mockResolvedValue([]);
   const mockQueryChain = {
+    select: jest.fn().mockReturnThis(),
     populate: jest.fn().mockReturnThis(),
     sort: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
@@ -148,6 +149,32 @@ describe('PeopleService', () => {
       roles: PersonRole.Speaker,
     });
     expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1 });
+  });
+
+  it('builds bounded published dynamic People queries with OR within filters', async () => {
+    mockQueryExec.mockResolvedValueOnce([
+      { _id: '507f1f77bcf86cd799439031', fullName: 'Ada' },
+    ]);
+
+    await expect(
+      service.findDynamicSummaries(
+        {
+          roles: [PersonRole.Team, PersonRole.Speaker],
+          specializations: [' trauma ', 'anxiety'],
+          workLocationIds: ['507f1f77bcf86cd799439032'],
+        },
+        12,
+      ),
+    ).resolves.toEqual([{ id: '507f1f77bcf86cd799439031', label: 'Ada' }]);
+
+    expect(mockPersonModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+      roles: { $in: [PersonRole.Team, PersonRole.Speaker] },
+      specializations: { $in: ['trauma', 'anxiety'] },
+      workLocationId: { $in: ['507f1f77bcf86cd799439032'] },
+    });
+    expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1, _id: 1 });
+    expect(mockQueryChain.limit).toHaveBeenCalledWith(12);
   });
 
   it('should not include isPublished in admin list query', async () => {

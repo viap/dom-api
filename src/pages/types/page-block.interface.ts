@@ -4,6 +4,9 @@ import { EntityCollectionEntityType } from '../enums/entity-collection-entity-ty
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
+import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
+import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
+import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
 
 export type BlockSpacing = 'none' | 'sm' | 'md' | 'lg' | 'xl';
 export type BlockVariant = 'section' | 'block' | 'element';
@@ -57,13 +60,48 @@ export interface RichTextBlock extends PageBlockBase {
   relatedPeople?: RelatedPeopleGroup;
 }
 
-export interface EntityCollectionBlock extends PageBlockBase {
+export type {
+  PeopleEntityCollectionFilters,
+  PartnerEntityCollectionFilters,
+  EventEntityCollectionFilters,
+};
+
+export type EntityCollectionFilters =
+  | PeopleEntityCollectionFilters
+  | PartnerEntityCollectionFilters
+  | EventEntityCollectionFilters;
+
+export interface EntityCollectionBlockBase extends PageBlockBase {
   type: PageBlockType.EntityCollection;
   entityType: EntityCollectionEntityType;
   layout: EntityCollectionLayout;
-  items: string[];
   cardVariant?: string;
 }
+
+export interface ManualEntityCollectionBlock extends EntityCollectionBlockBase {
+  source?: 'manual';
+  items: string[];
+}
+
+export interface DynamicEntityCollectionBlock
+  extends EntityCollectionBlockBase {
+  source: 'dynamic';
+  items: [];
+  filters:
+    | PeopleEntityCollectionFilters
+    | PartnerEntityCollectionFilters
+    | EventEntityCollectionFilters;
+  limit?: number;
+}
+
+export type EntityCollectionBlock =
+  | ManualEntityCollectionBlock
+  | DynamicEntityCollectionBlock;
+
+export type DynamicEntityCollectionResolutionContext = {
+  domainId?: string;
+  now: Date;
+};
 
 export interface HeroBlockItem {
   icon?: string;

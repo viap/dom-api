@@ -12,6 +12,7 @@ const buttonStyleValues = ['primary', 'secondary', 'ghost', 'outline', 'link'];
 const mediaPositionValues = ['left', 'right', 'top', 'bottom'];
 const galleryLayoutValues = ['grid', 'carousel', 'slider'];
 const textAlignValues = ['left', 'center', 'right'];
+const temporalModeValues = ['upcoming', 'past', 'custom'];
 
 export const blockButtonSchema = new mongoose.Schema(
   {
@@ -123,6 +124,38 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
       enum: Object.values(EntityCollectionLayout),
     },
     items: { type: [String], required: true, default: [] },
+    source: { type: String, enum: ['manual', 'dynamic'] },
+    filters: {
+      type: new mongoose.Schema(
+        {
+          roles: { type: [String], default: undefined },
+          specializations: { type: [String], default: undefined },
+          availability: { type: [String], default: undefined },
+          workFormats: { type: [String], default: undefined },
+          workLocationIds: { type: [String], default: undefined },
+          types: { type: [String], default: undefined },
+          lifecycle: { type: String, enum: ['active'] },
+          temporal: {
+            type: new mongoose.Schema(
+              {
+                mode: {
+                  type: String,
+                  required: true,
+                  enum: temporalModeValues,
+                },
+                from: { type: String },
+                to: { type: String },
+              },
+              { _id: false, id: false, strict: 'throw' },
+            ),
+          },
+          locationIds: { type: [String], default: undefined },
+          peopleIds: { type: [String], default: undefined },
+        },
+        { _id: false, id: false, strict: 'throw' },
+      ),
+    },
+    limit: { type: Number, min: 1, max: 24 },
     cardVariant: { type: String },
   },
   { _id: false, id: false, strict: 'throw' },

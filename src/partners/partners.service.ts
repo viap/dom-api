@@ -26,6 +26,7 @@ import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
 import { PartnerQueryParams } from './types/query-params.interface';
 import { Partner, PartnerDocument } from './schemas/partner.schema';
+import { PartnerEntityCollectionFilters } from './types/entity-collection-filters.interface';
 
 @Injectable()
 export class PartnersService {
@@ -149,6 +150,25 @@ export class PartnersService {
       items: partners as PartnerDocument[],
       getId: (partner) => partner._id.toString(),
     });
+  }
+
+  async findDynamicSummaries(
+    filters: PartnerEntityCollectionFilters,
+    limit: number,
+  ): Promise<Array<{ id: string; label: string }>> {
+    const query: FilterQuery<PartnerDocument> = { isPublished: true };
+    if (filters.types?.length) query.type = { $in: filters.types };
+    const partners = await this.partnerModel
+      .find(query)
+      .select({ _id: 1, title: 1 })
+      .sort({ title: 1, _id: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    return partners.map((partner) => ({
+      id: partner._id.toString(),
+      label: partner.title,
+    }));
   }
 
   async findAllAdmin(

@@ -30,7 +30,14 @@ import { UpdatePageDto } from './dto/update-page.dto';
 import { PageStatus } from './enums/page-status.enum';
 import { PageQueryParams } from './types/query-params.interface';
 import { Page, PageDocument } from './schemas/page.schema';
-import { PageBlock } from './types/page-block.interface';
+import {
+  DynamicEntityCollectionResolutionContext,
+  PageBlock,
+} from './types/page-block.interface';
+import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
+import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
+import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
+import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
 import {
   BlockValidationServices,
   prepareBlocksForWrite,
@@ -47,6 +54,26 @@ type PageReference = {
 type PublicPageSource = {
   blocks?: Array<PageBlock | Record<string, unknown>>;
 } & Record<string, unknown>;
+
+export type EntityCollectionPreviewInput =
+  | {
+      entityType: EntityCollectionEntityType.People;
+      filters: PeopleEntityCollectionFilters;
+      limit?: number;
+      contextDomainId: string | null;
+    }
+  | {
+      entityType: EntityCollectionEntityType.Partners;
+      filters: PartnerEntityCollectionFilters;
+      limit?: number;
+      contextDomainId: string | null;
+    }
+  | {
+      entityType: EntityCollectionEntityType.Events;
+      filters: EventEntityCollectionFilters;
+      limit?: number;
+      contextDomainId: string | null;
+    };
 
 @Injectable()
 export class PagesService {
@@ -555,6 +582,45 @@ export class PagesService {
     return resolveExistingIds(this.pageModel, ids);
   }
 
+  async previewEntityCollection(
+    input: EntityCollectionPreviewInput,
+  ): Promise<{ items: Array<{ id: string; label: string }> }> {
+    if (input.contextDomainId) {
+      await this.domainsService.getActiveById(input.contextDomainId);
+    }
+    const context: DynamicEntityCollectionResolutionContext = {
+      domainId: input.contextDomainId || undefined,
+      now: new Date(),
+    };
+    const limit = input.limit ?? 12;
+    switch (input.entityType) {
+      case EntityCollectionEntityType.People:
+        return {
+          items: await this.peopleService.findDynamicSummaries(
+            input.filters,
+            limit,
+          ),
+        };
+      case EntityCollectionEntityType.Partners:
+        return {
+          items: await this.partnersService.findDynamicSummaries(
+            input.filters,
+            limit,
+          ),
+        };
+      case EntityCollectionEntityType.Events:
+        return {
+          items: await this.eventsService.findDynamicSummaries(
+            input.filters,
+            limit,
+            context,
+          ),
+        };
+      default:
+        throw new BadRequestException('Unsupported entity collection type');
+    }
+  }
+
   async findReferenceById(id: string): Promise<PageReference | null> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -587,15 +653,35 @@ export class PagesService {
 
   private async toPublicPage(page: PublicPageSource): Promise<PageDocument> {
     const blocks = Array.isArray(page.blocks) ? page.blocks : [];
-    const publicBlocks = await toPublicBlocks(blocks, {
-      findPublishedPeopleSummariesByIds: (ids) =>
-        this.peopleService.findPublishedSummariesByIds(ids),
-    });
+    const publicBlocks = await toPublicBlocks(
+      blocks,
+      {
+        findPublishedPeopleSummariesByIds: (ids) =>
+          this.peopleService.findPublishedSummariesByIds(ids),
+        findDynamicPeopleSummaries: (filters, limit) =>
+          this.peopleService.findDynamicSummaries(filters, limit),
+        findDynamicPartnerSummaries: (filters, limit) =>
+          this.partnersService.findDynamicSummaries(filters, limit),
+        findDynamicEventSummaries: (filters, limit, context) =>
+          this.eventsService.findDynamicSummaries(filters, limit, context),
+      },
+      {
+        domainId: this.toIdString(page.domainId),
+        now: new Date(),
+      },
+    );
 
     return this.normalizePageTitleVisibility({
       ...(page as unknown as PageDocument),
       blocks: publicBlocks as mongoose.Types.Array<PageBlock>,
     } as unknown as Record<string, unknown>);
+  }
+
+  private toIdString(value: unknown): string | undefined {
+    if (!value) return undefined;
+    return typeof value === 'string'
+      ? value
+      : (value as { toString(): string }).toString();
   }
 
   private normalizePageTitleVisibility(

@@ -20,6 +20,7 @@ describe('PeopleController', () => {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      findSpecializations: jest.fn(),
     } as unknown as PeopleService);
   });
 
@@ -54,6 +55,12 @@ describe('PeopleController', () => {
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PeopleController.prototype.findManyAdmin),
+    ).toEqual([Role.Admin, Role.Editor]);
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        PeopleController.prototype.findSpecializations,
+      ),
     ).toEqual([Role.Admin, Role.Editor]);
     expect(
       Reflect.getMetadata(ROLES_KEY, PeopleController.prototype.create),

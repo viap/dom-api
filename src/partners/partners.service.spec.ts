@@ -128,6 +128,23 @@ describe('PartnersService', () => {
     expect(mockPublicListChain.select).toHaveBeenCalledWith({ contacts: 0 });
   });
 
+  it('builds bounded published dynamic Partner queries', async () => {
+    mockPublicListExec.mockResolvedValueOnce([
+      { _id: '507f1f77bcf86cd799439041', title: 'DOM' },
+    ]);
+
+    await expect(
+      service.findDynamicSummaries({ types: [PartnerType.Media] }, 8),
+    ).resolves.toEqual([{ id: '507f1f77bcf86cd799439041', label: 'DOM' }]);
+
+    expect(mockPartnerModel.find).toHaveBeenCalledWith({
+      isPublished: true,
+      type: { $in: [PartnerType.Media] },
+    });
+    expect(mockPublicListChain.sort).toHaveBeenCalledWith({ title: 1, _id: 1 });
+    expect(mockPublicListChain.limit).toHaveBeenCalledWith(8);
+  });
+
   it('should exclude contacts from public partner detail', async () => {
     await service.findOne('507f1f77bcf86cd799439041');
 

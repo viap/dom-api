@@ -28,6 +28,7 @@ import { CreatePersonDto } from './dto/create-person.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import { Person, PersonDocument } from './schemas/person.schema';
 import { PersonQueryParams } from './types/query-params.interface';
+import { PeopleEntityCollectionFilters } from './types/entity-collection-filters.interface';
 
 @Injectable()
 export class PeopleService {
@@ -172,6 +173,49 @@ export class PeopleService {
       items: people as PersonDocument[],
       getId: (person) => person._id.toString(),
     });
+  }
+
+  async findDynamicSummaries(
+    filters: PeopleEntityCollectionFilters,
+    limit: number,
+  ): Promise<Array<{ id: string; label: string }>> {
+    const query: FilterQuery<PersonDocument> = { isPublished: true };
+    if (filters.roles?.length) query.roles = { $in: filters.roles };
+    if (filters.specializations?.length) {
+      query.specializations = {
+        $in: filters.specializations.map((value) => value.trim()),
+      };
+    }
+    if (filters.availability?.length)
+      query.availability = { $in: filters.availability };
+    if (filters.workFormats?.length)
+      query.workFormat = { $in: filters.workFormats };
+    if (filters.workLocationIds?.length) {
+      query.workLocationId = { $in: filters.workLocationIds };
+    }
+    const people = await this.personModel
+      .find(query)
+      .select({ _id: 1, fullName: 1 })
+      .sort({ fullName: 1, _id: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    return people.map((person) => ({
+      id: person._id.toString(),
+      label: person.fullName,
+    }));
+  }
+
+  async findSpecializations(): Promise<string[]> {
+    const values = await this.personModel.distinct('specializations').exec();
+    return [
+      ...new Set(
+        values
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ].sort((left, right) => left.localeCompare(right));
   }
 
   async findOneBySlug(slug: string): Promise<PersonDocument> {

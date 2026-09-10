@@ -10,6 +10,7 @@ import { DomainsService } from '@/domains/domains.service';
 import { MediaService } from '@/media/media.service';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
+import { PersonRole } from '@/people/enums/person-role.enum';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from './enums/block-button-type.enum';
 import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
@@ -73,9 +74,18 @@ describe('PagesService', () => {
     findOne: jest.fn(),
     existingIds: jest.fn(),
     findPublishedSummariesByIds: jest.fn(),
+    findDynamicSummaries: jest.fn(),
   };
-  const mockPartnersService = { exists: jest.fn(), existingIds: jest.fn() };
-  const mockEventsService = { exists: jest.fn(), existingIds: jest.fn() };
+  const mockPartnersService = {
+    exists: jest.fn(),
+    existingIds: jest.fn(),
+    findDynamicSummaries: jest.fn(),
+  };
+  const mockEventsService = {
+    exists: jest.fn(),
+    existingIds: jest.fn(),
+    findDynamicSummaries: jest.fn(),
+  };
   const mockMediaService = {
     exists: jest.fn(),
     existingIds: jest.fn(),
@@ -122,6 +132,9 @@ describe('PagesService', () => {
           fullName: `Person ${id.slice(-4)}`,
         })),
     );
+    mockPeopleService.findDynamicSummaries.mockResolvedValue([]);
+    mockPartnersService.findDynamicSummaries.mockResolvedValue([]);
+    mockEventsService.findDynamicSummaries.mockResolvedValue([]);
     mockPartnersService.exists.mockResolvedValue(true);
     mockPartnersService.existingIds.mockImplementation(
       async (ids: string[]) => new Set(ids),
@@ -136,6 +149,27 @@ describe('PagesService', () => {
     );
     mockMediaService.existingPublishedIds.mockImplementation(
       async (ids: string[]) => new Set(ids),
+    );
+  });
+
+  it('uses the same People resolver for preview with the supplied global context', async () => {
+    mockPeopleService.findDynamicSummaries.mockResolvedValueOnce([
+      { id: '507f1f77bcf86cd799439031', label: 'Ada' },
+    ]);
+
+    await expect(
+      service.previewEntityCollection({
+        entityType: EntityCollectionEntityType.People,
+        filters: { roles: [PersonRole.Team] },
+        limit: 4,
+        contextDomainId: null,
+      }),
+    ).resolves.toEqual({
+      items: [{ id: '507f1f77bcf86cd799439031', label: 'Ada' }],
+    });
+    expect(mockPeopleService.findDynamicSummaries).toHaveBeenCalledWith(
+      { roles: [PersonRole.Team] },
+      4,
     );
   });
 
