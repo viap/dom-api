@@ -81,6 +81,42 @@ describe('createPageSchema', () => {
     expect(dynamic.value.blocks[0].limit).toBe(12);
   });
 
+  it('should allow only supported People language filters', () => {
+    const valid = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'team',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          source: 'dynamic',
+          items: [],
+          filters: { languages: ['ru', 'en'] },
+        },
+      ],
+    });
+    const invalid = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'team',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          source: 'dynamic',
+          items: [],
+          filters: { languages: ['de'] },
+        },
+      ],
+    });
+
+    expect(valid.error).toBeUndefined();
+    expect(invalid.error).toBeDefined();
+  });
+
   it('should reject invalid Dynamic entity collection branches and limits', () => {
     for (const block of [
       {

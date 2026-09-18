@@ -9,6 +9,7 @@ import { MediaService } from '@/media/media.service';
 import { LocationsService } from '@/locations/locations.service';
 import { UsersService } from '@/users/users.service';
 import { PersonRole } from './enums/person-role.enum';
+import { Languages } from './enums/languages.enum';
 import { Person } from './schemas/person.schema';
 import { PeopleService } from './people.service';
 
@@ -65,6 +66,7 @@ describe('PeopleService', () => {
   };
   const mockLocationsService = {
     exists: jest.fn().mockResolvedValue(true),
+    findManyByIds: jest.fn().mockResolvedValue({ items: [] }),
   };
 
   beforeEach(async () => {
@@ -85,6 +87,7 @@ describe('PeopleService', () => {
     });
     mockMediaService.existsPublished.mockResolvedValue(true);
     mockLocationsService.exists.mockResolvedValue(true);
+    mockLocationsService.findManyByIds.mockResolvedValue({ items: [] });
     mockQueryExec.mockResolvedValue([]);
     mockPersonModel.findOne.mockReturnValue(createLeanExecChain(null));
   });
@@ -162,6 +165,7 @@ describe('PeopleService', () => {
           roles: [PersonRole.Team, PersonRole.Speaker],
           specializations: [' trauma ', 'anxiety'],
           workLocationIds: ['507f1f77bcf86cd799439032'],
+          languages: [Languages.Ru, Languages.Ka],
         },
         12,
       ),
@@ -172,9 +176,69 @@ describe('PeopleService', () => {
       roles: { $in: [PersonRole.Team, PersonRole.Speaker] },
       specializations: { $in: ['trauma', 'anxiety'] },
       workLocationId: { $in: ['507f1f77bcf86cd799439032'] },
+      languages: { $in: [Languages.Ru, Languages.Ka] },
     });
     expect(mockQueryChain.sort).toHaveBeenCalledWith({ fullName: 1, _id: 1 });
     expect(mockQueryChain.limit).toHaveBeenCalledWith(12);
+  });
+
+  it('returns only safe, optional preview metadata without changing dynamic filters', async () => {
+    const locationId = '507f1f77bcf86cd799439032';
+    mockQueryExec.mockResolvedValueOnce([
+      {
+        _id: '507f1f77bcf86cd799439031',
+        fullName: 'Ada',
+        title: '  Therapist  ',
+        roles: [PersonRole.Team],
+        specializations: [' trauma ', ''],
+        workLocationId: locationId,
+        contacts: [{ username: 'private' }],
+      },
+    ]);
+    mockLocationsService.findManyByIds.mockResolvedValueOnce({
+      items: [{ _id: locationId, title: 'DOM Office', notes: 'private' }],
+    });
+
+    await expect(service.findDynamicPreviewItems({}, 12)).resolves.toEqual([
+      {
+        id: '507f1f77bcf86cd799439031',
+        label: 'Ada',
+        metadata: {
+          professionalTitle: 'Therapist',
+          role: PersonRole.Team,
+          specializations: ['trauma'],
+          workLocationTitle: 'DOM Office',
+        },
+      },
+    ]);
+    expect(mockQueryChain.select).toHaveBeenCalledWith({
+      _id: 1,
+      fullName: 1,
+      title: 1,
+      roles: 1,
+      specializations: 1,
+      workLocationId: 1,
+    });
+    expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+      locationId,
+    ]);
+  });
+
+  it('keeps preview rows successful when optional location metadata cannot load', async () => {
+    mockQueryExec.mockResolvedValueOnce([
+      {
+        _id: '507f1f77bcf86cd799439031',
+        fullName: 'Ada',
+        workLocationId: '507f1f77bcf86cd799439032',
+      },
+    ]);
+    mockLocationsService.findManyByIds.mockRejectedValueOnce(
+      new Error('locations unavailable'),
+    );
+
+    await expect(service.findDynamicPreviewItems({}, 12)).resolves.toEqual([
+      { id: '507f1f77bcf86cd799439031', label: 'Ada' },
+    ]);
   });
 
   it('should not include isPublished in admin list query', async () => {

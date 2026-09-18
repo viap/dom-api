@@ -452,6 +452,90 @@ export class EventsService {
     return [...upcoming, ...past];
   }
 
+  async findDynamicPreviewItems(
+    filters: EventEntityCollectionFilters,
+    limit: number,
+    context: DynamicEntityCollectionResolutionContext,
+  ) {
+    const domainIds = context.domainId
+      ? [context.domainId]
+      : (await this.domainsService.findAll()).map((domain) =>
+          domain._id.toString(),
+        );
+    if (!domainIds.length) return [];
+
+    const query = this.buildDynamicSummaryQuery(filters, domainIds);
+    const now = context.now.toISOString();
+    const temporal = filters.temporal;
+    let events;
+    if (temporal?.mode === 'upcoming') {
+      query.endAt = { $gte: now };
+      events = await this.findDynamicPreviewQuery(
+        query,
+        { startAt: 1, title: 1, _id: 1 },
+        limit,
+      );
+    } else if (temporal?.mode === 'past') {
+      query.endAt = { $lt: now };
+      events = await this.findDynamicPreviewQuery(
+        query,
+        { startAt: -1, title: 1, _id: 1 },
+        limit,
+      );
+    } else if (temporal?.mode === 'custom') {
+      if (temporal.from)
+        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
+      if (temporal.to) {
+        const toExclusive = new Date(`${temporal.to}T12:00:00.000Z`);
+        toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+        const nextDate = toExclusive.toISOString().slice(0, 10);
+        query.startAt = { $lt: eventDateToUtcStartIsoString(nextDate) };
+      }
+      events = await this.findDynamicPreviewQuery(
+        query,
+        { startAt: 1, title: 1, _id: 1 },
+        limit,
+      );
+    } else {
+      const upcoming = await this.findDynamicPreviewQuery(
+        { ...query, endAt: { $gte: now } },
+        { startAt: 1, title: 1, _id: 1 },
+        limit,
+      );
+      events =
+        upcoming.length >= limit
+          ? upcoming
+          : [
+              ...upcoming,
+              ...(await this.findDynamicPreviewQuery(
+                { ...query, endAt: { $lt: now } },
+                { startAt: -1, title: 1, _id: 1 },
+                limit - upcoming.length,
+              )),
+            ];
+    }
+
+    const locationTitles = await this.resolveLocationTitles(
+      events.map((event) => event.locationId),
+    );
+    return events.map((event) => {
+      const locationTitle = event.locationId
+        ? locationTitles.get(event.locationId.toString())
+        : undefined;
+      return {
+        id: event._id.toString(),
+        label: event.title,
+        metadata: {
+          eventType: event.type,
+          startAt: event.startAt,
+          endAt: event.endAt,
+          ...(event.schedule ? { schedule: event.schedule } : {}),
+          ...(locationTitle ? { locationTitle } : {}),
+        },
+      };
+    });
+  }
+
   private buildDynamicSummaryQuery(
     filters: EventEntityCollectionFilters,
     domainIds: string[],
@@ -493,6 +577,53 @@ export class EventsService {
       id: event._id.toString(),
       label: event.title,
     }));
+  }
+
+  private findDynamicPreviewQuery(
+    query: FilterQuery<DomainEventDocument>,
+    sort: Record<string, 1 | -1>,
+    limit: number,
+  ) {
+    return this.eventModel
+      .find(query)
+      .select({
+        _id: 1,
+        title: 1,
+        type: 1,
+        startAt: 1,
+        endAt: 1,
+        schedule: 1,
+        locationId: 1,
+      })
+      .sort(sort)
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  private async resolveLocationTitles(
+    locationIds: Array<{ toString(): string } | undefined>,
+  ) {
+    const ids = [
+      ...new Set(
+        locationIds
+          .filter((id): id is { toString(): string } => Boolean(id))
+          .map((id) => id.toString()),
+      ),
+    ];
+    if (!ids.length) return new Map<string, string>();
+
+    try {
+      const { items } = await this.locationsService.findManyByIds(ids);
+      const titles = new Map<string, string>();
+      items.forEach((location) => {
+        const title = location.title.trim();
+        if (title) titles.set(location._id.toString(), title);
+      });
+      return titles;
+    } catch {
+      return new Map<string, string>();
+    }
   }
 
   private async toPublicEvent(

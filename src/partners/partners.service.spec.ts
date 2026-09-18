@@ -145,6 +145,32 @@ describe('PartnersService', () => {
     expect(mockPublicListChain.limit).toHaveBeenCalledWith(8);
   });
 
+  it('returns only the localized-client-safe Partner preview metadata', async () => {
+    mockPublicListExec.mockResolvedValueOnce([
+      {
+        _id: '507f1f77bcf86cd799439041',
+        title: 'DOM',
+        type: PartnerType.Media,
+        contacts: [{ username: 'private' }],
+      },
+    ]);
+
+    await expect(
+      service.findDynamicPreviewItems({ types: [PartnerType.Media] }, 8),
+    ).resolves.toEqual([
+      {
+        id: '507f1f77bcf86cd799439041',
+        label: 'DOM',
+        metadata: { partnerType: PartnerType.Media },
+      },
+    ]);
+    expect(mockPublicListChain.select).toHaveBeenCalledWith({
+      _id: 1,
+      title: 1,
+      type: 1,
+    });
+  });
+
   it('should exclude contacts from public partner detail', async () => {
     await service.findOne('507f1f77bcf86cd799439041');
 

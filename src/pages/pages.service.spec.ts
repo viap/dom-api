@@ -75,16 +75,19 @@ describe('PagesService', () => {
     existingIds: jest.fn(),
     findPublishedSummariesByIds: jest.fn(),
     findDynamicSummaries: jest.fn(),
+    findDynamicPreviewItems: jest.fn(),
   };
   const mockPartnersService = {
     exists: jest.fn(),
     existingIds: jest.fn(),
     findDynamicSummaries: jest.fn(),
+    findDynamicPreviewItems: jest.fn(),
   };
   const mockEventsService = {
     exists: jest.fn(),
     existingIds: jest.fn(),
     findDynamicSummaries: jest.fn(),
+    findDynamicPreviewItems: jest.fn(),
   };
   const mockMediaService = {
     exists: jest.fn(),
@@ -133,8 +136,11 @@ describe('PagesService', () => {
         })),
     );
     mockPeopleService.findDynamicSummaries.mockResolvedValue([]);
+    mockPeopleService.findDynamicPreviewItems.mockResolvedValue([]);
     mockPartnersService.findDynamicSummaries.mockResolvedValue([]);
+    mockPartnersService.findDynamicPreviewItems.mockResolvedValue([]);
     mockEventsService.findDynamicSummaries.mockResolvedValue([]);
+    mockEventsService.findDynamicPreviewItems.mockResolvedValue([]);
     mockPartnersService.exists.mockResolvedValue(true);
     mockPartnersService.existingIds.mockImplementation(
       async (ids: string[]) => new Set(ids),
@@ -153,8 +159,12 @@ describe('PagesService', () => {
   });
 
   it('uses the same People resolver for preview with the supplied global context', async () => {
-    mockPeopleService.findDynamicSummaries.mockResolvedValueOnce([
-      { id: '507f1f77bcf86cd799439031', label: 'Ada' },
+    mockPeopleService.findDynamicPreviewItems.mockResolvedValueOnce([
+      {
+        id: '507f1f77bcf86cd799439031',
+        label: 'Ada',
+        metadata: { professionalTitle: 'Therapist' },
+      },
     ]);
 
     await expect(
@@ -165,9 +175,15 @@ describe('PagesService', () => {
         contextDomainId: null,
       }),
     ).resolves.toEqual({
-      items: [{ id: '507f1f77bcf86cd799439031', label: 'Ada' }],
+      items: [
+        {
+          id: '507f1f77bcf86cd799439031',
+          label: 'Ada',
+          metadata: { professionalTitle: 'Therapist' },
+        },
+      ],
     });
-    expect(mockPeopleService.findDynamicSummaries).toHaveBeenCalledWith(
+    expect(mockPeopleService.findDynamicPreviewItems).toHaveBeenCalledWith(
       { roles: [PersonRole.Team] },
       4,
     );
