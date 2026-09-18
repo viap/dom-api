@@ -171,6 +171,27 @@ export class PartnersService {
     }));
   }
 
+  async findDynamicPreviewItems(
+    filters: PartnerEntityCollectionFilters,
+    limit: number,
+  ) {
+    const query: FilterQuery<PartnerDocument> = { isPublished: true };
+    if (filters.types?.length) query.type = { $in: filters.types };
+    const partners = await this.partnerModel
+      .find(query)
+      .select({ _id: 1, title: 1, type: 1 })
+      .sort({ title: 1, _id: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+
+    return partners.map((partner) => ({
+      id: partner._id.toString(),
+      label: partner.title,
+      metadata: { partnerType: partner.type },
+    }));
+  }
+
   async findAllAdmin(
     queryParams: PartnerQueryParams = {},
   ): Promise<PartnerDocument[]> {

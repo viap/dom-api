@@ -14,6 +14,23 @@ describe('entityCollectionPreviewSchema', () => {
     expect(value.limit).toBe(12);
   });
 
+  it('accepts allow-listed People language filters and rejects unknown values', () => {
+    expect(
+      entityCollectionPreviewSchema.validate({
+        entityType: 'people',
+        filters: { languages: ['ru', 'ka'] },
+        contextDomainId: null,
+      }).error,
+    ).toBeUndefined();
+    expect(
+      entityCollectionPreviewSchema.validate({
+        entityType: 'people',
+        filters: { languages: ['de'] },
+        contextDomainId: null,
+      }).error,
+    ).toBeDefined();
+  });
+
   it('rejects unnormalized empty selections and incomplete custom ranges', () => {
     for (const input of [
       { entityType: 'people', filters: { roles: [] }, contextDomainId: null },

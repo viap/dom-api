@@ -582,9 +582,7 @@ export class PagesService {
     return resolveExistingIds(this.pageModel, ids);
   }
 
-  async previewEntityCollection(
-    input: EntityCollectionPreviewInput,
-  ): Promise<{ items: Array<{ id: string; label: string }> }> {
+  async previewEntityCollection(input: EntityCollectionPreviewInput) {
     if (input.contextDomainId) {
       await this.domainsService.getActiveById(input.contextDomainId);
     }
@@ -596,21 +594,21 @@ export class PagesService {
     switch (input.entityType) {
       case EntityCollectionEntityType.People:
         return {
-          items: await this.peopleService.findDynamicSummaries(
+          items: await this.peopleService.findDynamicPreviewItems(
             input.filters,
             limit,
           ),
         };
       case EntityCollectionEntityType.Partners:
         return {
-          items: await this.partnersService.findDynamicSummaries(
+          items: await this.partnersService.findDynamicPreviewItems(
             input.filters,
             limit,
           ),
         };
       case EntityCollectionEntityType.Events:
         return {
-          items: await this.eventsService.findDynamicSummaries(
+          items: await this.eventsService.findDynamicPreviewItems(
             input.filters,
             limit,
             context,

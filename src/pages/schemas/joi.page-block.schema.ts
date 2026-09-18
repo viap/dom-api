@@ -7,6 +7,7 @@ import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { PersonAvailability } from '@/people/enums/person-availability.enum';
+import { Languages } from '@/people/enums/languages.enum';
 import { PersonRole } from '@/people/enums/person-role.enum';
 import { WorkFormat } from '@/people/enums/work-format.enum';
 import { PartnerType } from '@/partners/enums/partner-type.enum';
@@ -238,6 +239,7 @@ const peopleFiltersSchema = Joi.object({
   availability: selectedValues(Object.values(PersonAvailability)),
   workFormats: selectedValues(Object.values(WorkFormat)),
   workLocationIds: objectIdValues,
+  languages: selectedValues(Object.values(Languages)),
 }).unknown(false);
 const partnerFiltersSchema = Joi.object({
   types: selectedValues(Object.values(PartnerType)),

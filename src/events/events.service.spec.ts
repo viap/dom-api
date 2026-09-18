@@ -216,6 +216,92 @@ describe('EventsService', () => {
     expect(chain.limit).toHaveBeenCalledWith(6);
   });
 
+  it('returns safe Event preview metadata with one bounded location lookup', async () => {
+    const event = {
+      ...mockEvent,
+      locationId: mockLocation._id,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        days: [{ date: '2026-04-20', startTime: '14:00', endTime: '15:00' }],
+      },
+    };
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([event]),
+    };
+    mockEventModel.find.mockReturnValue(chain);
+    mockLocationsService.findManyByIds.mockResolvedValueOnce({
+      items: [mockLocation],
+    });
+
+    await expect(
+      service.findDynamicPreviewItems({ temporal: { mode: 'upcoming' } }, 6, {
+        domainId: mockEvent.domainId,
+        now: new Date('2026-09-10T12:00:00.000Z'),
+      }),
+    ).resolves.toEqual([
+      {
+        id: mockEvent._id,
+        label: 'Event',
+        metadata: {
+          eventType: 'seminar',
+          startAt: mockEvent.startAt,
+          endAt: mockEvent.endAt,
+          schedule: event.schedule,
+          locationTitle: 'DOM Hall',
+        },
+      },
+    ]);
+    expect(chain.select).toHaveBeenCalledWith({
+      _id: 1,
+      title: 1,
+      type: 1,
+      startAt: 1,
+      endAt: 1,
+      schedule: 1,
+      locationId: 1,
+    });
+    expect(mockLocationsService.findManyByIds).toHaveBeenCalledWith([
+      mockLocation._id,
+    ]);
+  });
+
+  it('keeps Event preview rows successful when optional location metadata cannot load', async () => {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest
+        .fn()
+        .mockResolvedValue([{ ...mockEvent, locationId: mockLocation._id }]),
+    };
+    mockEventModel.find.mockReturnValue(chain);
+    mockLocationsService.findManyByIds.mockRejectedValueOnce(
+      new Error('locations unavailable'),
+    );
+
+    await expect(
+      service.findDynamicPreviewItems({ temporal: { mode: 'upcoming' } }, 6, {
+        domainId: mockEvent.domainId,
+        now: new Date('2026-09-10T12:00:00.000Z'),
+      }),
+    ).resolves.toEqual([
+      {
+        id: mockEvent._id,
+        label: 'Event',
+        metadata: {
+          eventType: 'seminar',
+          startAt: mockEvent.startAt,
+          endAt: mockEvent.endAt,
+        },
+      },
+    ]);
+  });
+
   it('fills Any-time results from current/upcoming before recent past', async () => {
     const chainFor = (items: unknown[]) => ({
       select: jest.fn().mockReturnThis(),

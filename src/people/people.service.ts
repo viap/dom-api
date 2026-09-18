@@ -179,6 +179,80 @@ export class PeopleService {
     filters: PeopleEntityCollectionFilters,
     limit: number,
   ): Promise<Array<{ id: string; label: string }>> {
+    const query = this.buildDynamicSummaryQuery(filters);
+    const people = await this.personModel
+      .find(query)
+      .select({ _id: 1, fullName: 1 })
+      .sort({ fullName: 1, _id: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    return people.map((person) => ({
+      id: person._id.toString(),
+      label: person.fullName,
+    }));
+  }
+
+  async findDynamicPreviewItems(
+    filters: PeopleEntityCollectionFilters,
+    limit: number,
+  ) {
+    const people = await this.personModel
+      .find(this.buildDynamicSummaryQuery(filters))
+      .select({
+        _id: 1,
+        fullName: 1,
+        title: 1,
+        roles: 1,
+        specializations: 1,
+        workLocationId: 1,
+      })
+      .sort({ fullName: 1, _id: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    const locationTitles = await this.resolveLocationTitles(
+      people.map((person) => person.workLocationId),
+    );
+
+    return people.map((person) => {
+      const professionalTitle = person.title?.trim();
+      const specializations = person.specializations
+        ?.map((value) => value.trim())
+        .filter(Boolean);
+      const workLocationTitle = person.workLocationId
+        ? locationTitles.get(person.workLocationId.toString())
+        : undefined;
+      const metadata = {
+        ...(professionalTitle ? { professionalTitle } : {}),
+        ...(person.roles?.[0] ? { role: person.roles[0] } : {}),
+        ...(specializations?.length ? { specializations } : {}),
+        ...(workLocationTitle ? { workLocationTitle } : {}),
+      };
+
+      return {
+        id: person._id.toString(),
+        label: person.fullName,
+        ...(Object.keys(metadata).length ? { metadata } : {}),
+      };
+    });
+  }
+
+  async findSpecializations(): Promise<string[]> {
+    const values = await this.personModel.distinct('specializations').exec();
+    return [
+      ...new Set(
+        values
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ].sort((left, right) => left.localeCompare(right));
+  }
+
+  private buildDynamicSummaryQuery(
+    filters: PeopleEntityCollectionFilters,
+  ): FilterQuery<PersonDocument> {
     const query: FilterQuery<PersonDocument> = { isPublished: true };
     if (filters.roles?.length) query.roles = { $in: filters.roles };
     if (filters.specializations?.length) {
@@ -193,29 +267,33 @@ export class PeopleService {
     if (filters.workLocationIds?.length) {
       query.workLocationId = { $in: filters.workLocationIds };
     }
-    const people = await this.personModel
-      .find(query)
-      .select({ _id: 1, fullName: 1 })
-      .sort({ fullName: 1, _id: 1 })
-      .limit(limit)
-      .lean()
-      .exec();
-    return people.map((person) => ({
-      id: person._id.toString(),
-      label: person.fullName,
-    }));
+    if (filters.languages?.length) query.languages = { $in: filters.languages };
+    return query;
   }
 
-  async findSpecializations(): Promise<string[]> {
-    const values = await this.personModel.distinct('specializations').exec();
-    return [
+  private async resolveLocationTitles(
+    locationIds: Array<{ toString(): string } | undefined>,
+  ) {
+    const ids = [
       ...new Set(
-        values
-          .filter((value): value is string => typeof value === 'string')
-          .map((value) => value.trim())
-          .filter(Boolean),
+        locationIds
+          .filter((id): id is { toString(): string } => Boolean(id))
+          .map((id) => id.toString()),
       ),
-    ].sort((left, right) => left.localeCompare(right));
+    ];
+    if (!ids.length) return new Map<string, string>();
+
+    try {
+      const { items } = await this.locationsService.findManyByIds(ids);
+      const titles = new Map<string, string>();
+      items.forEach((location) => {
+        const title = location.title.trim();
+        if (title) titles.set(location._id.toString(), title);
+      });
+      return titles;
+    } catch {
+      return new Map<string, string>();
+    }
   }
 
   async findOneBySlug(slug: string): Promise<PersonDocument> {

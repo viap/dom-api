@@ -5,6 +5,7 @@ import { EntityCollectionEntityType } from '../enums/entity-collection-entity-ty
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
+import { Languages } from '@/people/enums/languages.enum';
 
 const spacingValues = ['none', 'sm', 'md', 'lg', 'xl'];
 const variantValues = ['section', 'block', 'element'];
@@ -133,6 +134,11 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
           availability: { type: [String], default: undefined },
           workFormats: { type: [String], default: undefined },
           workLocationIds: { type: [String], default: undefined },
+          languages: {
+            type: [String],
+            enum: Object.values(Languages),
+            default: undefined,
+          },
           types: { type: [String], default: undefined },
           lifecycle: { type: String, enum: ['active'] },
           temporal: {
