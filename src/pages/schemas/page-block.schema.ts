@@ -83,6 +83,7 @@ export const pageBlockBaseSchema = new mongoose.Schema(
       enum: Object.values(PageBlockType),
     },
     variant: { type: String, enum: variantValues },
+    pretitle: { type: String, trim: true },
     title: { type: String, trim: true },
     subtitle: { type: String },
     description: { type: String },
