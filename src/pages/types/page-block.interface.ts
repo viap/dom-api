@@ -40,6 +40,7 @@ export interface PageBlockBase {
   id: string;
   type: PageBlockType;
   variant?: BlockVariant;
+  pretitle?: string;
   title?: string;
   subtitle?: string;
   description?: string;

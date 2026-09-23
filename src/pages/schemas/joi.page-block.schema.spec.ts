@@ -570,6 +570,71 @@ describe('createPageSchema', () => {
     expect(error).toBeDefined();
   });
 
+  it('should accept a pretitle of exactly 120 characters', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          pretitle: 'a'.repeat(120),
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].pretitle).toHaveLength(120);
+  });
+
+  it('should reject pretitle values longer than 120 characters', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          pretitle: 'a'.repeat(121),
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject an empty pretitle', () => {
+    const { error } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+          pretitle: '',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
+  it('should accept a block that omits pretitle', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'intro',
+          type: 'richText',
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].pretitle).toBeUndefined();
+  });
+
   it('should reject legacy cta backgroundStyle values', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

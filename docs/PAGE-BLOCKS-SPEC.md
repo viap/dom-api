@@ -61,6 +61,7 @@ type PageBlockBase = {
   id: string;
   type: string;
   variant?: string;
+  pretitle?: string;
   title?: string;
   subtitle?: string;
   description?: string;
@@ -76,6 +77,7 @@ type PageBlockBase = {
 
 Notes:
 
+- `pretitle` is an optional short plain-text eyebrow line rendered above `title` (overline); it is optional, capped at 120 characters, and independent of `title` (renders on its own when `title` is absent)
 - `description` is the main rich text / body field for blocks that need it
 - `variant` is block-specific and should not replace `type`
 - `theme` should stay token-based, not raw design values, where possible

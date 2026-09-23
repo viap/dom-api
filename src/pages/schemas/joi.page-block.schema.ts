@@ -164,6 +164,7 @@ const pageBlockBaseSchema = {
     .valid(...Object.values(PageBlockType))
     .required(),
   variant: variantSchema.optional(),
+  pretitle: Joi.string().trim().min(1).max(120).optional(),
   title: Joi.string().trim().min(1).max(150).optional(),
   subtitle: Joi.string().trim().min(1).max(300).optional(),
   description: stringSchema.optional(),
