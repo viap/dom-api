@@ -834,3 +834,281 @@ describe('createPageSchema', () => {
     expect(error).toBeUndefined();
   });
 });
+
+describe('block button action', () => {
+  const ctaWithButton = (button: Record<string, unknown>) => ({
+    title: 'About',
+    slug: 'about',
+    blocks: [{ id: 'cta', type: 'cta', buttons: [button] }],
+  });
+
+  it('should accept a block button carrying an embedded richText block', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        block: { id: 'modal-1', type: 'richText', title: 'Hello' },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject a block button without an embedded block', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({ label: 'Info', type: 'block' }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject a block button carrying url/targetId/application fields', () => {
+    for (const extra of [
+      { url: 'https://example.com' },
+      { targetId: objectId },
+      { applicationProgramId: objectId },
+      { applicationEventId: objectId },
+    ]) {
+      const { error } = createPageSchema.validate(
+        ctaWithButton({
+          label: 'Info',
+          type: 'block',
+          block: { id: 'modal-1', type: 'richText' },
+          ...extra,
+        }),
+      );
+
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('should reject a non-block button that carries a block field', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Open',
+        type: 'external',
+        url: 'https://example.com',
+        block: { id: 'modal-1', type: 'richText' },
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should accept every allowed embedded block type', () => {
+    const allowed = [
+      { id: 'm', type: 'richText', title: 'Hi' },
+      {
+        id: 'm',
+        type: 'cta',
+        buttons: [
+          { label: 'Go', type: 'external', url: 'https://example.com' },
+        ],
+      },
+      { id: 'm', type: 'html', content: '<p>Hi</p>' },
+      {
+        id: 'm',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        items: [objectId],
+      },
+      { id: 'm', type: 'gallery', items: [{ mediaId: objectId }] },
+    ];
+
+    for (const block of allowed) {
+      const { error } = createPageSchema.validate(
+        ctaWithButton({ label: 'Info', type: 'block', block }),
+      );
+
+      expect(error).toBeUndefined();
+    }
+  });
+
+  it('should keep dynamic entityCollection supported inside an embedded block', () => {
+    const { error, value } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        block: {
+          id: 'm',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          source: 'dynamic',
+          items: [],
+          filters: { languages: ['ru'] },
+        },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].buttons[0].block.limit).toBe(12);
+  });
+
+  it('should reject hero or applicationForm as an embedded block', () => {
+    for (const block of [
+      { id: 'm', type: 'hero' },
+      { id: 'm', type: 'applicationForm', applicationType: 'general' },
+    ]) {
+      const { error } = createPageSchema.validate(
+        ctaWithButton({ label: 'Info', type: 'block', block }),
+      );
+
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('should reject provider-owned modal buttons nested inside an embedded block', () => {
+    for (const nested of [
+      { label: 'Nested', type: 'application', targetId: 'partnership' },
+      {
+        label: 'Nested',
+        type: 'block',
+        block: { id: 'inner', type: 'richText' },
+      },
+    ]) {
+      const { error } = createPageSchema.validate(
+        ctaWithButton({
+          label: 'Info',
+          type: 'block',
+          block: { id: 'm', type: 'richText', buttons: [nested] },
+        }),
+      );
+
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('should accept non-modal buttons nested inside an embedded block', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        block: {
+          id: 'm',
+          type: 'richText',
+          buttons: [
+            { label: 'Site', type: 'external', url: 'https://example.com' },
+            { label: 'Page', type: 'page', targetId: objectId },
+          ],
+        },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+  });
+
+  // Hero item buttons use the same normal blockButtonSchema, so the block action
+  // and its embedded-block whitelist apply identically (no hero-specific schema).
+  const heroWithButton = (button: Record<string, unknown>) => ({
+    title: 'About',
+    slug: 'about',
+    blocks: [{ id: 'hero', type: 'hero', items: [{ title: 'Card', button }] }],
+  });
+
+  it('should accept a hero item block button carrying an embedded block', () => {
+    const { error } = createPageSchema.validate(
+      heroWithButton({
+        label: 'More',
+        type: 'block',
+        block: { id: 'modal-1', type: 'richText', title: 'Hello' },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject a hero item block button embedding a non-whitelisted type', () => {
+    for (const block of [
+      { id: 'm', type: 'hero' },
+      { id: 'm', type: 'applicationForm', applicationType: 'general' },
+    ]) {
+      const { error } = createPageSchema.validate(
+        heroWithButton({ label: 'More', type: 'block', block }),
+      );
+
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('should accept and preserve an optional modalTitle on a block button', () => {
+    const { error, value } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: 'Our team',
+        block: { id: 'modal-1', type: 'richText', title: 'Hi' },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].buttons[0].modalTitle).toBe('Our team');
+  });
+
+  it('should reject modalTitle over 150 characters', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: 'a'.repeat(151),
+        block: { id: 'modal-1', type: 'richText' },
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject modalTitle on a link (non-modal) button', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Open',
+        type: 'external',
+        url: 'https://example.com',
+        modalTitle: 'Nope',
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should accept and preserve an optional modalTitle on an application button', () => {
+    const { error, value } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Apply',
+        type: 'application',
+        targetId: 'partnership',
+        modalTitle: 'Become a partner',
+      }),
+    );
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].buttons[0].modalTitle).toBe('Become a partner');
+  });
+
+  it('should reject an application modalTitle over 150 characters', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Apply',
+        type: 'application',
+        targetId: 'partnership',
+        modalTitle: 'a'.repeat(151),
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject a whitespace-only modalTitle (field-level empty after trim)', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: '   ',
+        block: { id: 'm', type: 'richText' },
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+});
