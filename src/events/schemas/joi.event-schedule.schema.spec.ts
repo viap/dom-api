@@ -194,12 +194,12 @@ describe('Event schedule validation', () => {
     });
     const boundarySchedule = {
       days: Array.from({ length: EVENT_SCHEDULE_MAX_DAYS }, (_, index) =>
-        createDay(index)
+        createDay(index),
       ),
     };
     const tooManyDaysSchedule = {
       days: Array.from({ length: EVENT_SCHEDULE_MAX_DAYS + 1 }, (_, index) =>
-        createDay(index)
+        createDay(index),
       ),
     };
     const tooLongDescriptionSchedule = {
@@ -207,7 +207,7 @@ describe('Event schedule validation', () => {
         {
           ...createDay(0),
           description: 'a'.repeat(
-            EVENT_SCHEDULE_DAY_DESCRIPTION_MAX_LENGTH + 1
+            EVENT_SCHEDULE_DAY_DESCRIPTION_MAX_LENGTH + 1,
           ),
         },
       ],
@@ -217,18 +217,18 @@ describe('Event schedule validation', () => {
       createEventSchema.validate({
         ...baseCreatePayload,
         schedule: boundarySchedule,
-      }).error
+      }).error,
     ).toBeUndefined();
     expect(
       createEventSchema.validate({
         ...baseCreatePayload,
         schedule: tooManyDaysSchedule,
-      }).error
+      }).error,
     ).toBeDefined();
     expect(
       updateEventSchema.validate({
         schedule: tooLongDescriptionSchedule,
-      }).error
+      }).error,
     ).toBeDefined();
   });
 
