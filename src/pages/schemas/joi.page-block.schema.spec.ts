@@ -998,4 +998,37 @@ describe('block button action', () => {
 
     expect(error).toBeUndefined();
   });
+
+  // Hero item buttons use the same normal blockButtonSchema, so the block action
+  // and its embedded-block whitelist apply identically (no hero-specific schema).
+  const heroWithButton = (button: Record<string, unknown>) => ({
+    title: 'About',
+    slug: 'about',
+    blocks: [{ id: 'hero', type: 'hero', items: [{ title: 'Card', button }] }],
+  });
+
+  it('should accept a hero item block button carrying an embedded block', () => {
+    const { error } = createPageSchema.validate(
+      heroWithButton({
+        label: 'More',
+        type: 'block',
+        block: { id: 'modal-1', type: 'richText', title: 'Hello' },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject a hero item block button embedding a non-whitelisted type', () => {
+    for (const block of [
+      { id: 'm', type: 'hero' },
+      { id: 'm', type: 'applicationForm', applicationType: 'general' },
+    ]) {
+      const { error } = createPageSchema.validate(
+        heroWithButton({ label: 'More', type: 'block', block }),
+      );
+
+      expect(error).toBeDefined();
+    }
+  });
 });
