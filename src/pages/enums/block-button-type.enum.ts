@@ -3,4 +3,5 @@ export enum BlockButtonType {
   Domain = 'domain',
   External = 'external',
   Application = 'application',
+  Block = 'block',
 }

@@ -23,11 +23,142 @@ const attributeTokenSchema = Joi.string()
   .max(120)
   .pattern(/^[a-zA-Z0-9_-]+$/);
 
-const blockButtonSchema = Joi.object({
+// Shared per-button rules. Reused verbatim by the normal and the restricted
+// button schemas so both stay in sync; the `block` branches are inert for the
+// restricted schema (its `type` set excludes 'block' and it has no `block` key).
+const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
+  if (value.type === BlockButtonType.Block) {
+    if (!value.block) {
+      return helpers.error('any.custom', {
+        message: 'Block buttons require an embedded block',
+      });
+    }
+    if (
+      value.url ||
+      value.targetId ||
+      value.applicationProgramId ||
+      value.applicationEventId
+    ) {
+      return helpers.error('any.custom', {
+        message:
+          'Block buttons must not include url, targetId, or application fields',
+      });
+    }
+    return value;
+  }
+
+  if (value.block) {
+    return helpers.error('any.custom', {
+      message: 'Only block buttons may include an embedded block',
+    });
+  }
+
+  if (value.type !== BlockButtonType.Application) {
+    if (value.applicationProgramId || value.applicationEventId) {
+      return helpers.error('any.custom', {
+        message:
+          'Application entity target fields are only allowed on application buttons',
+      });
+    }
+  }
+
+  if (value.type === BlockButtonType.External) {
+    if (!value.url) {
+      return helpers.error('any.custom', {
+        message: 'External buttons require url',
+      });
+    }
+    if (value.targetId) {
+      return helpers.error('any.custom', {
+        message: 'External buttons must not include targetId',
+      });
+    }
+  } else {
+    if (!value.targetId) {
+      return helpers.error('any.custom', {
+        message: 'Internal buttons require targetId',
+      });
+    }
+    if (value.url) {
+      return helpers.error('any.custom', {
+        message: 'Internal buttons must not include url',
+      });
+    }
+    if (
+      (value.type === BlockButtonType.Page ||
+        value.type === BlockButtonType.Domain) &&
+      !joiObjectId.validate(value.targetId).error
+    ) {
+      return value;
+    }
+    if (
+      value.type === BlockButtonType.Page ||
+      value.type === BlockButtonType.Domain
+    ) {
+      return helpers.error('any.custom', {
+        message: `${value.type} buttons require a valid ObjectId targetId`,
+      });
+    }
+
+    if (value.type === BlockButtonType.Application) {
+      if (
+        !Object.values(ApplicationFormType).includes(
+          value.targetId as ApplicationFormType,
+        )
+      ) {
+        return helpers.error('any.custom', {
+          message:
+            'Application buttons require a valid application type targetId',
+        });
+      }
+
+      if (
+        value.targetId === ApplicationFormType.ProgramEnrollment &&
+        !value.applicationProgramId
+      ) {
+        return helpers.error('any.custom', {
+          message:
+            'Program enrollment application buttons require applicationProgramId',
+        });
+      }
+
+      if (
+        value.targetId === ApplicationFormType.EventRegistration &&
+        !value.applicationEventId
+      ) {
+        return helpers.error('any.custom', {
+          message:
+            'Event registration application buttons require applicationEventId',
+        });
+      }
+
+      if (
+        value.targetId !== ApplicationFormType.ProgramEnrollment &&
+        value.applicationProgramId
+      ) {
+        return helpers.error('any.custom', {
+          message:
+            'applicationProgramId is only allowed for program enrollment application buttons',
+        });
+      }
+
+      if (
+        value.targetId !== ApplicationFormType.EventRegistration &&
+        value.applicationEventId
+      ) {
+        return helpers.error('any.custom', {
+          message:
+            'applicationEventId is only allowed for event registration application buttons',
+        });
+      }
+    }
+  }
+
+  return value;
+};
+
+const blockButtonBaseFields = {
   label: Joi.string().trim().min(1).max(150).required(),
-  type: Joi.string()
-    .valid(...Object.values(BlockButtonType))
-    .required(),
   targetId: Joi.string().trim().max(120).optional(),
   applicationProgramId: joiObjectId.optional(),
   applicationEventId: joiObjectId.optional(),
@@ -36,111 +167,22 @@ const blockButtonSchema = Joi.object({
   style: Joi.string()
     .valid('primary', 'secondary', 'ghost', 'outline', 'link')
     .optional(),
+};
+
+// Buttons allowed INSIDE a modal-embedded block. Excludes the two
+// provider-owned modal actions (`application`, `block`) so modal content can
+// never open a nested modal (depth fixed at 1). No `block` field. See §6.
+const restrictedBlockButtonSchema = Joi.object({
+  ...blockButtonBaseFields,
+  type: Joi.string()
+    .valid(
+      BlockButtonType.Page,
+      BlockButtonType.Domain,
+      BlockButtonType.External,
+    )
+    .required(),
 })
-  .custom((value, helpers) => {
-    if (value.type !== BlockButtonType.Application) {
-      if (value.applicationProgramId || value.applicationEventId) {
-        return helpers.error('any.custom', {
-          message:
-            'Application entity target fields are only allowed on application buttons',
-        });
-      }
-    }
-
-    if (value.type === BlockButtonType.External) {
-      if (!value.url) {
-        return helpers.error('any.custom', {
-          message: 'External buttons require url',
-        });
-      }
-      if (value.targetId) {
-        return helpers.error('any.custom', {
-          message: 'External buttons must not include targetId',
-        });
-      }
-    } else {
-      if (!value.targetId) {
-        return helpers.error('any.custom', {
-          message: 'Internal buttons require targetId',
-        });
-      }
-      if (value.url) {
-        return helpers.error('any.custom', {
-          message: 'Internal buttons must not include url',
-        });
-      }
-      if (
-        (value.type === BlockButtonType.Page ||
-          value.type === BlockButtonType.Domain) &&
-        !joiObjectId.validate(value.targetId).error
-      ) {
-        return value;
-      }
-      if (
-        value.type === BlockButtonType.Page ||
-        value.type === BlockButtonType.Domain
-      ) {
-        return helpers.error('any.custom', {
-          message: `${value.type} buttons require a valid ObjectId targetId`,
-        });
-      }
-
-      if (value.type === BlockButtonType.Application) {
-        if (
-          !Object.values(ApplicationFormType).includes(
-            value.targetId as ApplicationFormType,
-          )
-        ) {
-          return helpers.error('any.custom', {
-            message:
-              'Application buttons require a valid application type targetId',
-          });
-        }
-
-        if (
-          value.targetId === ApplicationFormType.ProgramEnrollment &&
-          !value.applicationProgramId
-        ) {
-          return helpers.error('any.custom', {
-            message:
-              'Program enrollment application buttons require applicationProgramId',
-          });
-        }
-
-        if (
-          value.targetId === ApplicationFormType.EventRegistration &&
-          !value.applicationEventId
-        ) {
-          return helpers.error('any.custom', {
-            message:
-              'Event registration application buttons require applicationEventId',
-          });
-        }
-
-        if (
-          value.targetId !== ApplicationFormType.ProgramEnrollment &&
-          value.applicationProgramId
-        ) {
-          return helpers.error('any.custom', {
-            message:
-              'applicationProgramId is only allowed for program enrollment application buttons',
-          });
-        }
-
-        if (
-          value.targetId !== ApplicationFormType.EventRegistration &&
-          value.applicationEventId
-        ) {
-          return helpers.error('any.custom', {
-            message:
-              'applicationEventId is only allowed for event registration application buttons',
-          });
-        }
-      }
-    }
-
-    return value;
-  })
+  .custom(blockButtonCustomValidator)
   .messages({ 'any.custom': '{{#message}}' });
 
 const mediaRefSchema = Joi.object({
@@ -176,17 +218,6 @@ const pageBlockBaseSchema = {
   fullWidth: Joi.boolean().default(false).optional(),
   textAlign: textAlignSchema.optional(),
 };
-
-const richTextBlockSchema = Joi.object({
-  ...pageBlockBaseSchema,
-  type: Joi.string().valid(PageBlockType.RichText).required(),
-  media: mediaRefSchema.optional(),
-  mediaPosition: Joi.string()
-    .valid('left', 'right', 'top', 'bottom')
-    .optional(),
-  buttons: Joi.array().items(blockButtonSchema).optional(),
-  relatedPeople: relatedPeopleGroupSchema.optional(),
-});
 
 const entityCollectionBaseSchema = {
   ...pageBlockBaseSchema,
@@ -294,26 +325,6 @@ const entityCollectionBlockSchema = Joi.alternatives().try(
   dynamicEntityCollectionBlockSchema,
 );
 
-const heroItemSchema = Joi.object({
-  icon: Joi.string().trim().max(120).optional(),
-  title: Joi.string().trim().min(1).max(150).required(),
-  subtitle: Joi.string().trim().min(1).max(300).optional(),
-  button: blockButtonSchema.optional(),
-});
-
-const heroBlockSchema = Joi.object({
-  ...pageBlockBaseSchema,
-  type: Joi.string().valid(PageBlockType.Hero).required(),
-  backgroundMedia: mediaRefSchema.optional(),
-  items: Joi.array().items(heroItemSchema).optional(),
-});
-
-const ctaBlockSchema = Joi.object({
-  ...pageBlockBaseSchema,
-  type: Joi.string().valid(PageBlockType.Cta).required(),
-  buttons: Joi.array().items(blockButtonSchema).min(1).required(),
-});
-
 const galleryBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Gallery).required(),
@@ -349,6 +360,65 @@ const htmlBlockSchema = Joi.object({
     .default('vertical')
     .optional(),
   content: Joi.string().trim().min(1).max(50000).required(),
+});
+
+// richText and cta carry buttons, so they are parametrized by the button
+// schema: the normal one at the top level, the restricted one when embedded.
+const makeRichTextBlockSchema = (buttonSchema: Joi.Schema) =>
+  Joi.object({
+    ...pageBlockBaseSchema,
+    type: Joi.string().valid(PageBlockType.RichText).required(),
+    media: mediaRefSchema.optional(),
+    mediaPosition: Joi.string()
+      .valid('left', 'right', 'top', 'bottom')
+      .optional(),
+    buttons: Joi.array().items(buttonSchema).optional(),
+    relatedPeople: relatedPeopleGroupSchema.optional(),
+  });
+
+const makeCtaBlockSchema = (buttonSchema: Joi.Schema) =>
+  Joi.object({
+    ...pageBlockBaseSchema,
+    type: Joi.string().valid(PageBlockType.Cta).required(),
+    buttons: Joi.array().items(buttonSchema).min(1).required(),
+  });
+
+// Block types embeddable in a modal via a `block` button. Keep in sync with
+// dom-web MODAL_BLOCK_ALLOWED_TYPES: richText, cta, html, entityCollection,
+// gallery. Excludes hero + applicationForm. Nested buttons are restricted.
+const embeddableBlockSchema = Joi.alternatives().try(
+  makeRichTextBlockSchema(restrictedBlockButtonSchema),
+  entityCollectionBlockSchema,
+  makeCtaBlockSchema(restrictedBlockButtonSchema),
+  galleryBlockSchema,
+  htmlBlockSchema,
+);
+
+const blockButtonSchema = Joi.object({
+  ...blockButtonBaseFields,
+  type: Joi.string()
+    .valid(...Object.values(BlockButtonType))
+    .required(),
+  block: embeddableBlockSchema.optional(),
+})
+  .custom(blockButtonCustomValidator)
+  .messages({ 'any.custom': '{{#message}}' });
+
+const richTextBlockSchema = makeRichTextBlockSchema(blockButtonSchema);
+const ctaBlockSchema = makeCtaBlockSchema(blockButtonSchema);
+
+const heroItemSchema = Joi.object({
+  icon: Joi.string().trim().max(120).optional(),
+  title: Joi.string().trim().min(1).max(150).required(),
+  subtitle: Joi.string().trim().min(1).max(300).optional(),
+  button: blockButtonSchema.optional(),
+});
+
+const heroBlockSchema = Joi.object({
+  ...pageBlockBaseSchema,
+  type: Joi.string().valid(PageBlockType.Hero).required(),
+  backgroundMedia: mediaRefSchema.optional(),
+  items: Joi.array().items(heroItemSchema).optional(),
 });
 
 export const pageBlockSchema = Joi.alternatives().try(

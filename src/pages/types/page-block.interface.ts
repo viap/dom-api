@@ -22,6 +22,7 @@ export interface BlockButton {
   url?: string;
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
+  block?: PageBlock; // present only when type === 'block'
 }
 
 export interface MediaRef {

@@ -5,6 +5,7 @@ import { EntityCollectionEntityType } from '../enums/entity-collection-entity-ty
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import {
+  BlockButton,
   CtaBlock,
   DynamicEntityCollectionBlock,
   DynamicEntityCollectionResolutionContext,
@@ -100,11 +101,25 @@ function collectButtonRefs(
     type: BlockButtonType;
     targetId?: string;
     url?: string;
+    block?: PageBlock;
   }> = [],
   refs: ValidationRefs,
+  depth: number,
 ): void {
   for (const button of buttons || []) {
     switch (button.type) {
+      case BlockButtonType.Block:
+        if (!button.block) {
+          throw new BadRequestException(
+            'Block button requires an embedded block',
+          );
+        }
+        // Defense-in-depth: Joi already caps nesting at depth 1 before this
+        // runs, so stop descending past the cap rather than recurse unbounded.
+        if (depth < MAX_EMBEDDED_BLOCK_DEPTH) {
+          validateOneBlock(button.block, refs, depth + 1);
+        }
+        break;
       case BlockButtonType.External:
         if (!button.url) {
           throw new BadRequestException('External button url is required');
@@ -157,12 +172,13 @@ function collectButtonRefs(
 function validateRichTextBlock(
   block: RichTextBlock,
   refs: ValidationRefs,
+  depth: number,
 ): void {
   if (block.media) {
     refs.mediaIds.add(block.media.mediaId);
   }
 
-  collectButtonRefs(block.buttons, refs);
+  collectButtonRefs(block.buttons, refs, depth);
 
   if (block.relatedPeople) {
     if (!block.relatedPeople.title) {
@@ -212,24 +228,32 @@ function validateEntityCollectionBlock(
   }
 }
 
-function validateHeroBlock(block: HeroBlock, refs: ValidationRefs): void {
+function validateHeroBlock(
+  block: HeroBlock,
+  refs: ValidationRefs,
+  depth: number,
+): void {
   if (block.backgroundMedia) {
     refs.mediaIds.add(block.backgroundMedia.mediaId);
   }
 
   for (const item of block.items || []) {
     if (item.button) {
-      collectButtonRefs([item.button], refs);
+      collectButtonRefs([item.button], refs, depth);
     }
   }
 }
 
-function validateCtaBlock(block: CtaBlock, refs: ValidationRefs): void {
+function validateCtaBlock(
+  block: CtaBlock,
+  refs: ValidationRefs,
+  depth: number,
+): void {
   ensureBlockHasItems(
     block.buttons,
     'cta.buttons must contain at least one button',
   );
-  collectButtonRefs(block.buttons, refs);
+  collectButtonRefs(block.buttons, refs, depth);
 }
 
 function validateGalleryBlock(block: GalleryBlock, refs: ValidationRefs): void {
@@ -240,6 +264,37 @@ function validateGalleryBlock(block: GalleryBlock, refs: ValidationRefs): void {
 
   for (const item of block.items) {
     refs.mediaIds.add(item.mediaId);
+  }
+}
+
+function validateOneBlock(
+  block: PageBlock,
+  refs: ValidationRefs,
+  depth: number,
+): void {
+  switch (block.type) {
+    case PageBlockType.RichText:
+      validateRichTextBlock(block, refs, depth);
+      break;
+    case PageBlockType.EntityCollection:
+      validateEntityCollectionBlock(block, refs);
+      break;
+    case PageBlockType.Hero:
+      validateHeroBlock(block, refs, depth);
+      break;
+    case PageBlockType.Cta:
+      validateCtaBlock(block, refs, depth);
+      break;
+    case PageBlockType.Gallery:
+      validateGalleryBlock(block, refs);
+      break;
+    case PageBlockType.ApplicationForm:
+      validateApplicationFormType(block.applicationType);
+      break;
+    case PageBlockType.Html:
+      break;
+    default:
+      throw new BadRequestException('Unsupported page block type');
   }
 }
 
@@ -311,66 +366,53 @@ async function validateBlocks(
     }
     seenIds.add(block.id);
 
-    switch (block.type) {
-      case PageBlockType.RichText:
-        validateRichTextBlock(block, refs);
-        break;
-      case PageBlockType.EntityCollection:
-        validateEntityCollectionBlock(block, refs);
-        break;
-      case PageBlockType.Hero:
-        validateHeroBlock(block, refs);
-        break;
-      case PageBlockType.Cta:
-        validateCtaBlock(block, refs);
-        break;
-      case PageBlockType.Gallery:
-        validateGalleryBlock(block, refs);
-        break;
-      case PageBlockType.ApplicationForm:
-        validateApplicationFormType(block.applicationType);
-        break;
-      case PageBlockType.Html:
-        break;
-      default:
-        throw new BadRequestException('Unsupported page block type');
-    }
+    validateOneBlock(block, refs, 0);
   }
 
   await validateCollectedRefs(refs, services);
 }
 
-export async function prepareBlocksForWrite(
-  blocks: PageBlock[],
-  services: BlockValidationServices,
-): Promise<PageBlock[]> {
-  await validateBlocks(blocks, services);
-
-  return blocks.map((block) => {
-    if (block.type === PageBlockType.Html) {
-      const sanitizedContent = sanitizeHtmlBlockContent(block.content);
-      if (!sanitizedContent) {
-        throw new BadRequestException(
-          `HTML block "${block.id}" content is empty after sanitization`,
-        );
-      }
-      return {
-        ...block,
-        content: sanitizedContent,
-      };
+function sanitizeEmbeddedButtonBlocks(
+  buttons: BlockButton[],
+  depth: number,
+): BlockButton[] {
+  return buttons.map((button) => {
+    if (!button.block) {
+      return button;
     }
-
-    if (
-      block.type === PageBlockType.EntityCollection &&
-      block.source === 'dynamic'
-    ) {
-      return normalizeDynamicEntityCollectionBlock(block);
+    // Defense-in-depth: Joi caps nesting at depth 1 before this runs; past the
+    // cap drop the embedded block rather than recurse on malformed data.
+    if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+      const rest = { ...button };
+      delete rest.block;
+      return rest;
     }
+    return { ...button, block: sanitizeOneBlock(button.block, depth + 1) };
+  });
+}
 
-    if (block.type !== PageBlockType.RichText) {
-      return block;
+function sanitizeOneBlock(block: PageBlock, depth: number): PageBlock {
+  if (block.type === PageBlockType.Html) {
+    const sanitizedContent = sanitizeHtmlBlockContent(block.content);
+    if (!sanitizedContent) {
+      throw new BadRequestException(
+        `HTML block "${block.id}" content is empty after sanitization`,
+      );
     }
+    return {
+      ...block,
+      content: sanitizedContent,
+    };
+  }
 
+  if (
+    block.type === PageBlockType.EntityCollection &&
+    block.source === 'dynamic'
+  ) {
+    return normalizeDynamicEntityCollectionBlock(block);
+  }
+
+  if (block.type === PageBlockType.RichText) {
     return {
       ...block,
       description:
@@ -383,8 +425,52 @@ export async function prepareBlocksForWrite(
             display: block.relatedPeople.display || RelatedPeopleDisplay.Inline,
           }
         : undefined,
+      buttons: block.buttons
+        ? sanitizeEmbeddedButtonBlocks(block.buttons, depth)
+        : block.buttons,
     };
-  });
+  }
+
+  if (block.type === PageBlockType.Cta) {
+    return {
+      ...block,
+      buttons: sanitizeEmbeddedButtonBlocks(block.buttons, depth),
+    };
+  }
+
+  if (block.type === PageBlockType.Hero) {
+    return {
+      ...block,
+      items: block.items?.map((item) => {
+        if (!item.button?.block) {
+          return item;
+        }
+        if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+          const restButton = { ...item.button };
+          delete restButton.block;
+          return { ...item, button: restButton };
+        }
+        return {
+          ...item,
+          button: {
+            ...item.button,
+            block: sanitizeOneBlock(item.button.block, depth + 1),
+          },
+        };
+      }),
+    };
+  }
+
+  return block;
+}
+
+export async function prepareBlocksForWrite(
+  blocks: PageBlock[],
+  services: BlockValidationServices,
+): Promise<PageBlock[]> {
+  await validateBlocks(blocks, services);
+
+  return blocks.map((block) => sanitizeOneBlock(block, 0));
 }
 
 function normalizeDynamicEntityCollectionBlock(
@@ -410,6 +496,13 @@ function normalizeDynamicEntityCollectionBlock(
   };
 }
 
+// Embedded blocks live at depth 1 by construction — Joi rejects deeper nesting
+// on write (restricted embedded buttons carry no block). But `button.block` is
+// stored as Mixed, so a doc that bypassed Joi (migration, restore, manual edit)
+// could nest arbitrarily; this caps the recursion on the public read path.
+// Keep in sync with dom-web MAX_EMBEDDED_BLOCK_DEPTH (pageBlockReferences.ts).
+const MAX_EMBEDDED_BLOCK_DEPTH = 1;
+
 export async function toPublicBlocks(
   blocks: Array<PageBlock | Record<string, unknown>>,
   services: PublicBlockServices,
@@ -423,32 +516,127 @@ export async function toPublicBlocks(
     return typedBlock.isVisible !== false;
   });
   const resolvedBlocks = await Promise.all(
-    visibleBlocks.map(async (block) => {
-      const typedBlock = block as Record<string, unknown>;
-      if (typedBlock.type === PageBlockType.RichText) {
-        return toPublicRichTextBlock(typedBlock, services);
-      }
-      if (
-        typedBlock.type === PageBlockType.EntityCollection &&
-        typedBlock.source === 'dynamic'
-      ) {
-        return toPublicDynamicEntityCollectionBlock(
-          typedBlock,
-          services,
-          context,
-        );
-      }
-      if (typedBlock.type === PageBlockType.EntityCollection) {
-        const publicBlock = { ...typedBlock };
-        delete publicBlock.source;
-        return publicBlock;
-      }
-      return typedBlock;
-    }),
+    visibleBlocks.map((block) => toPublicOneBlock(block, services, context, 0)),
   );
   return resolvedBlocks.filter(Boolean) as Array<
     PageBlock | Record<string, unknown>
   >;
+}
+
+async function withPublicButtonBlocks(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const buttons = block.buttons;
+  if (!Array.isArray(buttons)) {
+    return block;
+  }
+  const resolved = await Promise.all(
+    buttons.map(async (button) => {
+      const embedded =
+        button && typeof button === 'object'
+          ? (button as Record<string, unknown>).block
+          : undefined;
+      if (!embedded) {
+        return button;
+      }
+      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+        // Beyond the depth-1 write invariant — malformed stored data. Drop the
+        // embedded block instead of recursing (resource-exhaustion guard).
+        const rest = { ...(button as Record<string, unknown>) };
+        delete rest.block;
+        return rest;
+      }
+      return {
+        ...(button as Record<string, unknown>),
+        block: await toPublicOneBlock(
+          embedded as Record<string, unknown>,
+          services,
+          context,
+          depth + 1,
+        ),
+      };
+    }),
+  );
+  return { ...block, buttons: resolved };
+}
+
+async function withPublicHeroButtonBlocks(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const items = block.items;
+  if (!Array.isArray(items)) {
+    return block;
+  }
+  const resolved = await Promise.all(
+    items.map(async (item) => {
+      const button =
+        item && typeof item === 'object'
+          ? (item as Record<string, unknown>).button
+          : undefined;
+      const embedded =
+        button && typeof button === 'object'
+          ? (button as Record<string, unknown>).block
+          : undefined;
+      if (!embedded) {
+        return item;
+      }
+      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+        const nextButton = { ...(button as Record<string, unknown>) };
+        delete nextButton.block;
+        return { ...(item as Record<string, unknown>), button: nextButton };
+      }
+      return {
+        ...(item as Record<string, unknown>),
+        button: {
+          ...(button as Record<string, unknown>),
+          block: await toPublicOneBlock(
+            embedded as Record<string, unknown>,
+            services,
+            context,
+            depth + 1,
+          ),
+        },
+      };
+    }),
+  );
+  return { ...block, items: resolved };
+}
+
+async function toPublicOneBlock(
+  block: PageBlock | Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const typedBlock = block as Record<string, unknown>;
+  if (typedBlock.type === PageBlockType.RichText) {
+    const publicBlock = await toPublicRichTextBlock(typedBlock, services);
+    return withPublicButtonBlocks(publicBlock, services, context, depth);
+  }
+  if (
+    typedBlock.type === PageBlockType.EntityCollection &&
+    typedBlock.source === 'dynamic'
+  ) {
+    return toPublicDynamicEntityCollectionBlock(typedBlock, services, context);
+  }
+  if (typedBlock.type === PageBlockType.EntityCollection) {
+    const publicBlock = { ...typedBlock };
+    delete publicBlock.source;
+    return publicBlock;
+  }
+  if (typedBlock.type === PageBlockType.Cta) {
+    return withPublicButtonBlocks(typedBlock, services, context, depth);
+  }
+  if (typedBlock.type === PageBlockType.Hero) {
+    return withPublicHeroButtonBlocks(typedBlock, services, context, depth);
+  }
+  return typedBlock;
 }
 
 async function toPublicDynamicEntityCollectionBlock(
@@ -498,7 +686,7 @@ async function toPublicDynamicEntityCollectionBlock(
 async function toPublicRichTextBlock(
   block: Record<string, unknown>,
   services: PublicBlockServices,
-): Promise<Record<string, unknown> | null> {
+): Promise<Record<string, unknown>> {
   const relatedPeople =
     block.relatedPeople && typeof block.relatedPeople === 'object'
       ? (block.relatedPeople as Record<string, unknown>)
