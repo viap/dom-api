@@ -32,6 +32,8 @@ export const blockButtonSchema = new mongoose.Schema(
     // Embedded block for type === 'block'. Structure is owned/validated by Joi
     // embeddableBlockSchema (see joi.page-block.schema.ts); Mixed mirrors Page.seo.
     block: { type: mongoose.Schema.Types.Mixed },
+    // Optional visible modal heading for block/application actions (Joi enforces).
+    modalTitle: { type: String, trim: true },
   },
   { _id: false, id: false },
 );

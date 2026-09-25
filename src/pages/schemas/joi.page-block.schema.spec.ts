@@ -1031,4 +1031,84 @@ describe('block button action', () => {
       expect(error).toBeDefined();
     }
   });
+
+  it('should accept and preserve an optional modalTitle on a block button', () => {
+    const { error, value } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: 'Our team',
+        block: { id: 'modal-1', type: 'richText', title: 'Hi' },
+      }),
+    );
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].buttons[0].modalTitle).toBe('Our team');
+  });
+
+  it('should reject modalTitle over 150 characters', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: 'a'.repeat(151),
+        block: { id: 'modal-1', type: 'richText' },
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject modalTitle on a link (non-modal) button', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Open',
+        type: 'external',
+        url: 'https://example.com',
+        modalTitle: 'Nope',
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should accept and preserve an optional modalTitle on an application button', () => {
+    const { error, value } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Apply',
+        type: 'application',
+        targetId: 'partnership',
+        modalTitle: 'Become a partner',
+      }),
+    );
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].buttons[0].modalTitle).toBe('Become a partner');
+  });
+
+  it('should reject an application modalTitle over 150 characters', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Apply',
+        type: 'application',
+        targetId: 'partnership',
+        modalTitle: 'a'.repeat(151),
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
+
+  it('should reject a whitespace-only modalTitle (field-level empty after trim)', () => {
+    const { error } = createPageSchema.validate(
+      ctaWithButton({
+        label: 'Info',
+        type: 'block',
+        modalTitle: '   ',
+        block: { id: 'm', type: 'richText' },
+      }),
+    );
+
+    expect(error).toBeDefined();
+  });
 });

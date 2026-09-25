@@ -53,6 +53,20 @@ const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
     });
   }
 
+  // modalTitle is only meaningful for provider-owned modal actions. Block is
+  // handled by the early return above; here reject it on link action types
+  // (page/domain/external). An empty/whitespace string is already rejected by
+  // the field-level Joi.string().trim() (string.empty), so any value reaching
+  // here is a real, non-empty title.
+  if (
+    value.type !== BlockButtonType.Application &&
+    value.modalTitle !== undefined
+  ) {
+    return helpers.error('any.custom', {
+      message: 'Only block or application buttons may include a modal title',
+    });
+  }
+
   if (value.type !== BlockButtonType.Application) {
     if (value.applicationProgramId || value.applicationEventId) {
       return helpers.error('any.custom', {
@@ -400,6 +414,11 @@ const blockButtonSchema = Joi.object({
     .valid(...Object.values(BlockButtonType))
     .required(),
   block: embeddableBlockSchema.optional(),
+  // Optional visible modal heading; only valid on block buttons (enforced in
+  // blockButtonCustomValidator). max(150) mirrors the button label / block title
+  // short-title convention. Declared here (not blockButtonBaseFields) so the
+  // restricted (modal-embedded) button schema never accepts it.
+  modalTitle: Joi.string().trim().max(150).optional(),
 })
   .custom(blockButtonCustomValidator)
   .messages({ 'any.custom': '{{#message}}' });

@@ -23,6 +23,7 @@ export interface BlockButton {
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
   block?: PageBlock; // present only when type === 'block'
+  modalTitle?: string; // optional visible modal heading; only when type is 'block' or 'application'
 }
 
 export interface MediaRef {
