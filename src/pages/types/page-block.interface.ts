@@ -162,3 +162,17 @@ export type PageBlock =
   | GalleryBlock
   | ApplicationFormBlock
   | HtmlBlock;
+
+// Group is page-only. Children are the eligible non-Group, non-Hero leaf types;
+// nesting a Group inside a Group is excluded at the type level (matches Joi +
+// Mongoose). Widen this union to lift that later (§3 extension path).
+export type GroupChildBlock = Exclude<PageBlock, HeroBlock>;
+
+export interface GroupBlock extends PageBlockBase {
+  type: PageBlockType.Group;
+  blocks: GroupChildBlock[];
+}
+
+// Blocks allowed at a page root: the 7 leaf types plus Group. Events keep
+// PageBlock[] (no Group) — see §9.
+export type PageRootBlock = PageBlock | GroupBlock;

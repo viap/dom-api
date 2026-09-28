@@ -3,7 +3,11 @@ import { ApplicationFormType } from '@/applications/enums/application-form-type.
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
-import { PageBlockType } from '../enums/page-block-type.enum';
+import {
+  GROUP_CHILD_BLOCK_TYPES,
+  GroupChildBlockType,
+  PageBlockType,
+} from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { Languages } from '@/people/enums/languages.enum';
 
@@ -226,3 +230,46 @@ export const htmlBlockSchema = new mongoose.Schema(
   },
   { _id: false, id: false, strict: 'throw' },
 );
+
+// Group block (pages only). Discriminators are registered on a per-path scope
+// keyed off the array's base *instance*. pageBlockBaseSchema is shared by the
+// page and event top-level arrays, so registering `group` on it would leak group
+// onto events. To keep group page-only AND cap nesting, both the page-root array
+// and the group's nested-children array use their own pristine clones (verified:
+// mongoose accepts the same delta instances on independent clone bases).
+
+// Group children: only the 6 eligible types (no hero, no group) → nested group
+// and hero children are rejected at persistence, matching Joi.
+const groupChildBaseSchema = pageBlockBaseSchema.clone();
+
+export const groupBlockSchema = new mongoose.Schema(
+  {
+    blocks: { type: [groupChildBaseSchema], default: [] },
+  },
+  { _id: false, id: false, strict: 'throw' },
+);
+
+const groupChildrenPath = groupBlockSchema.path(
+  'blocks',
+) as mongoose.Schema.Types.DocumentArray;
+
+// Register the eligible child discriminators from the shared eligibility list so
+// this can't drift from Joi / the editor. The full Record (not Partial) makes a
+// missing schema entry a compile error rather than a silently-dropped type.
+const groupChildDeltaSchemas: Record<GroupChildBlockType, mongoose.Schema> = {
+  [PageBlockType.RichText]: richTextBlockSchema,
+  [PageBlockType.EntityCollection]: entityCollectionBlockSchema,
+  [PageBlockType.Cta]: ctaBlockSchema,
+  [PageBlockType.Gallery]: galleryBlockSchema,
+  [PageBlockType.ApplicationForm]: applicationFormBlockSchema,
+  [PageBlockType.Html]: htmlBlockSchema,
+};
+
+for (const childType of GROUP_CHILD_BLOCK_TYPES) {
+  groupChildrenPath.discriminator(childType, groupChildDeltaSchemas[childType]);
+}
+
+// Page-root array base — an isolated clone so page.schema.ts can register the
+// `group` discriminator here WITHOUT it leaking onto the shared
+// pageBlockBaseSchema that events still use.
+export const pageRootBlockBaseSchema = pageBlockBaseSchema.clone();

@@ -647,6 +647,101 @@ describe('MediaService', () => {
     );
   });
 
+  it('drops a group when deleting media empties its only child', async () => {
+    const pageDoc = {
+      _id: '507f1f77bcf86cd799439244',
+      blocks: [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          blocks: [
+            {
+              id: 'gc1',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }],
+            },
+          ],
+        },
+        { id: 'keep', type: PageBlockType.RichText, title: 'Keep me' },
+      ],
+    };
+
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([pageDoc]),
+    });
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+
+    const updatedBlocks = mockPageModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, unknown>>;
+    // The now-empty group is dropped (not left as blocks: []), the sibling stays.
+    expect(updatedBlocks.some((block) => block.id === 'grp')).toBe(false);
+    expect(updatedBlocks.some((block) => block.id === 'keep')).toBe(true);
+  });
+
+  it('keeps a group but strips media from a surviving child', async () => {
+    const pageDoc = {
+      _id: '507f1f77bcf86cd799439255',
+      blocks: [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          blocks: [
+            {
+              id: 'gc1',
+              type: PageBlockType.RichText,
+              media: { mediaId: uploadedMediaId },
+            },
+            {
+              id: 'gc2',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }, { mediaId: 'other-media' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([pageDoc]),
+    });
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+
+    const updatedBlocks = mockPageModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, any>>;
+    const group = updatedBlocks.find((block) => block.id === 'grp');
+    expect(group).toBeDefined();
+    const children = group!.blocks as Array<Record<string, any>>;
+    // richText child kept (media stripped), gallery child kept with the other image.
+    expect(children.find((c) => c.id === 'gc1')?.media).toBeUndefined();
+    expect(children.find((c) => c.id === 'gc2')?.items).toEqual([
+      { mediaId: 'other-media' },
+    ]);
+  });
+
   it('should not delete media when cleanup fails', async () => {
     mockMediaModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnThis(),

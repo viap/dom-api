@@ -1112,3 +1112,151 @@ describe('block button action', () => {
     expect(error).toBeDefined();
   });
 });
+
+import { createEventSchema } from '@/events/schemas/joi.create-event.schema';
+
+describe('Group block (page-only)', () => {
+  const htmlChild = (id: string) => ({
+    id,
+    type: 'html',
+    template: 'vertical',
+    content: '<p>x</p>',
+  });
+
+  const group = (id: string, blocks: unknown[]) => ({
+    id,
+    type: 'group',
+    blocks,
+  });
+
+  const pageWith = (blocks: unknown[]) =>
+    createPageSchema.validate({ title: 'P', slug: 'p', blocks });
+
+  it('accepts a group with 1 child', () => {
+    const { error } = pageWith([group('g', [htmlChild('c1')])]);
+    expect(error).toBeUndefined();
+  });
+
+  it('accepts a group with 4 children', () => {
+    const { error } = pageWith([
+      group('g', [
+        htmlChild('c1'),
+        htmlChild('c2'),
+        htmlChild('c3'),
+        htmlChild('c4'),
+      ]),
+    ]);
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects a group with 0 children', () => {
+    const { error } = pageWith([group('g', [])]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a group with 5 children', () => {
+    const { error } = pageWith([
+      group('g', [
+        htmlChild('c1'),
+        htmlChild('c2'),
+        htmlChild('c3'),
+        htmlChild('c4'),
+        htmlChild('c5'),
+      ]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a nested group (child union excludes group)', () => {
+    const { error } = pageWith([
+      group('g', [group('nested', [htmlChild('c1')])]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a hero child (ineligible type)', () => {
+    const { error } = pageWith([
+      group('g', [{ id: 'h', type: 'hero', items: [] }]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('accepts group common header fields', () => {
+    const { error } = pageWith([
+      {
+        ...group('g', [htmlChild('c1')]),
+        pretitle: 'Eyebrow',
+        title: 'Columns',
+        subtitle: 'Sub',
+        description: 'Desc',
+        textAlign: 'center',
+        background: 'cream',
+        padding: 'lg',
+        anchorId: 'cols',
+      },
+    ]);
+    expect(error).toBeUndefined();
+  });
+
+  it('keeps the root max(20) with a group counting as one block', () => {
+    const twenty = Array.from({ length: 20 }, (_, index) =>
+      group(`g-${index}`, [
+        htmlChild(`g-${index}-a`),
+        htmlChild(`g-${index}-b`),
+      ]),
+    );
+    expect(pageWith(twenty).error).toBeUndefined();
+
+    const twentyOne = Array.from({ length: 21 }, (_, index) =>
+      group(`g-${index}`, [htmlChild(`g-${index}-a`)]),
+    );
+    expect(pageWith(twentyOne).error).toBeDefined();
+  });
+});
+
+describe('Group scope isolation (events reject group)', () => {
+  const baseEvent = {
+    domainId: objectId,
+    type: 'seminar',
+    title: 'Event',
+    slug: 'event',
+    startAt: '2026-01-01T10:00:00.000Z',
+    endAt: '2026-01-01T12:00:00.000Z',
+  };
+
+  it('sanity: a minimal event validates', () => {
+    const { error } = createEventSchema.validate(baseEvent);
+    expect(error).toBeUndefined();
+  });
+
+  it('accepts an existing leaf block on an event', () => {
+    const { error } = createEventSchema.validate({
+      ...baseEvent,
+      blocks: [
+        { id: 'h', type: 'html', template: 'vertical', content: '<p>x</p>' },
+      ],
+    });
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects a group block on an event', () => {
+    const { error } = createEventSchema.validate({
+      ...baseEvent,
+      blocks: [
+        {
+          id: 'g',
+          type: 'group',
+          blocks: [
+            {
+              id: 'c',
+              type: 'html',
+              template: 'vertical',
+              content: '<p>x</p>',
+            },
+          ],
+        },
+      ],
+    });
+    expect(error).toBeDefined();
+  });
+});

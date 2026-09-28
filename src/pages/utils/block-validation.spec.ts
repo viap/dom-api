@@ -1,5 +1,5 @@
 import { PageBlockType } from '../enums/page-block-type.enum';
-import { PageBlock } from '../types/page-block.interface';
+import { PageBlock, PageRootBlock } from '../types/page-block.interface';
 import { prepareBlocksForWrite, toPublicBlocks } from './block-validation';
 
 const context = {
@@ -279,6 +279,109 @@ describe('prepareBlocksForWrite embedded blocks', () => {
           layout: 'grid',
           items: ['507f1f77bcf86cd799439299'],
         }),
+        { ...allExist, peopleExistingIds: async () => new Set<string>() },
+      ),
+    ).rejects.toThrow(/Referenced person not found/);
+  });
+});
+
+describe('Group blocks (page-only)', () => {
+  const allExist = {
+    peopleExistingIds: async (ids: string[]) => new Set(ids),
+    partnersExistingIds: async (ids: string[]) => new Set(ids),
+    eventsExistingIds: async (ids: string[]) => new Set(ids),
+    mediaExistingPublishedIds: async (ids: string[]) => new Set(ids),
+    pagesExistingIds: async (ids: string[]) => new Set(ids),
+    domainsGetActiveById: async () => ({}),
+  };
+
+  const publicServices = {
+    findPublishedPeopleSummariesByIds: async () => [],
+    findDynamicPeopleSummaries: async () => [],
+    findDynamicPartnerSummaries: async () => [],
+    findDynamicEventSummaries: async () => [],
+  };
+
+  const htmlChild = (id: string, content = '<p>ok</p>') => ({
+    id,
+    type: PageBlockType.Html,
+    template: 'vertical',
+    content,
+  });
+
+  it('drops a hidden child inside a visible group on public read', async () => {
+    const result = await toPublicBlocks(
+      [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          isVisible: true,
+          blocks: [htmlChild('c1'), { ...htmlChild('c2'), isVisible: false }],
+        },
+      ],
+      publicServices,
+      context,
+    );
+
+    const group = result[0] as Record<string, any>;
+    expect(group.blocks).toHaveLength(1);
+    expect(group.blocks[0].id).toBe('c1');
+  });
+
+  it('sanitizes an HTML child inside a group on write', async () => {
+    const [group] = await prepareBlocksForWrite(
+      [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          blocks: [
+            htmlChild(
+              'c1',
+              '<p>ok</p><iframe src="https://evil.com"></iframe>',
+            ),
+          ],
+        },
+      ] as unknown as PageRootBlock[],
+      allExist,
+    );
+
+    expect((group as Record<string, any>).blocks[0].content).toBe('<p>ok</p>');
+  });
+
+  it('flags a duplicate id between a root block and a group child (tree-wide)', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          htmlChild('dup'),
+          {
+            id: 'grp',
+            type: PageBlockType.Group,
+            blocks: [htmlChild('dup')],
+          },
+        ] as unknown as PageRootBlock[],
+        allExist,
+      ),
+    ).rejects.toThrow(/Duplicate block id/);
+  });
+
+  it('existence-checks refs collected from a group child', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          {
+            id: 'grp',
+            type: PageBlockType.Group,
+            blocks: [
+              {
+                id: 'team',
+                type: PageBlockType.EntityCollection,
+                entityType: 'people',
+                layout: 'grid',
+                items: ['507f1f77bcf86cd799439299'],
+              },
+            ],
+          },
+        ] as unknown as PageRootBlock[],
         { ...allExist, peopleExistingIds: async () => new Set<string>() },
       ),
     ).rejects.toThrow(/Referenced person not found/);

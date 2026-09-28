@@ -451,3 +451,40 @@ export const pageBlockSchema = Joi.alternatives().try(
 );
 
 export const pageBlocksSchema = Joi.array().items(pageBlockSchema).max(20);
+
+// --- Group block (pages only) ---
+// Eligible children: the 6 non-hero, non-group leaf types. Because the child
+// items exclude group, nested Group is rejected at validation — matching
+// Mongoose persistence. `hero` is excluded per §7 (reversible: add heroBlockSchema
+// here + its child discriminator). No Joi.link self-reference in v1.
+const groupChildBlockSchema = Joi.alternatives().try(
+  richTextBlockSchema,
+  entityCollectionBlockSchema,
+  ctaBlockSchema,
+  galleryBlockSchema,
+  applicationFormBlockSchema,
+  htmlBlockSchema,
+);
+
+const groupBlockSchema = Joi.object({
+  ...pageBlockBaseSchema,
+  type: Joi.string().valid(PageBlockType.Group).required(),
+  blocks: Joi.array().items(groupChildBlockSchema).min(1).max(4).required(),
+});
+
+// Page-root union: the 7 leaf types plus Group. Events keep pageBlocksSchema
+// (group-free) so an event payload with type:'group' fails validation (§9).
+export const pageRootBlockSchema = Joi.alternatives().try(
+  richTextBlockSchema,
+  entityCollectionBlockSchema,
+  heroBlockSchema,
+  ctaBlockSchema,
+  galleryBlockSchema,
+  applicationFormBlockSchema,
+  htmlBlockSchema,
+  groupBlockSchema,
+);
+
+export const pageRootBlocksSchema = Joi.array()
+  .items(pageRootBlockSchema)
+  .max(20);
