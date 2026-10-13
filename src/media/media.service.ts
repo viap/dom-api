@@ -507,6 +507,242 @@ export class MediaService {
     await this.cleanupPartnerReferences(mediaId, summary);
   }
 
+  // Strip a deleted media reference from one block, recursing into Group
+  // children (pages only). Returns the rewritten block, whether anything
+  // changed, and whether the block should be dropped entirely (a gallery whose
+  // only items were the deleted media). `pathPrefix` keeps summary paths
+  // accurate at each nesting level (e.g. 'blocks.blocks.media.mediaId').
+  private cleanupBlockMediaRefs(
+    rawBlock: unknown,
+    mediaId: string,
+    paths: Set<string>,
+    pathPrefix: string,
+  ): { block: unknown; changed: boolean; drop: boolean } {
+    if (!rawBlock || typeof rawBlock !== 'object') {
+      return { block: rawBlock, changed: false, drop: false };
+    }
+
+    const block = rawBlock as Record<string, unknown>;
+    const blockType = block.type;
+    const nextBlock: Record<string, unknown> = { ...block };
+    let changed = false;
+
+    const cleanupCustomCollectionButton = (
+      rawButton: unknown,
+      buttonPath: string,
+      customCollectionOnly = true,
+    ): { button: unknown; changed: boolean; drop: boolean } => {
+      if (!rawButton || typeof rawButton !== 'object') {
+        return { button: rawButton, changed: false, drop: false };
+      }
+
+      const button = rawButton as Record<string, unknown>;
+      const embeddedBlock = button.block;
+      if (
+        !embeddedBlock ||
+        typeof embeddedBlock !== 'object' ||
+        (customCollectionOnly &&
+          ((embeddedBlock as Record<string, unknown>).type !==
+            PageBlockType.EntityCollection ||
+            (embeddedBlock as Record<string, unknown>).entityType !== 'custom'))
+      ) {
+        return { button: rawButton, changed: false, drop: false };
+      }
+
+      const result = this.cleanupBlockMediaRefs(
+        embeddedBlock,
+        mediaId,
+        paths,
+        buttonPath,
+      );
+      if (!result.changed) {
+        return { button: rawButton, changed: false, drop: false };
+      }
+      if (result.drop) {
+        return { button: rawButton, changed: true, drop: true };
+      }
+
+      return {
+        button: { ...button, block: result.block },
+        changed: true,
+        drop: false,
+      };
+    };
+
+    if (
+      blockType === PageBlockType.RichText &&
+      this.matchesMediaRef(nextBlock.media, mediaId)
+    ) {
+      delete nextBlock.media;
+      changed = true;
+      paths.add(`${pathPrefix}.media.mediaId`);
+    }
+
+    if (
+      blockType === PageBlockType.Hero &&
+      this.matchesMediaRef(nextBlock.backgroundMedia, mediaId)
+    ) {
+      delete nextBlock.backgroundMedia;
+      changed = true;
+      paths.add(`${pathPrefix}.backgroundMedia.mediaId`);
+    }
+
+    if (blockType === PageBlockType.Gallery && Array.isArray(block.items)) {
+      const originalItems = block.items;
+      const filteredItems = originalItems.filter(
+        (item) =>
+          !(
+            item &&
+            typeof item === 'object' &&
+            (item as Record<string, unknown>).mediaId === mediaId
+          ),
+      );
+
+      if (filteredItems.length !== originalItems.length) {
+        changed = true;
+        paths.add(`${pathPrefix}.items.mediaId`);
+      }
+
+      if (!filteredItems.length) {
+        paths.add(`${pathPrefix}.gallery`);
+        return { block: nextBlock, changed: true, drop: true };
+      }
+
+      nextBlock.items = filteredItems;
+    }
+
+    if (
+      blockType === PageBlockType.EntityCollection &&
+      block.entityType === 'custom' &&
+      Array.isArray(block.customItems)
+    ) {
+      let customItemsChanged = false;
+      const nextCustomItems = block.customItems.map((item) => {
+        if (
+          !item ||
+          typeof item !== 'object' ||
+          (item as Record<string, unknown>).mediaId !== mediaId
+        ) {
+          return item;
+        }
+        const nextItem = { ...(item as Record<string, unknown>) };
+        delete nextItem.mediaId;
+        customItemsChanged = true;
+        return nextItem;
+      });
+
+      if (customItemsChanged) {
+        nextBlock.customItems = nextCustomItems;
+        changed = true;
+        paths.add(`${pathPrefix}.customItems.mediaId`);
+      }
+    }
+
+    if (Array.isArray(block.buttons)) {
+      let buttonsChanged = false;
+      const nextButtons = block.buttons.map((button) => {
+        const result = cleanupCustomCollectionButton(
+          button,
+          `${pathPrefix}.buttons.block`,
+        );
+        buttonsChanged ||= result.changed;
+        return result.button;
+      });
+      if (buttonsChanged) {
+        nextBlock.buttons = nextButtons;
+        changed = true;
+      }
+    }
+
+    if (Array.isArray(nextBlock.items)) {
+      let itemsChanged = false;
+      const nextItems = nextBlock.items.map((rawItem) => {
+        if (!rawItem || typeof rawItem !== 'object') {
+          return rawItem;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const result = cleanupCustomCollectionButton(
+          item.button,
+          `${pathPrefix}.items.button.block`,
+        );
+        if (!result.changed) {
+          return rawItem;
+        }
+        itemsChanged = true;
+        return { ...item, button: result.button };
+      });
+      if (itemsChanged) {
+        nextBlock.items = nextItems;
+        changed = true;
+      }
+    }
+
+    const customItems = nextBlock.customItems;
+    if (Array.isArray(customItems)) {
+      let customItemButtonsChanged = false;
+      const nextCustomItems = customItems.map((rawItem) => {
+        if (!rawItem || typeof rawItem !== 'object') {
+          return rawItem;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const result = cleanupCustomCollectionButton(
+          item.button,
+          `${pathPrefix}.customItems.button.block`,
+          false,
+        );
+        if (!result.changed) {
+          return rawItem;
+        }
+        customItemButtonsChanged = true;
+        if (result.drop) {
+          const nextItem = { ...item };
+          delete nextItem.button;
+          return nextItem;
+        }
+        return { ...item, button: result.button };
+      });
+      if (customItemButtonsChanged) {
+        nextBlock.customItems = nextCustomItems;
+        changed = true;
+      }
+    }
+
+    if (blockType === PageBlockType.Group && Array.isArray(block.blocks)) {
+      const nextChildren: unknown[] = [];
+      let childrenChanged = false;
+      for (const child of block.blocks) {
+        const result = this.cleanupBlockMediaRefs(
+          child,
+          mediaId,
+          paths,
+          `${pathPrefix}.blocks`,
+        );
+        if (result.changed) {
+          childrenChanged = true;
+        }
+        if (result.drop) {
+          childrenChanged = true;
+          continue;
+        }
+        nextChildren.push(result.block);
+      }
+      if (childrenChanged) {
+        nextBlock.blocks = nextChildren;
+        changed = true;
+      }
+
+      // A group with no remaining children can't be persisted (Joi min(1) would
+      // reject the next editor save), so drop the whole group — same as an
+      // emptied gallery above.
+      if (!nextChildren.length) {
+        paths.add(`${pathPrefix}.group`);
+        return { block: nextBlock, changed: true, drop: true };
+      }
+    }
+
+    return { block: nextBlock, changed, drop: false };
+  }
+
   private async cleanupPageReferences(
     mediaId: string,
     summary: MediaReferenceCleanupSummary,
@@ -517,6 +753,28 @@ export class MediaService {
           { 'blocks.media.mediaId': mediaId },
           { 'blocks.backgroundMedia.mediaId': mediaId },
           { 'blocks.items.mediaId': mediaId },
+          { 'blocks.customItems.mediaId': mediaId },
+          { 'blocks.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.media.mediaId': mediaId },
+          { 'blocks.customItems.button.block.items.mediaId': mediaId },
+          // Group children (page-only, one nesting level). No nested
+          // backgroundMedia path — hero is not an eligible group child (§9).
+          { 'blocks.blocks.media.mediaId': mediaId },
+          { 'blocks.blocks.items.mediaId': mediaId },
+          { 'blocks.blocks.customItems.mediaId': mediaId },
+          { 'blocks.blocks.buttons.block.customItems.mediaId': mediaId },
+          {
+            'blocks.blocks.customItems.button.block.customItems.mediaId':
+              mediaId,
+          },
+          {
+            'blocks.blocks.customItems.button.block.media.mediaId': mediaId,
+          },
+          {
+            'blocks.blocks.customItems.button.block.items.mediaId': mediaId,
+          },
         ],
       })
       .select({ _id: 1, blocks: 1 })
@@ -530,59 +788,19 @@ export class MediaService {
       let changed = false;
 
       for (const rawBlock of blocks) {
-        if (!rawBlock || typeof rawBlock !== 'object') {
-          nextBlocks.push(rawBlock);
+        const result = this.cleanupBlockMediaRefs(
+          rawBlock,
+          mediaId,
+          pagePaths,
+          'blocks',
+        );
+        if (result.changed) {
+          changed = true;
+        }
+        if (result.drop) {
           continue;
         }
-
-        const block = rawBlock as Record<string, unknown>;
-        const blockType = block.type;
-        const nextBlock: Record<string, unknown> = { ...block };
-
-        if (
-          blockType === PageBlockType.RichText &&
-          this.matchesMediaRef(nextBlock.media, mediaId)
-        ) {
-          delete nextBlock.media;
-          changed = true;
-          pagePaths.add('blocks.media.mediaId');
-        }
-
-        if (
-          blockType === PageBlockType.Hero &&
-          this.matchesMediaRef(nextBlock.backgroundMedia, mediaId)
-        ) {
-          delete nextBlock.backgroundMedia;
-          changed = true;
-          pagePaths.add('blocks.backgroundMedia.mediaId');
-        }
-
-        if (blockType === PageBlockType.Gallery && Array.isArray(block.items)) {
-          const originalItems = block.items;
-          const filteredItems = originalItems.filter(
-            (item) =>
-              !(
-                item &&
-                typeof item === 'object' &&
-                (item as Record<string, unknown>).mediaId === mediaId
-              ),
-          );
-
-          if (filteredItems.length !== originalItems.length) {
-            changed = true;
-            pagePaths.add('blocks.items.mediaId');
-          }
-
-          if (!filteredItems.length) {
-            changed = true;
-            pagePaths.add('blocks.gallery');
-            continue;
-          }
-
-          nextBlock.items = filteredItems;
-        }
-
-        nextBlocks.push(nextBlock);
+        nextBlocks.push(result.block);
       }
 
       if (!changed) {
@@ -635,6 +853,12 @@ export class MediaService {
           { 'blocks.media.mediaId': mediaId },
           { 'blocks.backgroundMedia.mediaId': mediaId },
           { 'blocks.items.mediaId': mediaId },
+          { 'blocks.customItems.mediaId': mediaId },
+          { 'blocks.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.media.mediaId': mediaId },
+          { 'blocks.customItems.button.block.items.mediaId': mediaId },
         ],
       })
       .select({ _id: 1, blocks: 1 })
@@ -651,59 +875,21 @@ export class MediaService {
       let changed = false;
 
       for (const rawBlock of blocks) {
-        if (!rawBlock || typeof rawBlock !== 'object') {
-          nextBlocks.push(rawBlock);
+        // Shared with cleanupPageReferences; the group branch is inert for events
+        // (events can't contain groups), so behavior for existing types is unchanged.
+        const result = this.cleanupBlockMediaRefs(
+          rawBlock,
+          mediaId,
+          eventPaths,
+          'blocks',
+        );
+        if (result.changed) {
+          changed = true;
+        }
+        if (result.drop) {
           continue;
         }
-
-        const block = rawBlock as Record<string, unknown>;
-        const blockType = block.type;
-        const nextBlock: Record<string, unknown> = { ...block };
-
-        if (
-          blockType === PageBlockType.RichText &&
-          this.matchesMediaRef(nextBlock.media, mediaId)
-        ) {
-          delete nextBlock.media;
-          changed = true;
-          eventPaths.add('blocks.media.mediaId');
-        }
-
-        if (
-          blockType === PageBlockType.Hero &&
-          this.matchesMediaRef(nextBlock.backgroundMedia, mediaId)
-        ) {
-          delete nextBlock.backgroundMedia;
-          changed = true;
-          eventPaths.add('blocks.backgroundMedia.mediaId');
-        }
-
-        if (blockType === PageBlockType.Gallery && Array.isArray(block.items)) {
-          const originalItems = block.items;
-          const filteredItems = originalItems.filter(
-            (item) =>
-              !(
-                item &&
-                typeof item === 'object' &&
-                (item as Record<string, unknown>).mediaId === mediaId
-              ),
-          );
-
-          if (filteredItems.length !== originalItems.length) {
-            changed = true;
-            eventPaths.add('blocks.items.mediaId');
-          }
-
-          if (!filteredItems.length) {
-            changed = true;
-            eventPaths.add('blocks.gallery');
-            continue;
-          }
-
-          nextBlock.items = filteredItems;
-        }
-
-        nextBlocks.push(nextBlock);
+        nextBlocks.push(result.block);
       }
 
       if (!changed) {

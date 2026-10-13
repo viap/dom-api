@@ -1,5 +1,5 @@
 import { PageBlockType } from '../enums/page-block-type.enum';
-import { PageBlock } from '../types/page-block.interface';
+import { PageBlock, PageRootBlock } from '../types/page-block.interface';
 import { prepareBlocksForWrite, toPublicBlocks } from './block-validation';
 
 const context = {
@@ -206,6 +206,55 @@ describe('toPublicBlocks', () => {
     expect(embedded.source).toBeUndefined();
   });
 
+  it('preserves Custom item order and materializes an embedded dynamic block', async () => {
+    const [custom] = await toPublicBlocks(
+      [
+        {
+          id: 'custom',
+          type: PageBlockType.EntityCollection,
+          entityType: 'custom',
+          layout: 'grid',
+          items: [],
+          customItems: [
+            { title: 'First' },
+            {
+              title: 'Second',
+              button: {
+                label: 'Open people',
+                type: 'block',
+                block: {
+                  id: 'embedded-people',
+                  type: PageBlockType.EntityCollection,
+                  entityType: 'people',
+                  layout: 'list',
+                  source: 'dynamic',
+                  items: [],
+                  filters: {},
+                  limit: 4,
+                },
+              },
+            },
+          ],
+        },
+      ],
+      baseServices,
+      context,
+    );
+
+    const publicCustom = custom as Record<string, any>;
+    expect(publicCustom.items).toEqual([]);
+    expect(
+      publicCustom.customItems.map((item: { title: string }) => item.title),
+    ).toEqual(['First', 'Second']);
+    expect(publicCustom.customItems[1].button.block).toEqual(
+      expect.objectContaining({
+        id: 'embedded-people',
+        items: ['person-1'],
+      }),
+    );
+    expect(publicCustom.customItems[1].button.block.source).toBeUndefined();
+  });
+
   it('caps recursion and drops over-deep embedded blocks from malformed stored data', async () => {
     // A self-referential cycle that only malformed (non-Joi) stored data could
     // contain — Mixed lets it reach Mongo. The read path must terminate.
@@ -279,6 +328,194 @@ describe('prepareBlocksForWrite embedded blocks', () => {
           layout: 'grid',
           items: ['507f1f77bcf86cd799439299'],
         }),
+        { ...allExist, peopleExistingIds: async () => new Set<string>() },
+      ),
+    ).rejects.toThrow(/Referenced person not found/);
+  });
+
+  it('collects Custom media and button references and sanitizes item modal content', async () => {
+    const mediaId = '507f1f77bcf86cd799439291';
+    const pageId = '507f1f77bcf86cd799439292';
+    const mediaExistingPublishedIds = jest
+      .fn()
+      .mockImplementation(async (ids: string[]) => new Set(ids));
+    const pagesExistingIds = jest
+      .fn()
+      .mockImplementation(async (ids: string[]) => new Set(ids));
+
+    const [custom] = await prepareBlocksForWrite(
+      [
+        {
+          id: 'custom',
+          type: PageBlockType.EntityCollection,
+          entityType: 'custom',
+          layout: 'grid',
+          items: [],
+          customItems: [
+            {
+              mediaId,
+              title: 'Linked card',
+              button: {
+                label: 'Read more',
+                type: 'page',
+                targetId: pageId,
+              },
+            },
+            {
+              title: 'Modal card',
+              button: {
+                label: 'Open',
+                type: 'block',
+                block: {
+                  id: 'modal-html',
+                  type: PageBlockType.Html,
+                  template: 'vertical',
+                  content:
+                    '<p>Allowed</p><iframe src="https://evil.example"></iframe>',
+                },
+              },
+            },
+          ],
+        },
+      ] as PageBlock[],
+      {
+        ...allExist,
+        mediaExistingPublishedIds,
+        pagesExistingIds,
+      },
+    );
+
+    expect(mediaExistingPublishedIds).toHaveBeenCalledWith([mediaId]);
+    expect(pagesExistingIds).toHaveBeenCalledWith([pageId]);
+    expect(
+      (custom as Record<string, any>).customItems[1].button.block.content,
+    ).toBe('<p>Allowed</p>');
+  });
+
+  it('rejects a missing published media reference from a Custom item', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          {
+            id: 'custom',
+            type: PageBlockType.EntityCollection,
+            entityType: 'custom',
+            layout: 'grid',
+            items: [],
+            customItems: [
+              {
+                mediaId: '507f1f77bcf86cd799439293',
+                title: 'Missing image',
+              },
+            ],
+          },
+        ] as PageBlock[],
+        {
+          ...allExist,
+          mediaExistingPublishedIds: async () => new Set<string>(),
+        },
+      ),
+    ).rejects.toThrow(/Referenced published media not found/);
+  });
+});
+
+describe('Group blocks (page-only)', () => {
+  const allExist = {
+    peopleExistingIds: async (ids: string[]) => new Set(ids),
+    partnersExistingIds: async (ids: string[]) => new Set(ids),
+    eventsExistingIds: async (ids: string[]) => new Set(ids),
+    mediaExistingPublishedIds: async (ids: string[]) => new Set(ids),
+    pagesExistingIds: async (ids: string[]) => new Set(ids),
+    domainsGetActiveById: async () => ({}),
+  };
+
+  const publicServices = {
+    findPublishedPeopleSummariesByIds: async () => [],
+    findDynamicPeopleSummaries: async () => [],
+    findDynamicPartnerSummaries: async () => [],
+    findDynamicEventSummaries: async () => [],
+  };
+
+  const htmlChild = (id: string, content = '<p>ok</p>') => ({
+    id,
+    type: PageBlockType.Html,
+    template: 'vertical',
+    content,
+  });
+
+  it('drops a hidden child inside a visible group on public read', async () => {
+    const result = await toPublicBlocks(
+      [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          isVisible: true,
+          blocks: [htmlChild('c1'), { ...htmlChild('c2'), isVisible: false }],
+        },
+      ],
+      publicServices,
+      context,
+    );
+
+    const group = result[0] as Record<string, any>;
+    expect(group.blocks).toHaveLength(1);
+    expect(group.blocks[0].id).toBe('c1');
+  });
+
+  it('sanitizes an HTML child inside a group on write', async () => {
+    const [group] = await prepareBlocksForWrite(
+      [
+        {
+          id: 'grp',
+          type: PageBlockType.Group,
+          blocks: [
+            htmlChild(
+              'c1',
+              '<p>ok</p><iframe src="https://evil.com"></iframe>',
+            ),
+          ],
+        },
+      ] as unknown as PageRootBlock[],
+      allExist,
+    );
+
+    expect((group as Record<string, any>).blocks[0].content).toBe('<p>ok</p>');
+  });
+
+  it('flags a duplicate id between a root block and a group child (tree-wide)', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          htmlChild('dup'),
+          {
+            id: 'grp',
+            type: PageBlockType.Group,
+            blocks: [htmlChild('dup')],
+          },
+        ] as unknown as PageRootBlock[],
+        allExist,
+      ),
+    ).rejects.toThrow(/Duplicate block id/);
+  });
+
+  it('existence-checks refs collected from a group child', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          {
+            id: 'grp',
+            type: PageBlockType.Group,
+            blocks: [
+              {
+                id: 'team',
+                type: PageBlockType.EntityCollection,
+                entityType: 'people',
+                layout: 'grid',
+                items: ['507f1f77bcf86cd799439299'],
+              },
+            ],
+          },
+        ] as unknown as PageRootBlock[],
         { ...allExist, peopleExistingIds: async () => new Set<string>() },
       ),
     ).rejects.toThrow(/Referenced person not found/);

@@ -3,7 +3,7 @@ import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiSeoSchema } from '@/common/schemas/joi.seo.schema';
 import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { PageStatus } from '../enums/page-status.enum';
-import { pageBlocksSchema } from './joi.page-block.schema';
+import { pageRootBlocksSchema } from './joi.page-block.schema';
 
 export const createPageSchema = Joi.object({
   domainId: joiObjectId.optional(),
@@ -16,5 +16,5 @@ export const createPageSchema = Joi.object({
   isHomepage: Joi.boolean().default(false).optional(),
   isTitleVisible: Joi.boolean().default(true).optional(),
   seo: joiSeoSchema.optional(),
-  blocks: pageBlocksSchema.optional(),
+  blocks: pageRootBlocksSchema.optional(),
 });

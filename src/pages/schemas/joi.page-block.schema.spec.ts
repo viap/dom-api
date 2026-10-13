@@ -167,6 +167,120 @@ describe('createPageSchema', () => {
     }
   });
 
+  it('accepts strict Custom entity collections at the 1 and 50 item bounds', () => {
+    const customItem = {
+      mediaId: objectId,
+      pretitle: 'Pretitle',
+      title: 'Authored card',
+      subtitle: 'Subtitle',
+      description: 'Plain card description',
+      button: {
+        label: 'Apply',
+        type: 'application',
+        targetId: 'general',
+      },
+    };
+
+    for (const customItems of [
+      [customItem],
+      Array.from({ length: 50 }, () => customItem),
+    ]) {
+      const { error, value } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'authored-cards',
+            type: 'entityCollection',
+            entityType: 'custom',
+            layout: 'grid',
+            items: [],
+            customItems,
+          },
+        ],
+      });
+
+      expect(error).toBeUndefined();
+      expect(value.blocks[0].customItems).toHaveLength(customItems.length);
+    }
+  });
+
+  it('rejects invalid Custom cardinality, text, branch, and unknown item fields', () => {
+    const validItem = { title: 'Card' };
+    const invalidBlocks = [
+      { items: [], customItems: [] },
+      {
+        items: [],
+        customItems: Array.from({ length: 51 }, () => validItem),
+      },
+      { items: [], customItems: [{ title: '   ' }] },
+      { items: [], customItems: [{ title: 'x'.repeat(151) }] },
+      { items: [], customItems: [{ title: 'Card', alt: 'not allowed' }] },
+      { items: [], customItems: [{ title: 'Card', buttons: [] }] },
+      { items: [objectId], customItems: [validItem] },
+      { items: [], customItems: [validItem], source: 'manual' },
+      { items: [], customItems: [validItem], filters: {} },
+      { items: [], customItems: [validItem], limit: 2 },
+    ];
+
+    for (const branch of invalidBlocks) {
+      const { error } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'authored-cards',
+            type: 'entityCollection',
+            entityType: 'custom',
+            layout: 'grid',
+            ...branch,
+          },
+        ],
+      });
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('uses restricted Custom item buttons inside modal-embedded collections', () => {
+    const pageWithEmbeddedCustomButton = (type: 'page' | 'application') =>
+      createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'cta',
+            type: 'cta',
+            buttons: [
+              {
+                label: 'Open',
+                type: 'block',
+                block: {
+                  id: 'modal-cards',
+                  type: 'entityCollection',
+                  entityType: 'custom',
+                  layout: 'list',
+                  items: [],
+                  customItems: [
+                    {
+                      title: 'Nested card',
+                      button: {
+                        label: 'Nested action',
+                        type,
+                        targetId: type === 'page' ? objectId : 'general',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(pageWithEmbeddedCustomButton('page').error).toBeUndefined();
+    expect(pageWithEmbeddedCustomButton('application').error).toBeDefined();
+  });
+
   it('should reject invalid page button target ids at the joi layer', () => {
     const { error } = createPageSchema.validate({
       title: 'About',
@@ -1109,6 +1223,154 @@ describe('block button action', () => {
       }),
     );
 
+    expect(error).toBeDefined();
+  });
+});
+
+import { createEventSchema } from '@/events/schemas/joi.create-event.schema';
+
+describe('Group block (page-only)', () => {
+  const htmlChild = (id: string) => ({
+    id,
+    type: 'html',
+    template: 'vertical',
+    content: '<p>x</p>',
+  });
+
+  const group = (id: string, blocks: unknown[]) => ({
+    id,
+    type: 'group',
+    blocks,
+  });
+
+  const pageWith = (blocks: unknown[]) =>
+    createPageSchema.validate({ title: 'P', slug: 'p', blocks });
+
+  it('accepts a group with 1 child', () => {
+    const { error } = pageWith([group('g', [htmlChild('c1')])]);
+    expect(error).toBeUndefined();
+  });
+
+  it('accepts a group with 4 children', () => {
+    const { error } = pageWith([
+      group('g', [
+        htmlChild('c1'),
+        htmlChild('c2'),
+        htmlChild('c3'),
+        htmlChild('c4'),
+      ]),
+    ]);
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects a group with 0 children', () => {
+    const { error } = pageWith([group('g', [])]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a group with 5 children', () => {
+    const { error } = pageWith([
+      group('g', [
+        htmlChild('c1'),
+        htmlChild('c2'),
+        htmlChild('c3'),
+        htmlChild('c4'),
+        htmlChild('c5'),
+      ]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a nested group (child union excludes group)', () => {
+    const { error } = pageWith([
+      group('g', [group('nested', [htmlChild('c1')])]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a hero child (ineligible type)', () => {
+    const { error } = pageWith([
+      group('g', [{ id: 'h', type: 'hero', items: [] }]),
+    ]);
+    expect(error).toBeDefined();
+  });
+
+  it('accepts group common header fields', () => {
+    const { error } = pageWith([
+      {
+        ...group('g', [htmlChild('c1')]),
+        pretitle: 'Eyebrow',
+        title: 'Columns',
+        subtitle: 'Sub',
+        description: 'Desc',
+        textAlign: 'center',
+        background: 'cream',
+        padding: 'lg',
+        anchorId: 'cols',
+      },
+    ]);
+    expect(error).toBeUndefined();
+  });
+
+  it('keeps the root max(20) with a group counting as one block', () => {
+    const twenty = Array.from({ length: 20 }, (_, index) =>
+      group(`g-${index}`, [
+        htmlChild(`g-${index}-a`),
+        htmlChild(`g-${index}-b`),
+      ]),
+    );
+    expect(pageWith(twenty).error).toBeUndefined();
+
+    const twentyOne = Array.from({ length: 21 }, (_, index) =>
+      group(`g-${index}`, [htmlChild(`g-${index}-a`)]),
+    );
+    expect(pageWith(twentyOne).error).toBeDefined();
+  });
+});
+
+describe('Group scope isolation (events reject group)', () => {
+  const baseEvent = {
+    domainId: objectId,
+    type: 'seminar',
+    title: 'Event',
+    slug: 'event',
+    startAt: '2026-01-01T10:00:00.000Z',
+    endAt: '2026-01-01T12:00:00.000Z',
+  };
+
+  it('sanity: a minimal event validates', () => {
+    const { error } = createEventSchema.validate(baseEvent);
+    expect(error).toBeUndefined();
+  });
+
+  it('accepts an existing leaf block on an event', () => {
+    const { error } = createEventSchema.validate({
+      ...baseEvent,
+      blocks: [
+        { id: 'h', type: 'html', template: 'vertical', content: '<p>x</p>' },
+      ],
+    });
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects a group block on an event', () => {
+    const { error } = createEventSchema.validate({
+      ...baseEvent,
+      blocks: [
+        {
+          id: 'g',
+          type: 'group',
+          blocks: [
+            {
+              id: 'c',
+              type: 'html',
+              template: 'vertical',
+              content: '<p>x</p>',
+            },
+          ],
+        },
+      ],
+    });
     expect(error).toBeDefined();
   });
 });

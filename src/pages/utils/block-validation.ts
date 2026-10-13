@@ -7,12 +7,15 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import {
   BlockButton,
   CtaBlock,
+  CustomEntityCollectionBlock,
   DynamicEntityCollectionBlock,
   DynamicEntityCollectionResolutionContext,
   EntityCollectionBlock,
   GalleryBlock,
+  GroupChildBlock,
   HeroBlock,
   PageBlock,
+  PageRootBlock,
   RichTextBlock,
 } from '../types/page-block.interface';
 import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
@@ -196,7 +199,29 @@ function validateRichTextBlock(
 function validateEntityCollectionBlock(
   block: EntityCollectionBlock,
   refs: ValidationRefs,
+  depth: number,
 ): void {
+  if (block.entityType === EntityCollectionEntityType.Custom) {
+    if (block.items.length !== 0) {
+      throw new BadRequestException(
+        'Custom entity collections must have an empty items array',
+      );
+    }
+    ensureBlockHasItems(
+      block.customItems,
+      'entityCollection.customItems must contain at least one item',
+    );
+    for (const item of block.customItems) {
+      if (item.mediaId) {
+        refs.mediaIds.add(item.mediaId);
+      }
+      if (item.button) {
+        collectButtonRefs([item.button], refs, depth);
+      }
+    }
+    return;
+  }
+
   if (block.source === 'dynamic') {
     if (block.items.length !== 0) {
       throw new BadRequestException(
@@ -223,7 +248,9 @@ function validateEntityCollectionBlock(
       break;
     default:
       throw new BadRequestException(
-        `Unsupported entity collection type: ${block.entityType}`,
+        `Unsupported entity collection type: ${String(
+          (block as { entityType?: unknown }).entityType,
+        )}`,
       );
   }
 }
@@ -268,7 +295,7 @@ function validateGalleryBlock(block: GalleryBlock, refs: ValidationRefs): void {
 }
 
 function validateOneBlock(
-  block: PageBlock,
+  block: PageRootBlock,
   refs: ValidationRefs,
   depth: number,
 ): void {
@@ -277,7 +304,7 @@ function validateOneBlock(
       validateRichTextBlock(block, refs, depth);
       break;
     case PageBlockType.EntityCollection:
-      validateEntityCollectionBlock(block, refs);
+      validateEntityCollectionBlock(block, refs, depth);
       break;
     case PageBlockType.Hero:
       validateHeroBlock(block, refs, depth);
@@ -292,6 +319,9 @@ function validateOneBlock(
       validateApplicationFormType(block.applicationType);
       break;
     case PageBlockType.Html:
+      break;
+    case PageBlockType.Group:
+      // Children (and their id dedup) are visited recursively in validateBlocks.
       break;
     default:
       throw new BadRequestException('Unsupported page block type');
@@ -352,13 +382,17 @@ async function validateCollectedRefs(
 }
 
 async function validateBlocks(
-  blocks: PageBlock[],
+  blocks: PageRootBlock[],
   services: BlockValidationServices,
 ): Promise<void> {
   const seenIds = new Set<string>();
   const refs = createValidationRefs();
 
-  for (const block of blocks) {
+  // Tree-wide id dedup + ref collection. Group children join the same seenIds
+  // set and refs so their media/people/button targets are existence-checked and
+  // ids stay unique across the whole tree. Group is dead code for events (they
+  // can't contain groups — rejected upstream), so event behavior is unchanged.
+  const visit = (block: PageRootBlock): void => {
     if (seenIds.has(block.id)) {
       throw new BadRequestException(
         `Duplicate block id found in payload: ${block.id}`,
@@ -367,6 +401,16 @@ async function validateBlocks(
     seenIds.add(block.id);
 
     validateOneBlock(block, refs, 0);
+
+    if (block.type === PageBlockType.Group) {
+      for (const child of block.blocks || []) {
+        visit(child);
+      }
+    }
+  };
+
+  for (const block of blocks) {
+    visit(block);
   }
 
   await validateCollectedRefs(refs, services);
@@ -387,11 +431,27 @@ function sanitizeEmbeddedButtonBlocks(
       delete rest.block;
       return rest;
     }
-    return { ...button, block: sanitizeOneBlock(button.block, depth + 1) };
+    // Embedded blocks are never groups (Joi excludes group from embeddable), so
+    // the sanitized result is a leaf PageBlock.
+    return {
+      ...button,
+      block: sanitizeOneBlock(button.block, depth + 1) as PageBlock,
+    };
   });
 }
 
-function sanitizeOneBlock(block: PageBlock, depth: number): PageBlock {
+function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
+  if (block.type === PageBlockType.Group) {
+    // Security: nested HTML/richText children are sanitized and dynamic
+    // collections normalized, same as root. Children are leaf types (no group).
+    return {
+      ...block,
+      blocks: block.blocks.map(
+        (child) => sanitizeOneBlock(child, depth) as GroupChildBlock,
+      ),
+    };
+  }
+
   if (block.type === PageBlockType.Html) {
     const sanitizedContent = sanitizeHtmlBlockContent(block.content);
     if (!sanitizedContent) {
@@ -403,6 +463,22 @@ function sanitizeOneBlock(block: PageBlock, depth: number): PageBlock {
       ...block,
       content: sanitizedContent,
     };
+  }
+
+  if (
+    block.type === PageBlockType.EntityCollection &&
+    block.entityType === EntityCollectionEntityType.Custom
+  ) {
+    return {
+      ...block,
+      items: [],
+      customItems: block.customItems.map((item) => ({
+        ...item,
+        ...(item.button
+          ? { button: sanitizeEmbeddedButtonBlocks([item.button], depth)[0] }
+          : {}),
+      })),
+    } satisfies CustomEntityCollectionBlock;
   }
 
   if (
@@ -454,7 +530,7 @@ function sanitizeOneBlock(block: PageBlock, depth: number): PageBlock {
           ...item,
           button: {
             ...item.button,
-            block: sanitizeOneBlock(item.button.block, depth + 1),
+            block: sanitizeOneBlock(item.button.block, depth + 1) as PageBlock,
           },
         };
       }),
@@ -465,9 +541,9 @@ function sanitizeOneBlock(block: PageBlock, depth: number): PageBlock {
 }
 
 export async function prepareBlocksForWrite(
-  blocks: PageBlock[],
+  blocks: PageRootBlock[],
   services: BlockValidationServices,
-): Promise<PageBlock[]> {
+): Promise<PageRootBlock[]> {
   await validateBlocks(blocks, services);
 
   return blocks.map((block) => sanitizeOneBlock(block, 0));
@@ -608,6 +684,52 @@ async function withPublicHeroButtonBlocks(
   return { ...block, items: resolved };
 }
 
+async function withPublicCustomItemButtonBlocks(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const customItems = block.customItems;
+  if (!Array.isArray(customItems)) {
+    return block;
+  }
+  const resolved = await Promise.all(
+    customItems.map(async (item) => {
+      if (!item || typeof item !== 'object') {
+        return item;
+      }
+      const typedItem = item as Record<string, unknown>;
+      const button =
+        typedItem.button && typeof typedItem.button === 'object'
+          ? (typedItem.button as Record<string, unknown>)
+          : undefined;
+      const embedded = button?.block;
+      if (!button || !embedded) {
+        return item;
+      }
+      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+        const nextButton = { ...button };
+        delete nextButton.block;
+        return { ...typedItem, button: nextButton };
+      }
+      return {
+        ...typedItem,
+        button: {
+          ...button,
+          block: await toPublicOneBlock(
+            embedded as Record<string, unknown>,
+            services,
+            context,
+            depth + 1,
+          ),
+        },
+      };
+    }),
+  );
+  return { ...block, items: [], customItems: resolved };
+}
+
 async function toPublicOneBlock(
   block: PageBlock | Record<string, unknown>,
   services: PublicBlockServices,
@@ -615,9 +737,46 @@ async function toPublicOneBlock(
   depth: number,
 ): Promise<Record<string, unknown>> {
   const typedBlock = block as Record<string, unknown>;
+  if (typedBlock.type === PageBlockType.Group) {
+    // Drop hidden children, resolve/strip each visible child (same rules as a
+    // root block). Group is dead code for events (no groups reach here).
+    const children = Array.isArray(typedBlock.blocks) ? typedBlock.blocks : [];
+    const visibleChildren = children.filter(
+      (child) =>
+        child &&
+        typeof child === 'object' &&
+        (child as Record<string, unknown>).isVisible !== false,
+    );
+    const resolvedChildren = await Promise.all(
+      visibleChildren.map((child) =>
+        toPublicOneBlock(
+          child as Record<string, unknown>,
+          services,
+          context,
+          depth,
+        ),
+      ),
+    );
+    return { ...typedBlock, blocks: resolvedChildren };
+  }
   if (typedBlock.type === PageBlockType.RichText) {
     const publicBlock = await toPublicRichTextBlock(typedBlock, services);
     return withPublicButtonBlocks(publicBlock, services, context, depth);
+  }
+  if (
+    typedBlock.type === PageBlockType.EntityCollection &&
+    typedBlock.entityType === EntityCollectionEntityType.Custom
+  ) {
+    const publicBlock: Record<string, unknown> = { ...typedBlock, items: [] };
+    delete publicBlock.source;
+    delete publicBlock.filters;
+    delete publicBlock.limit;
+    return withPublicCustomItemButtonBlocks(
+      publicBlock,
+      services,
+      context,
+      depth,
+    );
   }
   if (
     typedBlock.type === PageBlockType.EntityCollection &&

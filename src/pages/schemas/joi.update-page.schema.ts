@@ -3,7 +3,7 @@ import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { joiSeoSchema } from '@/common/schemas/joi.seo.schema';
 import { joiSlugSchema } from '@/common/schemas/joi.slug.schema';
 import { PageStatus } from '../enums/page-status.enum';
-import { pageBlocksSchema } from './joi.page-block.schema';
+import { pageRootBlocksSchema } from './joi.page-block.schema';
 
 export const updatePageSchema = Joi.object({
   domainId: Joi.alternatives().try(joiObjectId, Joi.valid(null)).optional(),
@@ -15,5 +15,5 @@ export const updatePageSchema = Joi.object({
   isHomepage: Joi.boolean().optional(),
   isTitleVisible: Joi.boolean().optional(),
   seo: joiSeoSchema.optional(),
-  blocks: pageBlocksSchema.optional(),
+  blocks: pageRootBlocksSchema.optional(),
 });

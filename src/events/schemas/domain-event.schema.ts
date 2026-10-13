@@ -192,3 +192,24 @@ domainEventSchema.index(
   { sparse: true },
 );
 domainEventSchema.index({ 'blocks.items.mediaId': 1 }, { sparse: true });
+domainEventSchema.index({ 'blocks.customItems.mediaId': 1 }, { sparse: true });
+domainEventSchema.index(
+  { 'blocks.buttons.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.items.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.customItems.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.customItems.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.customItems.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
