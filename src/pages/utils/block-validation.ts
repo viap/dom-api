@@ -7,6 +7,7 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import {
   BlockButton,
   CtaBlock,
+  CustomEntityCollectionBlock,
   DynamicEntityCollectionBlock,
   DynamicEntityCollectionResolutionContext,
   EntityCollectionBlock,
@@ -198,7 +199,29 @@ function validateRichTextBlock(
 function validateEntityCollectionBlock(
   block: EntityCollectionBlock,
   refs: ValidationRefs,
+  depth: number,
 ): void {
+  if (block.entityType === EntityCollectionEntityType.Custom) {
+    if (block.items.length !== 0) {
+      throw new BadRequestException(
+        'Custom entity collections must have an empty items array',
+      );
+    }
+    ensureBlockHasItems(
+      block.customItems,
+      'entityCollection.customItems must contain at least one item',
+    );
+    for (const item of block.customItems) {
+      if (item.mediaId) {
+        refs.mediaIds.add(item.mediaId);
+      }
+      if (item.button) {
+        collectButtonRefs([item.button], refs, depth);
+      }
+    }
+    return;
+  }
+
   if (block.source === 'dynamic') {
     if (block.items.length !== 0) {
       throw new BadRequestException(
@@ -225,7 +248,9 @@ function validateEntityCollectionBlock(
       break;
     default:
       throw new BadRequestException(
-        `Unsupported entity collection type: ${block.entityType}`,
+        `Unsupported entity collection type: ${String(
+          (block as { entityType?: unknown }).entityType,
+        )}`,
       );
   }
 }
@@ -279,7 +304,7 @@ function validateOneBlock(
       validateRichTextBlock(block, refs, depth);
       break;
     case PageBlockType.EntityCollection:
-      validateEntityCollectionBlock(block, refs);
+      validateEntityCollectionBlock(block, refs, depth);
       break;
     case PageBlockType.Hero:
       validateHeroBlock(block, refs, depth);
@@ -438,6 +463,22 @@ function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
       ...block,
       content: sanitizedContent,
     };
+  }
+
+  if (
+    block.type === PageBlockType.EntityCollection &&
+    block.entityType === EntityCollectionEntityType.Custom
+  ) {
+    return {
+      ...block,
+      items: [],
+      customItems: block.customItems.map((item) => ({
+        ...item,
+        ...(item.button
+          ? { button: sanitizeEmbeddedButtonBlocks([item.button], depth)[0] }
+          : {}),
+      })),
+    } satisfies CustomEntityCollectionBlock;
   }
 
   if (
@@ -643,6 +684,52 @@ async function withPublicHeroButtonBlocks(
   return { ...block, items: resolved };
 }
 
+async function withPublicCustomItemButtonBlocks(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const customItems = block.customItems;
+  if (!Array.isArray(customItems)) {
+    return block;
+  }
+  const resolved = await Promise.all(
+    customItems.map(async (item) => {
+      if (!item || typeof item !== 'object') {
+        return item;
+      }
+      const typedItem = item as Record<string, unknown>;
+      const button =
+        typedItem.button && typeof typedItem.button === 'object'
+          ? (typedItem.button as Record<string, unknown>)
+          : undefined;
+      const embedded = button?.block;
+      if (!button || !embedded) {
+        return item;
+      }
+      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+        const nextButton = { ...button };
+        delete nextButton.block;
+        return { ...typedItem, button: nextButton };
+      }
+      return {
+        ...typedItem,
+        button: {
+          ...button,
+          block: await toPublicOneBlock(
+            embedded as Record<string, unknown>,
+            services,
+            context,
+            depth + 1,
+          ),
+        },
+      };
+    }),
+  );
+  return { ...block, items: [], customItems: resolved };
+}
+
 async function toPublicOneBlock(
   block: PageBlock | Record<string, unknown>,
   services: PublicBlockServices,
@@ -675,6 +762,21 @@ async function toPublicOneBlock(
   if (typedBlock.type === PageBlockType.RichText) {
     const publicBlock = await toPublicRichTextBlock(typedBlock, services);
     return withPublicButtonBlocks(publicBlock, services, context, depth);
+  }
+  if (
+    typedBlock.type === PageBlockType.EntityCollection &&
+    typedBlock.entityType === EntityCollectionEntityType.Custom
+  ) {
+    const publicBlock: Record<string, unknown> = { ...typedBlock, items: [] };
+    delete publicBlock.source;
+    delete publicBlock.filters;
+    delete publicBlock.limit;
+    return withPublicCustomItemButtonBlocks(
+      publicBlock,
+      services,
+      context,
+      depth,
+    );
   }
   if (
     typedBlock.type === PageBlockType.EntityCollection &&

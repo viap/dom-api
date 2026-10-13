@@ -7,7 +7,11 @@ import { pageBlockSchema } from './joi.page-block.schema';
 // cannot drift into different filter contracts.
 export const entityCollectionPreviewSchema = Joi.object({
   entityType: Joi.string()
-    .valid(...Object.values(EntityCollectionEntityType))
+    .valid(
+      EntityCollectionEntityType.People,
+      EntityCollectionEntityType.Partners,
+      EntityCollectionEntityType.Events,
+    )
     .required(),
   filters: Joi.object().required(),
   limit: Joi.number().integer().min(1).max(24).default(12).optional(),

@@ -37,6 +37,62 @@ const baseEvent = {
 };
 
 describe('Page group block persistence (Mongoose)', () => {
+  it('persists strict Custom items while retaining an empty string items array', () => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          id: 'custom',
+          type: 'entityCollection',
+          entityType: 'custom',
+          layout: 'grid',
+          items: [],
+          customItems: [
+            {
+              mediaId: '507f1f77bcf86cd799439221',
+              title: 'Card',
+              button: {
+                label: 'More',
+                type: 'external',
+                url: 'https://example.com',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(doc.validateSync()).toBeUndefined();
+    const stored = doc.toObject().blocks[0] as Record<string, any>;
+    expect(stored.items).toEqual([]);
+    expect(stored.customItems).toEqual([
+      expect.objectContaining({
+        mediaId: '507f1f77bcf86cd799439221',
+        title: 'Card',
+      }),
+    ]);
+    expect(stored.customItems[0].button).toEqual(
+      expect.objectContaining({ type: 'external' }),
+    );
+  });
+
+  it('rejects unknown fields in strict Custom item subdocuments', () => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          id: 'custom',
+          type: 'entityCollection',
+          entityType: 'custom',
+          layout: 'grid',
+          items: [],
+          customItems: [{ title: 'Card', alt: 'not persisted' }],
+        },
+      ],
+    });
+
+    expect(doc.validateSync()).toBeDefined();
+  });
   it('validates a group with leaf children and keeps child discriminator fields', () => {
     const doc = new PageModel({
       ...basePage,

@@ -527,6 +527,48 @@ export class MediaService {
     const nextBlock: Record<string, unknown> = { ...block };
     let changed = false;
 
+    const cleanupCustomCollectionButton = (
+      rawButton: unknown,
+      buttonPath: string,
+      customCollectionOnly = true,
+    ): { button: unknown; changed: boolean; drop: boolean } => {
+      if (!rawButton || typeof rawButton !== 'object') {
+        return { button: rawButton, changed: false, drop: false };
+      }
+
+      const button = rawButton as Record<string, unknown>;
+      const embeddedBlock = button.block;
+      if (
+        !embeddedBlock ||
+        typeof embeddedBlock !== 'object' ||
+        (customCollectionOnly &&
+          ((embeddedBlock as Record<string, unknown>).type !==
+            PageBlockType.EntityCollection ||
+            (embeddedBlock as Record<string, unknown>).entityType !== 'custom'))
+      ) {
+        return { button: rawButton, changed: false, drop: false };
+      }
+
+      const result = this.cleanupBlockMediaRefs(
+        embeddedBlock,
+        mediaId,
+        paths,
+        buttonPath,
+      );
+      if (!result.changed) {
+        return { button: rawButton, changed: false, drop: false };
+      }
+      if (result.drop) {
+        return { button: rawButton, changed: true, drop: true };
+      }
+
+      return {
+        button: { ...button, block: result.block },
+        changed: true,
+        drop: false,
+      };
+    };
+
     if (
       blockType === PageBlockType.RichText &&
       this.matchesMediaRef(nextBlock.media, mediaId)
@@ -567,6 +609,102 @@ export class MediaService {
       }
 
       nextBlock.items = filteredItems;
+    }
+
+    if (
+      blockType === PageBlockType.EntityCollection &&
+      block.entityType === 'custom' &&
+      Array.isArray(block.customItems)
+    ) {
+      let customItemsChanged = false;
+      const nextCustomItems = block.customItems.map((item) => {
+        if (
+          !item ||
+          typeof item !== 'object' ||
+          (item as Record<string, unknown>).mediaId !== mediaId
+        ) {
+          return item;
+        }
+        const nextItem = { ...(item as Record<string, unknown>) };
+        delete nextItem.mediaId;
+        customItemsChanged = true;
+        return nextItem;
+      });
+
+      if (customItemsChanged) {
+        nextBlock.customItems = nextCustomItems;
+        changed = true;
+        paths.add(`${pathPrefix}.customItems.mediaId`);
+      }
+    }
+
+    if (Array.isArray(block.buttons)) {
+      let buttonsChanged = false;
+      const nextButtons = block.buttons.map((button) => {
+        const result = cleanupCustomCollectionButton(
+          button,
+          `${pathPrefix}.buttons.block`,
+        );
+        buttonsChanged ||= result.changed;
+        return result.button;
+      });
+      if (buttonsChanged) {
+        nextBlock.buttons = nextButtons;
+        changed = true;
+      }
+    }
+
+    if (Array.isArray(nextBlock.items)) {
+      let itemsChanged = false;
+      const nextItems = nextBlock.items.map((rawItem) => {
+        if (!rawItem || typeof rawItem !== 'object') {
+          return rawItem;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const result = cleanupCustomCollectionButton(
+          item.button,
+          `${pathPrefix}.items.button.block`,
+        );
+        if (!result.changed) {
+          return rawItem;
+        }
+        itemsChanged = true;
+        return { ...item, button: result.button };
+      });
+      if (itemsChanged) {
+        nextBlock.items = nextItems;
+        changed = true;
+      }
+    }
+
+    const customItems = nextBlock.customItems;
+    if (Array.isArray(customItems)) {
+      let customItemButtonsChanged = false;
+      const nextCustomItems = customItems.map((rawItem) => {
+        if (!rawItem || typeof rawItem !== 'object') {
+          return rawItem;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const result = cleanupCustomCollectionButton(
+          item.button,
+          `${pathPrefix}.customItems.button.block`,
+          false,
+        );
+        if (!result.changed) {
+          return rawItem;
+        }
+        customItemButtonsChanged = true;
+        if (result.drop) {
+          const nextItem = { ...item };
+          delete nextItem.button;
+          return nextItem;
+        }
+        return { ...item, button: result.button };
+      });
+      if (customItemButtonsChanged) {
+        nextBlock.customItems = nextCustomItems;
+        changed = true;
+      }
     }
 
     if (blockType === PageBlockType.Group && Array.isArray(block.blocks)) {
@@ -615,10 +753,28 @@ export class MediaService {
           { 'blocks.media.mediaId': mediaId },
           { 'blocks.backgroundMedia.mediaId': mediaId },
           { 'blocks.items.mediaId': mediaId },
+          { 'blocks.customItems.mediaId': mediaId },
+          { 'blocks.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.media.mediaId': mediaId },
+          { 'blocks.customItems.button.block.items.mediaId': mediaId },
           // Group children (page-only, one nesting level). No nested
           // backgroundMedia path — hero is not an eligible group child (§9).
           { 'blocks.blocks.media.mediaId': mediaId },
           { 'blocks.blocks.items.mediaId': mediaId },
+          { 'blocks.blocks.customItems.mediaId': mediaId },
+          { 'blocks.blocks.buttons.block.customItems.mediaId': mediaId },
+          {
+            'blocks.blocks.customItems.button.block.customItems.mediaId':
+              mediaId,
+          },
+          {
+            'blocks.blocks.customItems.button.block.media.mediaId': mediaId,
+          },
+          {
+            'blocks.blocks.customItems.button.block.items.mediaId': mediaId,
+          },
         ],
       })
       .select({ _id: 1, blocks: 1 })
@@ -697,6 +853,12 @@ export class MediaService {
           { 'blocks.media.mediaId': mediaId },
           { 'blocks.backgroundMedia.mediaId': mediaId },
           { 'blocks.items.mediaId': mediaId },
+          { 'blocks.customItems.mediaId': mediaId },
+          { 'blocks.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
+          { 'blocks.customItems.button.block.media.mediaId': mediaId },
+          { 'blocks.customItems.button.block.items.mediaId': mediaId },
         ],
       })
       .select({ _id: 1, blocks: 1 })

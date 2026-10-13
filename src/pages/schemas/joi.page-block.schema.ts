@@ -245,6 +245,12 @@ const entityCollectionBaseSchema = {
   cardVariant: Joi.string().trim().max(120).optional(),
 };
 
+const entityBackedEntityTypes = [
+  EntityCollectionEntityType.People,
+  EntityCollectionEntityType.Partners,
+  EntityCollectionEntityType.Events,
+];
+
 const selectedValues = <T extends string>(values: T[]) =>
   Joi.array()
     .items(Joi.string().valid(...values))
@@ -308,37 +314,6 @@ const eventFiltersSchema = Joi.object({
   peopleIds: objectIdValues,
 }).unknown(false);
 
-const manualEntityCollectionBlockSchema = Joi.object({
-  ...entityCollectionBaseSchema,
-  source: Joi.string().valid('manual').optional(),
-  items: Joi.array().items(joiObjectId).min(1).max(50).required(),
-}).unknown(false);
-
-const dynamicEntityCollectionBlockSchema = Joi.object({
-  ...entityCollectionBaseSchema,
-  source: Joi.string().valid('dynamic').required(),
-  items: Joi.array().length(0).required(),
-  filters: Joi.alternatives()
-    .conditional('entityType', {
-      is: EntityCollectionEntityType.People,
-      then: peopleFiltersSchema.required(),
-    })
-    .conditional('entityType', {
-      is: EntityCollectionEntityType.Partners,
-      then: partnerFiltersSchema.required(),
-    })
-    .conditional('entityType', {
-      is: EntityCollectionEntityType.Events,
-      then: eventFiltersSchema.required(),
-    }),
-  limit: Joi.number().integer().min(1).max(24).default(12).optional(),
-}).unknown(false);
-
-const entityCollectionBlockSchema = Joi.alternatives().try(
-  manualEntityCollectionBlockSchema,
-  dynamicEntityCollectionBlockSchema,
-);
-
 const galleryBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Gallery).required(),
@@ -397,12 +372,71 @@ const makeCtaBlockSchema = (buttonSchema: Joi.Schema) =>
     buttons: Joi.array().items(buttonSchema).min(1).required(),
   });
 
+const makeEntityCollectionBlockSchema = (buttonSchema: Joi.Schema) => {
+  const entityBackedBaseSchema = {
+    ...entityCollectionBaseSchema,
+    entityType: Joi.string()
+      .valid(...entityBackedEntityTypes)
+      .required(),
+  };
+  const manualEntityCollectionBlockSchema = Joi.object({
+    ...entityBackedBaseSchema,
+    source: Joi.string().valid('manual').optional(),
+    items: Joi.array().items(joiObjectId).min(1).max(50).required(),
+  }).unknown(false);
+  const dynamicEntityCollectionBlockSchema = Joi.object({
+    ...entityBackedBaseSchema,
+    source: Joi.string().valid('dynamic').required(),
+    items: Joi.array().length(0).required(),
+    filters: Joi.alternatives()
+      .conditional('entityType', {
+        is: EntityCollectionEntityType.People,
+        then: peopleFiltersSchema.required(),
+      })
+      .conditional('entityType', {
+        is: EntityCollectionEntityType.Partners,
+        then: partnerFiltersSchema.required(),
+      })
+      .conditional('entityType', {
+        is: EntityCollectionEntityType.Events,
+        then: eventFiltersSchema.required(),
+      }),
+    limit: Joi.number().integer().min(1).max(24).default(12).optional(),
+  }).unknown(false);
+  const customEntityCollectionItemSchema = Joi.object({
+    mediaId: joiObjectId.optional(),
+    pretitle: Joi.string().trim().min(1).max(120).optional(),
+    title: Joi.string().trim().min(1).max(150).required(),
+    subtitle: Joi.string().trim().min(1).max(300).optional(),
+    description: stringSchema.optional(),
+    button: buttonSchema.optional(),
+  }).unknown(false);
+  const customEntityCollectionBlockSchema = Joi.object({
+    ...entityCollectionBaseSchema,
+    entityType: Joi.string()
+      .valid(EntityCollectionEntityType.Custom)
+      .required(),
+    items: Joi.array().length(0).required(),
+    customItems: Joi.array()
+      .items(customEntityCollectionItemSchema)
+      .min(1)
+      .max(50)
+      .required(),
+  }).unknown(false);
+
+  return Joi.alternatives().try(
+    manualEntityCollectionBlockSchema,
+    dynamicEntityCollectionBlockSchema,
+    customEntityCollectionBlockSchema,
+  );
+};
+
 // Block types embeddable in a modal via a `block` button. Keep in sync with
 // dom-web MODAL_BLOCK_ALLOWED_TYPES: richText, cta, html, entityCollection,
 // gallery. Excludes hero + applicationForm. Nested buttons are restricted.
 const embeddableBlockSchema = Joi.alternatives().try(
   makeRichTextBlockSchema(restrictedBlockButtonSchema),
-  entityCollectionBlockSchema,
+  makeEntityCollectionBlockSchema(restrictedBlockButtonSchema),
   makeCtaBlockSchema(restrictedBlockButtonSchema),
   galleryBlockSchema,
   htmlBlockSchema,
@@ -425,6 +459,8 @@ const blockButtonSchema = Joi.object({
 
 const richTextBlockSchema = makeRichTextBlockSchema(blockButtonSchema);
 const ctaBlockSchema = makeCtaBlockSchema(blockButtonSchema);
+const entityCollectionBlockSchema =
+  makeEntityCollectionBlockSchema(blockButtonSchema);
 
 const heroItemSchema = Joi.object({
   icon: Joi.string().trim().max(120).optional(),

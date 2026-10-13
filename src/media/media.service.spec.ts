@@ -113,6 +113,7 @@ describe('MediaService', () => {
 
   const mockDomainEventModel = {
     find: jest.fn(),
+    updateOne: jest.fn(),
     updateMany: jest.fn(),
   };
 
@@ -176,6 +177,9 @@ describe('MediaService', () => {
     mockPersonModel.find.mockReturnValue(createLeanChain([]));
     mockPartnerModel.find.mockReturnValue(createLeanChain([]));
     mockDomainEventModel.updateMany.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+    });
+    mockDomainEventModel.updateOne.mockReturnValue({
       exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     });
     mockPersonModel.updateMany.mockReturnValue({
@@ -644,6 +648,285 @@ describe('MediaService', () => {
     expect(mockPartnerModel.updateMany).toHaveBeenCalledWith(
       { logoId: uploadedMediaId },
       { $unset: { logoId: '' } },
+    );
+  });
+
+  it('removes only matching Custom media from Page, Group, Event, and modal positions', async () => {
+    const customBlock = (id: string, mediaId: string) => ({
+      id,
+      type: PageBlockType.EntityCollection,
+      entityType: 'custom',
+      layout: 'grid',
+      items: [],
+      customItems: [
+        { title: `${id} removed`, mediaId: uploadedMediaId },
+        { title: `${id} retained`, mediaId },
+      ],
+    });
+    const modalButton = (block: unknown) => ({
+      label: 'Open',
+      type: 'block',
+      block,
+    });
+    const customModalOwner = (id: string, block: unknown) => ({
+      id,
+      type: PageBlockType.EntityCollection,
+      entityType: 'custom',
+      layout: 'grid',
+      items: [],
+      customItems: [
+        {
+          title: `${id} card`,
+          button: modalButton(block),
+        },
+      ],
+    });
+    const pageDoc = {
+      _id: '507f1f77bcf86cd799439271',
+      blocks: [
+        customBlock('page-custom', 'page-other'),
+        {
+          id: 'page-rich-text',
+          type: PageBlockType.RichText,
+          buttons: [
+            modalButton(customBlock('rich-modal-custom', 'rich-other')),
+          ],
+        },
+        {
+          id: 'page-hero',
+          type: PageBlockType.Hero,
+          items: [
+            {
+              title: 'Hero item',
+              button: modalButton(
+                customBlock('hero-modal-custom', 'hero-other'),
+              ),
+            },
+          ],
+        },
+        {
+          ...customBlock('button-owner-custom', 'owner-other'),
+          customItems: [
+            {
+              title: 'Modal owner',
+              button: modalButton(
+                customBlock('item-modal-custom', 'item-other'),
+              ),
+            },
+          ],
+        },
+        customModalOwner('rich-owner-custom', {
+          id: 'custom-item-rich-modal',
+          type: PageBlockType.RichText,
+          media: { mediaId: uploadedMediaId, alt: 'removed' },
+        }),
+        customModalOwner('empty-gallery-owner-custom', {
+          id: 'custom-item-empty-gallery-modal',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: uploadedMediaId }],
+        }),
+        {
+          id: 'legacy-cta-modal-owner',
+          type: PageBlockType.Cta,
+          buttons: [
+            modalButton({
+              id: 'legacy-rich-modal',
+              type: PageBlockType.RichText,
+              media: { mediaId: uploadedMediaId },
+            }),
+          ],
+        },
+        {
+          id: 'page-group',
+          type: PageBlockType.Group,
+          blocks: [
+            customBlock('group-custom', 'group-other'),
+            {
+              id: 'group-cta',
+              type: PageBlockType.Cta,
+              buttons: [
+                modalButton(
+                  customBlock('group-modal-custom', 'group-modal-other'),
+                ),
+              ],
+            },
+            customModalOwner('group-gallery-owner-custom', {
+              id: 'custom-item-group-gallery-modal',
+              type: PageBlockType.Gallery,
+              items: [
+                { mediaId: uploadedMediaId },
+                { mediaId: 'group-gallery-other' },
+              ],
+            }),
+          ],
+        },
+      ],
+    };
+    const eventDoc = {
+      _id: '507f1f77bcf86cd799439272',
+      blocks: [
+        customBlock('event-custom', 'event-other'),
+        {
+          id: 'event-cta',
+          type: PageBlockType.Cta,
+          buttons: [
+            modalButton(customBlock('event-modal-custom', 'event-modal-other')),
+          ],
+        },
+        customModalOwner('event-rich-owner-custom', {
+          id: 'custom-item-event-rich-modal',
+          type: PageBlockType.RichText,
+          media: { mediaId: uploadedMediaId },
+        }),
+      ],
+    };
+
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    mockPageModel.find.mockReturnValue(createLeanChain([pageDoc]));
+    mockDomainEventModel.find
+      .mockReturnValueOnce(createLeanChain([]))
+      .mockReturnValueOnce(createLeanChain([eventDoc]));
+
+    await expect(service.remove(uploadedMediaId)).resolves.toBe(true);
+
+    const updatedPageBlocks = mockPageModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, any>>;
+    const updatedEventBlocks = mockDomainEventModel.updateOne.mock.calls[0]?.[1]
+      ?.$set?.blocks as Array<Record<string, any>>;
+    const findCustom = (
+      blocks: Array<Record<string, any>>,
+      id: string,
+    ): Record<string, any> | undefined => {
+      for (const block of blocks) {
+        if (block.id === id) return block;
+        if (Array.isArray(block.blocks)) {
+          const nested = findCustom(block.blocks, id);
+          if (nested) return nested;
+        }
+        for (const button of block.buttons ?? []) {
+          if (button.block?.id === id) return button.block;
+        }
+        for (const item of block.items ?? []) {
+          if (item.button?.block?.id === id) return item.button.block;
+        }
+        for (const item of block.customItems ?? []) {
+          if (item.button?.block?.id === id) return item.button.block;
+        }
+      }
+      return undefined;
+    };
+    const assertCustomMediaCleanup = (
+      blocks: Array<Record<string, any>>,
+      id: string,
+      retainedMediaId: string,
+    ) => {
+      const block = findCustom(blocks, id);
+      expect(block).toBeDefined();
+      expect(block?.customItems).toHaveLength(2);
+      expect(block?.customItems[0]).toEqual({ title: `${id} removed` });
+      expect(block?.customItems[1]).toEqual({
+        title: `${id} retained`,
+        mediaId: retainedMediaId,
+      });
+    };
+
+    assertCustomMediaCleanup(updatedPageBlocks, 'page-custom', 'page-other');
+    assertCustomMediaCleanup(
+      updatedPageBlocks,
+      'rich-modal-custom',
+      'rich-other',
+    );
+    assertCustomMediaCleanup(
+      updatedPageBlocks,
+      'hero-modal-custom',
+      'hero-other',
+    );
+    assertCustomMediaCleanup(
+      updatedPageBlocks,
+      'item-modal-custom',
+      'item-other',
+    );
+    assertCustomMediaCleanup(updatedPageBlocks, 'group-custom', 'group-other');
+    assertCustomMediaCleanup(
+      updatedPageBlocks,
+      'group-modal-custom',
+      'group-modal-other',
+    );
+    assertCustomMediaCleanup(updatedEventBlocks, 'event-custom', 'event-other');
+    assertCustomMediaCleanup(
+      updatedEventBlocks,
+      'event-modal-custom',
+      'event-modal-other',
+    );
+
+    const richOwner = findCustom(updatedPageBlocks, 'rich-owner-custom');
+    expect(richOwner?.customItems[0].button.block.media).toBeUndefined();
+    const emptyGalleryOwner = findCustom(
+      updatedPageBlocks,
+      'empty-gallery-owner-custom',
+    );
+    expect(emptyGalleryOwner?.customItems[0].button).toBeUndefined();
+    const groupGalleryOwner = findCustom(
+      updatedPageBlocks,
+      'group-gallery-owner-custom',
+    );
+    expect(groupGalleryOwner?.customItems[0].button.block.items).toEqual([
+      { mediaId: 'group-gallery-other' },
+    ]);
+    const eventRichOwner = findCustom(
+      updatedEventBlocks,
+      'event-rich-owner-custom',
+    );
+    expect(eventRichOwner?.customItems[0].button.block.media).toBeUndefined();
+    const legacyOwner = updatedPageBlocks.find(
+      (block) => block.id === 'legacy-cta-modal-owner',
+    );
+    expect(legacyOwner?.buttons[0].block.media).toEqual({
+      mediaId: uploadedMediaId,
+    });
+
+    expect(
+      updatedPageBlocks.find((block) => block.id === 'page-group'),
+    ).toBeDefined();
+    expect(mockPageModel.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          { 'blocks.buttons.block.customItems.mediaId': uploadedMediaId },
+          {
+            'blocks.blocks.customItems.button.block.customItems.mediaId':
+              uploadedMediaId,
+          },
+          {
+            'blocks.customItems.button.block.media.mediaId': uploadedMediaId,
+          },
+          {
+            'blocks.blocks.customItems.button.block.items.mediaId':
+              uploadedMediaId,
+          },
+        ]),
+      }),
+    );
+    expect(mockDomainEventModel.find).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          { 'blocks.buttons.block.customItems.mediaId': uploadedMediaId },
+          {
+            'blocks.customItems.button.block.customItems.mediaId':
+              uploadedMediaId,
+          },
+          {
+            'blocks.customItems.button.block.media.mediaId': uploadedMediaId,
+          },
+        ]),
+      }),
     );
   });
 

@@ -74,6 +74,11 @@ export type EntityCollectionFilters =
   | PartnerEntityCollectionFilters
   | EventEntityCollectionFilters;
 
+export type EntityBackedEntityCollectionType = Exclude<
+  EntityCollectionEntityType,
+  EntityCollectionEntityType.Custom
+>;
+
 export interface EntityCollectionBlockBase extends PageBlockBase {
   type: PageBlockType.EntityCollection;
   entityType: EntityCollectionEntityType;
@@ -82,12 +87,14 @@ export interface EntityCollectionBlockBase extends PageBlockBase {
 }
 
 export interface ManualEntityCollectionBlock extends EntityCollectionBlockBase {
+  entityType: EntityBackedEntityCollectionType;
   source?: 'manual';
   items: string[];
 }
 
 export interface DynamicEntityCollectionBlock
   extends EntityCollectionBlockBase {
+  entityType: EntityBackedEntityCollectionType;
   source: 'dynamic';
   items: [];
   filters:
@@ -97,9 +104,25 @@ export interface DynamicEntityCollectionBlock
   limit?: number;
 }
 
+export interface CustomEntityCollectionItem {
+  mediaId?: string;
+  pretitle?: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  button?: BlockButton;
+}
+
+export interface CustomEntityCollectionBlock extends EntityCollectionBlockBase {
+  entityType: EntityCollectionEntityType.Custom;
+  items: [];
+  customItems: CustomEntityCollectionItem[];
+}
+
 export type EntityCollectionBlock =
   | ManualEntityCollectionBlock
-  | DynamicEntityCollectionBlock;
+  | DynamicEntityCollectionBlock
+  | CustomEntityCollectionBlock;
 
 export type DynamicEntityCollectionResolutionContext = {
   domainId?: string;

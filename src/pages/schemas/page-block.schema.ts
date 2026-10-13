@@ -83,6 +83,18 @@ export const galleryItemSchema = new mongoose.Schema(
   { _id: false, id: false, strict: 'throw' },
 );
 
+export const customEntityCollectionItemSchema = new mongoose.Schema(
+  {
+    mediaId: { type: String },
+    pretitle: { type: String, trim: true },
+    title: { type: String, required: true, trim: true },
+    subtitle: { type: String, trim: true },
+    description: { type: String, trim: true },
+    button: { type: blockButtonSchema },
+  },
+  { _id: false, id: false, strict: 'throw' },
+);
+
 export const pageBlockBaseSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, trim: true },
@@ -135,6 +147,10 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
       enum: Object.values(EntityCollectionLayout),
     },
     items: { type: [String], required: true, default: [] },
+    customItems: {
+      type: [customEntityCollectionItemSchema],
+      default: undefined,
+    },
     source: { type: String, enum: ['manual', 'dynamic'] },
     filters: {
       type: new mongoose.Schema(

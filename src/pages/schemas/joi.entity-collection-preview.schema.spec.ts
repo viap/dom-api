@@ -3,6 +3,15 @@ import { entityCollectionPreviewSchema } from './joi.entity-collection-preview.s
 const objectId = '507f1f77bcf86cd799439221';
 
 describe('entityCollectionPreviewSchema', () => {
+  it('rejects Custom collections from the Dynamic preview endpoint', () => {
+    const { error } = entityCollectionPreviewSchema.validate({
+      entityType: 'custom',
+      filters: {},
+      contextDomainId: null,
+    });
+
+    expect(error).toBeDefined();
+  });
   it('accepts normalized empty filters and defaults the limit', () => {
     const { error, value } = entityCollectionPreviewSchema.validate({
       entityType: 'people',

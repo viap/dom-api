@@ -76,10 +76,50 @@ blocksPath.discriminator(PageBlockType.Group, groupBlockSchema);
 pageSchema.index({ 'blocks.media.mediaId': 1 }, { sparse: true });
 pageSchema.index({ 'blocks.backgroundMedia.mediaId': 1 }, { sparse: true });
 pageSchema.index({ 'blocks.items.mediaId': 1 }, { sparse: true });
+pageSchema.index({ 'blocks.customItems.mediaId': 1 }, { sparse: true });
+pageSchema.index(
+  { 'blocks.buttons.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.items.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.customItems.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.customItems.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.customItems.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
 // Nested Group child media paths — without these the media-cleanup $or (which
 // queries them) can't use any index and falls back to a full collection scan.
 pageSchema.index({ 'blocks.blocks.media.mediaId': 1 }, { sparse: true });
 pageSchema.index({ 'blocks.blocks.items.mediaId': 1 }, { sparse: true });
+pageSchema.index({ 'blocks.blocks.customItems.mediaId': 1 }, { sparse: true });
+pageSchema.index(
+  { 'blocks.blocks.buttons.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  {
+    'blocks.blocks.customItems.button.block.customItems.mediaId': 1,
+  },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.blocks.customItems.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.blocks.customItems.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
 pageSchema.index({ slug: 1 }, { unique: true });
 pageSchema.index({ domainId: 1, status: 1, updatedAt: -1 });
 pageSchema.index(

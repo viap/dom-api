@@ -167,6 +167,120 @@ describe('createPageSchema', () => {
     }
   });
 
+  it('accepts strict Custom entity collections at the 1 and 50 item bounds', () => {
+    const customItem = {
+      mediaId: objectId,
+      pretitle: 'Pretitle',
+      title: 'Authored card',
+      subtitle: 'Subtitle',
+      description: 'Plain card description',
+      button: {
+        label: 'Apply',
+        type: 'application',
+        targetId: 'general',
+      },
+    };
+
+    for (const customItems of [
+      [customItem],
+      Array.from({ length: 50 }, () => customItem),
+    ]) {
+      const { error, value } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'authored-cards',
+            type: 'entityCollection',
+            entityType: 'custom',
+            layout: 'grid',
+            items: [],
+            customItems,
+          },
+        ],
+      });
+
+      expect(error).toBeUndefined();
+      expect(value.blocks[0].customItems).toHaveLength(customItems.length);
+    }
+  });
+
+  it('rejects invalid Custom cardinality, text, branch, and unknown item fields', () => {
+    const validItem = { title: 'Card' };
+    const invalidBlocks = [
+      { items: [], customItems: [] },
+      {
+        items: [],
+        customItems: Array.from({ length: 51 }, () => validItem),
+      },
+      { items: [], customItems: [{ title: '   ' }] },
+      { items: [], customItems: [{ title: 'x'.repeat(151) }] },
+      { items: [], customItems: [{ title: 'Card', alt: 'not allowed' }] },
+      { items: [], customItems: [{ title: 'Card', buttons: [] }] },
+      { items: [objectId], customItems: [validItem] },
+      { items: [], customItems: [validItem], source: 'manual' },
+      { items: [], customItems: [validItem], filters: {} },
+      { items: [], customItems: [validItem], limit: 2 },
+    ];
+
+    for (const branch of invalidBlocks) {
+      const { error } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'authored-cards',
+            type: 'entityCollection',
+            entityType: 'custom',
+            layout: 'grid',
+            ...branch,
+          },
+        ],
+      });
+      expect(error).toBeDefined();
+    }
+  });
+
+  it('uses restricted Custom item buttons inside modal-embedded collections', () => {
+    const pageWithEmbeddedCustomButton = (type: 'page' | 'application') =>
+      createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'cta',
+            type: 'cta',
+            buttons: [
+              {
+                label: 'Open',
+                type: 'block',
+                block: {
+                  id: 'modal-cards',
+                  type: 'entityCollection',
+                  entityType: 'custom',
+                  layout: 'list',
+                  items: [],
+                  customItems: [
+                    {
+                      title: 'Nested card',
+                      button: {
+                        label: 'Nested action',
+                        type,
+                        targetId: type === 'page' ? objectId : 'general',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(pageWithEmbeddedCustomButton('page').error).toBeUndefined();
+    expect(pageWithEmbeddedCustomButton('application').error).toBeDefined();
+  });
+
   it('should reject invalid page button target ids at the joi layer', () => {
     const { error } = createPageSchema.validate({
       title: 'About',
