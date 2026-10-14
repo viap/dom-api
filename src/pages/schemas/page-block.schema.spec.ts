@@ -37,6 +37,62 @@ const baseEvent = {
 };
 
 describe('Page group block persistence (Mongoose)', () => {
+  it('persists strict typed HTML button snippets without subdocument ids', () => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          ...htmlChild('snippet-html'),
+          content:
+            '<span data-dom-html-snippet="button" data-dom-html-snippet-id="snippet-1"></span>',
+          snippets: [
+            {
+              id: 'snippet-1',
+              type: 'button',
+              button: {
+                label: 'Visit',
+                type: 'external',
+                url: 'https://example.com',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(doc.validateSync()).toBeUndefined();
+    const stored = doc.toObject().blocks[0] as Record<string, any>;
+    expect(stored.snippets[0]).toEqual(
+      expect.objectContaining({ id: 'snippet-1', type: 'button' }),
+    );
+    expect(stored.snippets[0]._id).toBeUndefined();
+  });
+
+  it('rejects unknown fields in strict HTML snippet subdocuments', () => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          ...htmlChild('snippet-html'),
+          snippets: [
+            {
+              id: 'snippet-1',
+              type: 'button',
+              button: {
+                label: 'Visit',
+                type: 'external',
+                url: 'https://example.com',
+              },
+              unexpected: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(doc.validateSync()).toBeDefined();
+  });
+
   it('persists strict Custom items while retaining an empty string items array', () => {
     const doc = new PageModel({
       ...basePage,

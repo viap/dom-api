@@ -77,6 +77,12 @@ describe('sanitizeHtmlBlockContent', () => {
     expect(sanitizeHtmlBlockContent(html)).toBe(html);
   });
 
+  it('should preserve canonical HTML snippet marker attributes', () => {
+    const html =
+      '<span data-dom-html-snippet="button" data-dom-html-snippet-id="html-button-safe_1"></span>';
+    expect(sanitizeHtmlBlockContent(html)).toBe(html);
+  });
+
   it('should preserve class attributes', () => {
     const html = '<div class="my-class"><p class="text-lg">Hello</p></div>';
     expect(sanitizeHtmlBlockContent(html)).toBe(html);

@@ -341,15 +341,34 @@ const applicationFormBlockSchema = Joi.object({
   buttonLabel: Joi.string().trim().min(1).max(150).optional(),
 });
 
-const htmlBlockSchema = Joi.object({
-  ...pageBlockBaseSchema,
-  type: Joi.string().valid(PageBlockType.Html).required(),
-  template: Joi.string()
-    .valid('vertical', 'horizontal-left', 'horizontal-right')
-    .default('vertical')
-    .optional(),
-  content: Joi.string().trim().min(1).max(50000).required(),
-});
+const htmlSnippetIdSchema = Joi.string()
+  .trim()
+  .min(1)
+  .max(100)
+  .pattern(/^[a-zA-Z0-9_-]+$/);
+
+const makeHtmlBlockSchema = (buttonSchema: Joi.Schema) => {
+  const htmlButtonSnippetSchema = Joi.object({
+    id: htmlSnippetIdSchema.required(),
+    type: Joi.string().valid('button').required(),
+    button: buttonSchema.required(),
+  }).unknown(false);
+
+  return Joi.object({
+    ...pageBlockBaseSchema,
+    type: Joi.string().valid(PageBlockType.Html).required(),
+    template: Joi.string()
+      .valid('vertical', 'horizontal-left', 'horizontal-right')
+      .default('vertical')
+      .optional(),
+    content: Joi.string().trim().min(1).max(50000).required(),
+    snippets: Joi.array()
+      .items(htmlButtonSnippetSchema)
+      .max(20)
+      .unique('id')
+      .optional(),
+  }).unknown(false);
+};
 
 // richText and cta carry buttons, so they are parametrized by the button
 // schema: the normal one at the top level, the restricted one when embedded.
@@ -439,7 +458,7 @@ const embeddableBlockSchema = Joi.alternatives().try(
   makeEntityCollectionBlockSchema(restrictedBlockButtonSchema),
   makeCtaBlockSchema(restrictedBlockButtonSchema),
   galleryBlockSchema,
-  htmlBlockSchema,
+  makeHtmlBlockSchema(restrictedBlockButtonSchema),
 );
 
 const blockButtonSchema = Joi.object({
@@ -461,6 +480,7 @@ const richTextBlockSchema = makeRichTextBlockSchema(blockButtonSchema);
 const ctaBlockSchema = makeCtaBlockSchema(blockButtonSchema);
 const entityCollectionBlockSchema =
   makeEntityCollectionBlockSchema(blockButtonSchema);
+const htmlBlockSchema = makeHtmlBlockSchema(blockButtonSchema);
 
 const heroItemSchema = Joi.object({
   icon: Joi.string().trim().max(120).optional(),

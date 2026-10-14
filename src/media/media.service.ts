@@ -31,6 +31,7 @@ import {
 } from '@/events/schemas/domain-event.schema';
 import { Page, PageDocument } from '@/pages/schemas/page.schema';
 import { PageBlockType } from '@/pages/enums/page-block-type.enum';
+import { removeHtmlSnippetMarker } from '@/pages/utils/html-snippets';
 import { Partner, PartnerDocument } from '@/partners/schemas/partner.schema';
 import { Person, PersonDocument } from '@/people/schemas/person.schema';
 import { CreateMediaDto } from './dto/create-media.dto';
@@ -707,6 +708,51 @@ export class MediaService {
       }
     }
 
+    if (blockType === PageBlockType.Html && Array.isArray(block.snippets)) {
+      const nextSnippets: unknown[] = [];
+      let snippetsChanged = false;
+      let nextContent =
+        typeof nextBlock.content === 'string' ? nextBlock.content : '';
+
+      for (const rawSnippet of block.snippets) {
+        if (!rawSnippet || typeof rawSnippet !== 'object') {
+          nextSnippets.push(rawSnippet);
+          continue;
+        }
+        const snippet = rawSnippet as Record<string, unknown>;
+        const result = cleanupCustomCollectionButton(
+          snippet.button,
+          `${pathPrefix}.snippets.button.block`,
+          false,
+        );
+        if (!result.changed) {
+          nextSnippets.push(rawSnippet);
+          continue;
+        }
+
+        snippetsChanged = true;
+        if (result.drop) {
+          if (typeof snippet.id === 'string') {
+            nextContent = removeHtmlSnippetMarker(nextContent, snippet.id);
+            paths.add(`${pathPrefix}.content`);
+          }
+          paths.add(`${pathPrefix}.snippets`);
+          continue;
+        }
+        nextSnippets.push({ ...snippet, button: result.button });
+      }
+
+      if (snippetsChanged) {
+        nextBlock.snippets = nextSnippets;
+        nextBlock.content = nextContent;
+        changed = true;
+        if (!nextContent.trim() && nextSnippets.length === 0) {
+          paths.add(`${pathPrefix}.html`);
+          return { block: nextBlock, changed: true, drop: true };
+        }
+      }
+    }
+
     if (blockType === PageBlockType.Group && Array.isArray(block.blocks)) {
       const nextChildren: unknown[] = [];
       let childrenChanged = false;
@@ -759,6 +805,9 @@ export class MediaService {
           { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
           { 'blocks.customItems.button.block.media.mediaId': mediaId },
           { 'blocks.customItems.button.block.items.mediaId': mediaId },
+          { 'blocks.snippets.button.block.media.mediaId': mediaId },
+          { 'blocks.snippets.button.block.items.mediaId': mediaId },
+          { 'blocks.snippets.button.block.customItems.mediaId': mediaId },
           // Group children (page-only, one nesting level). No nested
           // backgroundMedia path — hero is not an eligible group child (§9).
           { 'blocks.blocks.media.mediaId': mediaId },
@@ -774,6 +823,15 @@ export class MediaService {
           },
           {
             'blocks.blocks.customItems.button.block.items.mediaId': mediaId,
+          },
+          {
+            'blocks.blocks.snippets.button.block.media.mediaId': mediaId,
+          },
+          {
+            'blocks.blocks.snippets.button.block.items.mediaId': mediaId,
+          },
+          {
+            'blocks.blocks.snippets.button.block.customItems.mediaId': mediaId,
           },
         ],
       })
@@ -859,6 +917,9 @@ export class MediaService {
           { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
           { 'blocks.customItems.button.block.media.mediaId': mediaId },
           { 'blocks.customItems.button.block.items.mediaId': mediaId },
+          { 'blocks.snippets.button.block.media.mediaId': mediaId },
+          { 'blocks.snippets.button.block.items.mediaId': mediaId },
+          { 'blocks.snippets.button.block.customItems.mediaId': mediaId },
         ],
       })
       .select({ _id: 1, blocks: 1 })

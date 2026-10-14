@@ -930,6 +930,145 @@ describe('MediaService', () => {
     );
   });
 
+  it('cleans root, group, and event HTML snippet media while preserving marker/config integrity', async () => {
+    const marker = (id: string) =>
+      `<span data-dom-html-snippet="button" data-dom-html-snippet-id="${id}"></span>`;
+    const snippetHtml = (
+      id: string,
+      embeddedBlock: unknown,
+      includeMalformedDuplicate = false,
+    ) => ({
+      id: `html-${id}`,
+      type: PageBlockType.Html,
+      content: `<p>Before</p>${marker(id)}${
+        includeMalformedDuplicate
+          ? `${marker(
+              id,
+            )}<span data-dom-html-snippet="future" data-dom-html-snippet-id="${id}"></span>`
+          : ''
+      }<p>After</p>`,
+      snippets: [
+        {
+          id,
+          type: 'button',
+          button: { label: 'Open', type: 'block', block: embeddedBlock },
+        },
+      ],
+    });
+    const pageDoc = {
+      _id: '507f1f77bcf86cd799439281',
+      blocks: [
+        snippetHtml(
+          'root-gallery',
+          {
+            id: 'root-gallery-block',
+            type: PageBlockType.Gallery,
+            items: [{ mediaId: uploadedMediaId }],
+          },
+          true,
+        ),
+        {
+          id: 'group',
+          type: PageBlockType.Group,
+          blocks: [
+            snippetHtml('group-custom', {
+              id: 'group-custom-block',
+              type: PageBlockType.EntityCollection,
+              entityType: 'custom',
+              layout: 'grid',
+              items: [],
+              customItems: [
+                { title: 'Card', mediaId: uploadedMediaId },
+                { title: 'Keep', mediaId: 'other-media' },
+              ],
+            }),
+          ],
+        },
+      ],
+    };
+    const eventDoc = {
+      _id: '507f1f77bcf86cd799439282',
+      blocks: [
+        snippetHtml('event-gallery', {
+          id: 'event-gallery-block',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: uploadedMediaId }],
+        }),
+      ],
+    };
+
+    mockMediaModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(uploadedMedia),
+    });
+    mockMediaModel.findByIdAndDelete.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(uploadedMedia),
+      }),
+    });
+    mockPageModel.find.mockReturnValue(createLeanChain([pageDoc]));
+    mockDomainEventModel.find
+      .mockReturnValueOnce(createLeanChain([]))
+      .mockReturnValueOnce(createLeanChain([eventDoc]));
+
+    await service.remove(uploadedMediaId);
+
+    const pageBlocks = mockPageModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, any>>;
+    const rootHtml = pageBlocks.find(
+      (block) => block.id === 'html-root-gallery',
+    );
+    expect(rootHtml?.snippets).toEqual([]);
+    expect(rootHtml?.content).not.toContain(
+      'data-dom-html-snippet="button" data-dom-html-snippet-id="root-gallery"',
+    );
+    expect(rootHtml?.content).toContain(
+      'data-dom-html-snippet="future" data-dom-html-snippet-id="root-gallery"',
+    );
+    expect(rootHtml?.content).toContain('<p>Before</p>');
+    expect(rootHtml?.content).toContain('<p>After</p>');
+
+    const groupHtml = pageBlocks.find((block) => block.id === 'group')
+      ?.blocks[0];
+    expect(groupHtml.snippets).toHaveLength(1);
+    expect(groupHtml.content).toContain('group-custom');
+    expect(groupHtml.snippets[0].button.block.customItems[0]).toEqual({
+      title: 'Card',
+    });
+    expect(groupHtml.snippets[0].button.block.customItems[1]).toEqual({
+      title: 'Keep',
+      mediaId: 'other-media',
+    });
+
+    const eventBlocks = mockDomainEventModel.updateOne.mock.calls[0]?.[1]?.$set
+      ?.blocks as Array<Record<string, any>>;
+    expect(eventBlocks[0].snippets).toEqual([]);
+    expect(eventBlocks[0].content).not.toContain('event-gallery');
+
+    expect(mockPageModel.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          {
+            'blocks.snippets.button.block.items.mediaId': uploadedMediaId,
+          },
+          {
+            'blocks.blocks.snippets.button.block.customItems.mediaId':
+              uploadedMediaId,
+          },
+        ]),
+      }),
+    );
+    expect(mockDomainEventModel.find).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          {
+            'blocks.snippets.button.block.items.mediaId': uploadedMediaId,
+          },
+        ]),
+      }),
+    );
+  });
+
   it('drops a group when deleting media empties its only child', async () => {
     const pageDoc = {
       _id: '507f1f77bcf86cd799439244',
@@ -1017,7 +1156,7 @@ describe('MediaService', () => {
       ?.blocks as Array<Record<string, any>>;
     const group = updatedBlocks.find((block) => block.id === 'grp');
     expect(group).toBeDefined();
-    const children = group!.blocks as Array<Record<string, any>>;
+    const children = (group?.blocks || []) as Array<Record<string, any>>;
     // richText child kept (media stripped), gallery child kept with the other image.
     expect(children.find((c) => c.id === 'gc1')?.media).toBeUndefined();
     expect(children.find((c) => c.id === 'gc2')?.items).toEqual([

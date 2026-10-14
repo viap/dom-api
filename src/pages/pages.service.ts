@@ -43,6 +43,7 @@ import {
   prepareBlocksForWrite,
   toPublicBlocks,
 } from './utils/block-validation';
+import { preserveOmittedHtmlSnippets } from './utils/html-snippet-preservation';
 
 type PageReference = {
   _id: mongoose.Types.ObjectId | string;
@@ -450,7 +451,10 @@ export class PagesService {
     const normalizedBlocks =
       updatePageDto.blocks !== undefined
         ? await prepareBlocksForWrite(
-            updatePageDto.blocks,
+            preserveOmittedHtmlSnippets(
+              updatePageDto.blocks,
+              Array.isArray(existingPage.blocks) ? existingPage.blocks : [],
+            ),
             this.getBlockValidationServices(),
           )
         : undefined;

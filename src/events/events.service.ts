@@ -36,6 +36,7 @@ import {
   PublicBlockServices,
   toPublicBlocks,
 } from '@/pages/utils/block-validation';
+import { preserveOmittedHtmlSnippets } from '@/pages/utils/html-snippet-preservation';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -339,7 +340,10 @@ export class EventsService {
     const normalizedBlocks =
       updateEventDto.blocks !== undefined
         ? await prepareBlocksForWrite(
-            updateEventDto.blocks,
+            preserveOmittedHtmlSnippets(
+              updateEventDto.blocks,
+              Array.isArray(existingEvent.blocks) ? existingEvent.blocks : [],
+            ),
             this.getBlockValidationServices(),
           )
         : undefined;

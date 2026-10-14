@@ -521,3 +521,176 @@ describe('Group blocks (page-only)', () => {
     ).rejects.toThrow(/Referenced person not found/);
   });
 });
+
+describe('HTML button snippet validation and public conversion', () => {
+  const allExist = {
+    peopleExistingIds: async (ids: string[]) => new Set(ids),
+    partnersExistingIds: async (ids: string[]) => new Set(ids),
+    eventsExistingIds: async (ids: string[]) => new Set(ids),
+    mediaExistingPublishedIds: async (ids: string[]) => new Set(ids),
+    pagesExistingIds: async (ids: string[]) => new Set(ids),
+    domainsGetActiveById: async () => ({}),
+  };
+  const publicServices = {
+    findPublishedPeopleSummariesByIds: async () => [],
+    findDynamicPeopleSummaries: async () => [],
+    findDynamicPartnerSummaries: async () => [],
+    findDynamicEventSummaries: async () => [
+      { id: 'resolved-event', label: 'Resolved event' },
+    ],
+  };
+  const marker = (id: string, type = 'button') =>
+    `<span data-dom-html-snippet="${type}" data-dom-html-snippet-id="${id}"></span>`;
+  const htmlBlock = (content: string, snippets: unknown[]): PageBlock =>
+    ({
+      id: 'html',
+      type: PageBlockType.Html,
+      template: 'vertical',
+      content,
+      snippets,
+    } as unknown as PageBlock);
+
+  it('sanitizes before enforcing marker/configuration integrity', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          htmlBlock(`<template>${marker('removed')}</template><p>Safe</p>`, [
+            {
+              id: 'removed',
+              type: 'button',
+              button: {
+                label: 'Visit',
+                type: 'external',
+                url: 'https://example.com',
+              },
+            },
+          ]),
+        ],
+        allExist,
+      ),
+    ).rejects.toThrow(/orphan-configuration:removed/);
+  });
+
+  it.each([
+    {
+      name: 'missing configuration',
+      content: marker('missing'),
+      snippets: [],
+      message: 'missing-configuration:missing',
+    },
+    {
+      name: 'orphan configuration',
+      content: '<p>No marker</p>',
+      snippets: [
+        {
+          id: 'orphan',
+          type: 'button',
+          button: {
+            label: 'Visit',
+            type: 'external',
+            url: 'https://example.com',
+          },
+        },
+      ],
+      message: 'orphan-configuration:orphan',
+    },
+    {
+      name: 'duplicate marker',
+      content: `${marker('duplicate')}${marker('duplicate')}`,
+      snippets: [
+        {
+          id: 'duplicate',
+          type: 'button',
+          button: {
+            label: 'Visit',
+            type: 'external',
+            url: 'https://example.com',
+          },
+        },
+      ],
+      message: 'duplicate-marker:duplicate',
+    },
+    {
+      name: 'type mismatch',
+      content: marker('mismatch', 'future'),
+      snippets: [
+        {
+          id: 'mismatch',
+          type: 'button',
+          button: {
+            label: 'Visit',
+            type: 'external',
+            url: 'https://example.com',
+          },
+        },
+      ],
+      message: 'type-mismatch:mismatch',
+    },
+  ])('rejects $name', async ({ content, snippets, message }) => {
+    await expect(
+      prepareBlocksForWrite([htmlBlock(content, snippets)], allExist),
+    ).rejects.toThrow(message);
+  });
+
+  it('collects page and domain references from snippet buttons', async () => {
+    const pageId = '507f1f77bcf86cd799439251';
+    const domainId = '507f1f77bcf86cd799439252';
+    const pagesExistingIds = jest
+      .fn()
+      .mockImplementation(async (ids: string[]) => new Set(ids));
+    const domainsGetActiveById = jest.fn().mockResolvedValue({});
+
+    await prepareBlocksForWrite(
+      [
+        htmlBlock(`${marker('page')}${marker('domain')}`, [
+          {
+            id: 'page',
+            type: 'button',
+            button: { label: 'Page', type: 'page', targetId: pageId },
+          },
+          {
+            id: 'domain',
+            type: 'button',
+            button: { label: 'Domain', type: 'domain', targetId: domainId },
+          },
+        ]),
+      ],
+      { ...allExist, pagesExistingIds, domainsGetActiveById },
+    );
+
+    expect(pagesExistingIds).toHaveBeenCalledWith([pageId]);
+    expect(domainsGetActiveById).toHaveBeenCalledWith(domainId);
+  });
+
+  it('resolves a snippet-owned dynamic embedded block on public conversion', async () => {
+    const [html] = await toPublicBlocks(
+      [
+        htmlBlock(marker('dynamic'), [
+          {
+            id: 'dynamic',
+            type: 'button',
+            button: {
+              label: 'Events',
+              type: 'block',
+              block: {
+                id: 'dynamic-events',
+                type: PageBlockType.EntityCollection,
+                entityType: 'events',
+                source: 'dynamic',
+                layout: 'grid',
+                items: [],
+                filters: { lifecycle: 'active' },
+              },
+            },
+          },
+        ]),
+      ],
+      publicServices,
+      context,
+    );
+
+    expect(
+      (html as Record<string, any>).snippets[0].button.block.items,
+    ).toEqual(['resolved-event']);
+  });
+});

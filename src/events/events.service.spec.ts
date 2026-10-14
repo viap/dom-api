@@ -15,6 +15,8 @@ import { PeopleService } from '@/people/people.service';
 import { DomainEvent } from './schemas/domain-event.schema';
 import { EventsService } from './events.service';
 import { EventType } from './enums/event-type.enum';
+import { PageBlockType } from '@/pages/enums/page-block-type.enum';
+import { BlockButtonType } from '@/pages/enums/block-button-type.enum';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -1134,6 +1136,204 @@ describe('EventsService', () => {
         expect.objectContaining({
           blocks: [],
         }),
+      );
+    });
+  });
+
+  describe('HTML snippet update compatibility', () => {
+    it('keeps rejecting page-target buttons inside event HTML snippets', async () => {
+      mockEventModel.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.create({
+          domainId: mockEvent.domainId,
+          type: 'seminar' as any,
+          title: 'Snippet event',
+          slug: 'snippet-event',
+          startAt: '2026-04-20T10:00:00.000Z',
+          endAt: '2026-04-20T11:00:00.000Z',
+          blocks: [
+            {
+              id: 'html',
+              type: PageBlockType.Html,
+              template: 'vertical',
+              content:
+                '<span data-dom-html-snippet="button" data-dom-html-snippet-id="page"></span>',
+              snippets: [
+                {
+                  id: 'page',
+                  type: 'button',
+                  button: {
+                    label: 'Page',
+                    type: BlockButtonType.Page,
+                    targetId: '507f1f77bcf86cd799439099',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      ).rejects.toThrow('Page button links are not supported in event blocks');
+    });
+
+    it('preserves snippets omitted by an old-shaped event update', async () => {
+      const marker =
+        '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+      const savedSnippets = [
+        {
+          id: 'saved',
+          type: 'button' as const,
+          button: {
+            label: 'Saved',
+            type: BlockButtonType.External,
+            url: 'https://example.com',
+          },
+        },
+      ];
+      mockEventModel.findOne.mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...mockEvent,
+            blocks: [
+              {
+                id: 'html',
+                type: PageBlockType.Html,
+                template: 'vertical',
+                content: marker,
+                snippets: savedSnippets,
+              },
+            ],
+          }),
+        }),
+      });
+      mockEventModel.findByIdAndUpdate.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(mockEvent),
+        }),
+      });
+
+      await service.update(mockEvent._id, {
+        blocks: [
+          {
+            id: 'html',
+            type: PageBlockType.Html,
+            template: 'vertical',
+            content: marker,
+          },
+        ],
+      });
+
+      expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        mockEvent._id,
+        expect.objectContaining({
+          blocks: [expect.objectContaining({ snippets: savedSnippets })],
+        }),
+        { new: true, runValidators: true },
+      );
+    });
+
+    it('rejects an old-shaped event update when stored block ids make preservation ambiguous', async () => {
+      const marker =
+        '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+      const storedHtmlBlock = {
+        id: 'html',
+        type: PageBlockType.Html,
+        template: 'vertical',
+        content: marker,
+        snippets: [
+          {
+            id: 'saved',
+            type: 'button',
+            button: {
+              label: 'Saved',
+              type: BlockButtonType.External,
+              url: 'https://example.com',
+            },
+          },
+        ],
+      };
+      mockEventModel.findOne.mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...mockEvent,
+            blocks: [storedHtmlBlock, storedHtmlBlock],
+          }),
+        }),
+      });
+
+      await expect(
+        service.update(mockEvent._id, {
+          blocks: [
+            {
+              id: 'html',
+              type: PageBlockType.Html,
+              template: 'vertical',
+              content: marker,
+            },
+          ],
+        }),
+      ).rejects.toThrow(
+        'Cannot preserve omitted HTML snippets for ambiguous existing block id: html',
+      );
+      expect(mockEventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('treats an explicit empty HTML snippet list as an intentional clear', async () => {
+      const marker =
+        '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+      mockEventModel.findOne.mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...mockEvent,
+            blocks: [
+              {
+                id: 'html',
+                type: PageBlockType.Html,
+                template: 'vertical',
+                content: marker,
+                snippets: [
+                  {
+                    id: 'saved',
+                    type: 'button',
+                    button: {
+                      label: 'Saved',
+                      type: BlockButtonType.External,
+                      url: 'https://example.com',
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+        }),
+      });
+      mockEventModel.findByIdAndUpdate.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(mockEvent),
+        }),
+      });
+
+      await service.update(mockEvent._id, {
+        blocks: [
+          {
+            id: 'html',
+            type: PageBlockType.Html,
+            template: 'vertical',
+            content: '<p>Cleared</p>',
+            snippets: [],
+          },
+        ],
+      });
+
+      expect(mockEventModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        mockEvent._id,
+        expect.objectContaining({
+          blocks: [expect.objectContaining({ snippets: [] })],
+        }),
+        { new: true, runValidators: true },
       );
     });
   });

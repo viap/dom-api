@@ -1374,3 +1374,185 @@ describe('Group scope isolation (events reject group)', () => {
     expect(error).toBeDefined();
   });
 });
+
+describe('HTML button snippet schema', () => {
+  const marker = (id: string) =>
+    `<span data-dom-html-snippet="button" data-dom-html-snippet-id="${id}"></span>`;
+  const pageWithSnippet = (button: Record<string, unknown>, id = 'snippet-1') =>
+    createPageSchema.validate({
+      title: 'Snippet page',
+      slug: 'snippet-page',
+      blocks: [
+        {
+          id: 'html',
+          type: 'html',
+          content: marker(id),
+          snippets: [{ id, type: 'button', button }],
+        },
+      ],
+    });
+
+  it.each(['primary', 'secondary', 'ghost', 'outline', 'link'])(
+    'accepts the %s canonical style',
+    (style) => {
+      expect(
+        pageWithSnippet({
+          label: 'Visit',
+          type: 'external',
+          url: 'https://example.com',
+          style,
+        }).error,
+      ).toBeUndefined();
+    },
+  );
+
+  it.each([
+    { label: 'Page', type: 'page', targetId: objectId },
+    { label: 'Domain', type: 'domain', targetId: objectId },
+    { label: 'External', type: 'external', url: 'https://example.com' },
+    { label: 'Apply', type: 'application', targetId: 'general' },
+    {
+      label: 'Modal',
+      type: 'block',
+      block: { id: 'modal', type: 'richText' },
+    },
+  ])('accepts page-placement action $type', (button) => {
+    expect(pageWithSnippet(button).error).toBeUndefined();
+  });
+
+  it('allows absent snippets for a legacy HTML block', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Legacy',
+      slug: 'legacy',
+      blocks: [{ id: 'html', type: 'html', content: '<p>Legacy</p>' }],
+    });
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].snippets).toBeUndefined();
+  });
+
+  it('rejects unsafe ids, duplicate ids, unknown fields, and more than 20 snippets', () => {
+    expect(
+      pageWithSnippet(
+        { label: 'Visit', type: 'external', url: 'https://example.com' },
+        'unsafe id',
+      ).error,
+    ).toBeDefined();
+
+    const base = {
+      id: 'html',
+      type: 'html',
+      content: marker('duplicate'),
+    };
+    const button = {
+      label: 'Visit',
+      type: 'external',
+      url: 'https://example.com',
+    };
+    const duplicate = createPageSchema.validate({
+      title: 'Duplicate',
+      slug: 'duplicate',
+      blocks: [
+        {
+          ...base,
+          snippets: [
+            { id: 'duplicate', type: 'button', button },
+            { id: 'duplicate', type: 'button', button },
+          ],
+        },
+      ],
+    });
+    expect(duplicate.error).toBeDefined();
+
+    expect(
+      createPageSchema.validate({
+        title: 'Unknown',
+        slug: 'unknown',
+        blocks: [
+          {
+            ...base,
+            snippets: [
+              { id: 'duplicate', type: 'button', button, unknown: true },
+            ],
+          },
+        ],
+      }).error,
+    ).toBeDefined();
+
+    const twenty = Array.from({ length: 20 }, (_, index) => ({
+      id: `snippet-${index}`,
+      type: 'button',
+      button,
+    }));
+    const html = twenty.map((snippet) => marker(snippet.id)).join('');
+    expect(
+      createPageSchema.validate({
+        title: 'Twenty',
+        slug: 'twenty',
+        blocks: [{ id: 'html', type: 'html', content: html, snippets: twenty }],
+      }).error,
+    ).toBeUndefined();
+    expect(
+      createPageSchema.validate({
+        title: 'Twenty one',
+        slug: 'twenty-one',
+        blocks: [
+          {
+            id: 'html',
+            type: 'html',
+            content: `${html}${marker('snippet-20')}`,
+            snippets: [...twenty, { id: 'snippet-20', type: 'button', button }],
+          },
+        ],
+      }).error,
+    ).toBeDefined();
+  });
+
+  it('restricts nested modal HTML snippets to link actions', () => {
+    const payload = (button: Record<string, unknown>) => ({
+      title: 'Modal HTML',
+      slug: 'modal-html',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'block',
+              block: {
+                id: 'modal-html',
+                type: 'html',
+                content: marker('nested'),
+                snippets: [{ id: 'nested', type: 'button', button }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(
+      createPageSchema.validate(
+        payload({
+          label: 'Visit',
+          type: 'external',
+          url: 'https://example.com',
+        }),
+      ).error,
+    ).toBeUndefined();
+    expect(
+      createPageSchema.validate(
+        payload({ label: 'Apply', type: 'application', targetId: 'general' }),
+      ).error,
+    ).toBeDefined();
+    expect(
+      createPageSchema.validate(
+        payload({
+          label: 'Nested',
+          type: 'block',
+          block: { id: 'nested-block', type: 'richText' },
+        }),
+      ).error,
+    ).toBeDefined();
+  });
+});
