@@ -1,4 +1,6 @@
 import * as Joi from 'joi';
+import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
@@ -234,6 +236,9 @@ const pageBlockBaseSchema = {
 };
 
 const entityCollectionBaseSchema = {
+  itemOrder: Joi.string()
+    .valid(...Object.values(EntityCollectionItemOrder))
+    .optional(),
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.EntityCollection).required(),
   entityType: Joi.string()
@@ -420,7 +425,12 @@ const makeEntityCollectionBlockSchema = (buttonSchema: Joi.Schema) => {
         is: EntityCollectionEntityType.Events,
         then: eventFiltersSchema.required(),
       }),
-    limit: Joi.number().integer().min(1).max(24).default(12).optional(),
+    limit: Joi.number()
+      .integer()
+      .min(1)
+      .max(DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS)
+      .default(12)
+      .optional(),
   }).unknown(false);
   const customEntityCollectionItemSchema = Joi.object({
     mediaId: joiObjectId.optional(),

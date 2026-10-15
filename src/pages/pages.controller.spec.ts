@@ -1,3 +1,6 @@
+import { EventEmitter } from 'node:events';
+import type { Request, Response } from 'express';
+import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
 import 'reflect-metadata';
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { IS_PUBLIC_KEY } from '@/auth/decorators/public.decorator';
@@ -123,5 +126,80 @@ describe('PagesController', () => {
     expect(
       Reflect.getMetadata(PATH_METADATA, PagesController.prototype.remove),
     ).toBe(':id([0-9a-fA-F]{24})');
+  });
+});
+
+describe('EntityCollection preview disconnect lifecycle', () => {
+  function setup() {
+    const request = Object.assign(new EventEmitter(), { aborted: false });
+    const response = Object.assign(new EventEmitter(), {
+      writableEnded: false,
+      destroyed: false,
+    });
+    const preview = jest.fn(async (_body: unknown, signal?: AbortSignal) => {
+      signal?.throwIfAborted();
+      return { items: [] };
+    });
+    const controller = new PagesController({
+      previewEntityCollection: preview,
+    } as unknown as PagesService);
+    const run = () =>
+      controller.previewEntityCollection(
+        {
+          entityType: EntityCollectionEntityType.People,
+          filters: {},
+          contextDomainId: null,
+        },
+        request as unknown as Request,
+        response as unknown as Response,
+      );
+    return { request, response, preview, run };
+  }
+  it.each(['aborted', 'close'])(
+    'propagates %s and removes lifecycle listeners',
+    async (event) => {
+      const { request, response, preview, run } = setup();
+      preview.mockImplementation(
+        (_body, signal) =>
+          new Promise((_resolve, reject) =>
+            signal?.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            }),
+          ),
+      );
+      const result = run();
+      if (event === 'aborted') request.emit(event);
+      else response.emit(event);
+      await expect(result).resolves.toBeUndefined();
+      expect(preview.mock.calls[0][1]?.aborted).toBe(true);
+      expect(request.listenerCount('aborted')).toBe(0);
+      expect(response.listenerCount('close')).toBe(0);
+    },
+  );
+  it('ignores normal request completion and completed responses', async () => {
+    const { request, response, preview, run } = setup();
+    const result = run();
+    request.emit('close');
+    response.writableEnded = true;
+    response.emit('close');
+    await expect(result).resolves.toEqual({ items: [] });
+    expect(preview.mock.calls[0][1]?.aborted).toBe(false);
+    expect(request.listenerCount('aborted')).toBe(0);
+    expect(response.listenerCount('close')).toBe(0);
+  });
+  it('cancels already disconnected clients before starting work', async () => {
+    const { request, preview, run } = setup();
+    request.aborted = true;
+    await expect(run()).resolves.toBeUndefined();
+    expect(preview.mock.calls[0][1]?.aborted).toBe(true);
+  });
+  it('preserves ordinary failures even if the client disconnects', async () => {
+    const { request, response, preview, run } = setup();
+    const failure = new Error('database');
+    preview.mockRejectedValue(failure);
+    const result = run();
+    request.emit('aborted');
+    await expect(result).rejects.toBe(failure);
+    expect(response.listenerCount('close')).toBe(0);
   });
 });

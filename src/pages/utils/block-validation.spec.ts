@@ -3,6 +3,7 @@ import { PageBlock, PageRootBlock } from '../types/page-block.interface';
 import { prepareBlocksForWrite, toPublicBlocks } from './block-validation';
 
 const context = {
+  owner: { kind: 'page' as const, pageId: '507f1f77bcf86cd799439221' },
   domainId: '507f1f77bcf86cd799439221',
   now: new Date('2026-09-10T12:00:00.000Z'),
 };

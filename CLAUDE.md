@@ -113,10 +113,19 @@ These are registered once in `AppModule` and apply to every route automatically.
 | Middleware | `SanitizationMiddleware` | Strips MongoDB operators from all input |
 
 ### Validation Pattern
+
 The project uses a consistent dual-schema approach:
 - **Joi schemas** for request validation via custom `JoiValidationPipe`
 - **Mongoose schemas** for database modeling
 - Custom decorators for authorization (`@IsMyData`, `@IsMyTherapySession`)
+
+### Public EntityCollection ordering
+
+- Preview cancellation is execution state, separate from ordering identity. Propagate disconnect signals through preview admission and cursor cleanup; only typed overload/deadline failures permit public Default fallback.
+
+
+- Conversion owns persisted owner/path identity and private runtime dependencies; generic query helpers own scan admission. Event list/bulk uses Dynamic Default, while details permit Random with isolated overload fallback. See shared API contracts and the availability validation procedure for operational limits.
+
 
 ### Adding a New Module
 

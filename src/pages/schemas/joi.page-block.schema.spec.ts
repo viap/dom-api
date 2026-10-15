@@ -154,7 +154,7 @@ describe('createPageSchema', () => {
         source: 'dynamic',
         items: [],
         filters: {},
-        limit: 25,
+        limit: 101,
       },
     ]) {
       expect(

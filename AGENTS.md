@@ -6,6 +6,7 @@ For cross-service architecture, auth contracts, MongoDB schema reference, and st
 
 ## Mandatory Rules
 
+
 - **Never use `class-validator` or `class-transformer`.** This project uses Joi exclusively for request validation via the custom `JoiValidationPipe`. Never install or import these packages.
 - **Every new entity requires both schemas** — a Mongoose schema (`[entity].schema.ts`) AND a Joi validation schema (`joi.[operation]-[entity].schema.ts`). Omitting either is a bug.
 - **Never bypass `SanitizationMiddleware`.** Do not remove or conditionally skip it in `AppModule`. Do not strip the `sanitizeObject` call from `JoiValidationPipe`.
@@ -90,6 +91,11 @@ The WS gateway is **pull-based** — clients request data via socket events; the
 ---
 
 ## Module Structure
+
+- Preview cancellation is execution state, separate from ordering identity. Propagate disconnect signals through preview admission and cursor cleanup; only typed overload/deadline failures permit public Default fallback.
+
+
+- Keep ordering materialization in the API. Only typed Random admission/deadline failures permit Dynamic Default fallback; preserve stored policy, authored arrays, and fresh previews.
 
 When adding a new module, follow this layout (use `psychologists/` or `booking-system/bookings/` as reference):
 

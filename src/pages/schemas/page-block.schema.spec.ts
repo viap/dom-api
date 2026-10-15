@@ -229,3 +229,34 @@ describe('Group scope isolation (Mongoose, §9)', () => {
     expect(doc.toObject().blocks).toHaveLength(1);
   });
 });
+
+describe('Dynamic collection persistence limit', () => {
+  it.each(['people', 'partners', 'events'])(
+    '%s permits 100 and rejects 101 in Page, Group and Event blocks',
+    (entityType) => {
+      for (const limit of [100, 101]) {
+        const block = {
+          id: 'collection',
+          type: 'entityCollection',
+          source: 'dynamic',
+          entityType,
+          layout: 'grid',
+          items: [],
+          filters: {},
+          limit,
+        };
+        for (const document of [
+          new PageModel({ ...basePage, blocks: [block] }),
+          new PageModel({
+            ...basePage,
+            blocks: [{ id: 'group', type: 'group', blocks: [block] }],
+          }),
+          new EventModel({ ...baseEvent, blocks: [block] }),
+        ]) {
+          if (limit === 100) expect(document.validateSync()).toBeUndefined();
+          else expect(document.validateSync()?.message).toContain('100');
+        }
+      }
+    },
+  );
+});

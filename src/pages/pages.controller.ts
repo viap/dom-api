@@ -9,8 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
@@ -101,11 +104,34 @@ export class PagesController {
 
   @Post('admin/entity-collection/preview')
   @Roles(Role.Admin, Role.Editor)
-  previewEntityCollection(
+  async previewEntityCollection(
     @Body(new JoiValidationPipe(entityCollectionPreviewSchema))
     body: EntityCollectionPreviewInput,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.previewEntityCollection(body);
+    const cancellation = new AbortController();
+    const abort = () => cancellation.abort();
+    const close = () => {
+      if (!response.writableEnded) abort();
+    };
+    request.once('aborted', abort);
+    response.once('close', close);
+    if (request.aborted || response.destroyed) abort();
+    try {
+      return await this.pagesService.previewEntityCollection(
+        body,
+        cancellation.signal,
+      );
+    } catch (error) {
+      // The client has disconnected: cancellation is neither overload nor a 500.
+      if (cancellation.signal.aborted && error === cancellation.signal.reason)
+        return;
+      throw error;
+    } finally {
+      request.removeListener('aborted', abort);
+      response.removeListener('close', close);
+    }
   }
 
   @Get('domain/:domainSlug')

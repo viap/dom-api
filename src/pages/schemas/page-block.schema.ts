@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
@@ -160,6 +162,7 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
       type: [customEntityCollectionItemSchema],
       default: undefined,
     },
+    itemOrder: { type: String, enum: Object.values(EntityCollectionItemOrder) },
     source: { type: String, enum: ['manual', 'dynamic'] },
     filters: {
       type: new mongoose.Schema(
@@ -196,7 +199,7 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
         { _id: false, id: false, strict: 'throw' },
       ),
     },
-    limit: { type: Number, min: 1, max: 24 },
+    limit: { type: Number, min: 1, max: DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS },
     cardVariant: { type: String },
   },
   { _id: false, id: false, strict: 'throw' },
