@@ -213,3 +213,15 @@ domainEventSchema.index(
   { 'blocks.customItems.button.block.items.mediaId': 1 },
   { sparse: true },
 );
+domainEventSchema.index(
+  { 'blocks.snippets.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.snippets.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
+domainEventSchema.index(
+  { 'blocks.snippets.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);

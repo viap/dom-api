@@ -14,6 +14,7 @@ import {
   GalleryBlock,
   GroupChildBlock,
   HeroBlock,
+  HtmlBlock,
   PageBlock,
   PageRootBlock,
   RichTextBlock,
@@ -25,6 +26,7 @@ import {
   sanitizeHtmlBlockContent,
   sanitizeRichTextHtml,
 } from './html-sanitizer';
+import { analyzeHtmlSnippets } from './html-snippets';
 
 export type ValidationRefs = {
   peopleIds: Set<string>;
@@ -319,6 +321,11 @@ function validateOneBlock(
       validateApplicationFormType(block.applicationType);
       break;
     case PageBlockType.Html:
+      collectButtonRefs(
+        (block.snippets || []).map((snippet) => snippet.button),
+        refs,
+        depth,
+      );
       break;
     case PageBlockType.Group:
       // Children (and their id dedup) are visited recursively in validateBlocks.
@@ -459,10 +466,28 @@ function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
         `HTML block "${block.id}" content is empty after sanitization`,
       );
     }
+    const snippets = block.snippets?.map((snippet) => ({
+      ...snippet,
+      button: sanitizeEmbeddedButtonBlocks([snippet.button], depth)[0],
+    }));
+    const analysis = analyzeHtmlSnippets(sanitizedContent, snippets);
+    if (analysis.diagnostics.length) {
+      const details = analysis.diagnostics
+        .map((diagnostic) =>
+          diagnostic.id
+            ? `${diagnostic.code}:${diagnostic.id}`
+            : diagnostic.code,
+        )
+        .join(', ');
+      throw new BadRequestException(
+        `HTML block "${block.id}" has invalid snippet markers: ${details}`,
+      );
+    }
     return {
       ...block,
       content: sanitizedContent,
-    };
+      ...(snippets ? { snippets } : {}),
+    } satisfies HtmlBlock;
   }
 
   if (
@@ -544,9 +569,9 @@ export async function prepareBlocksForWrite(
   blocks: PageRootBlock[],
   services: BlockValidationServices,
 ): Promise<PageRootBlock[]> {
-  await validateBlocks(blocks, services);
-
-  return blocks.map((block) => sanitizeOneBlock(block, 0));
+  const sanitizedBlocks = blocks.map((block) => sanitizeOneBlock(block, 0));
+  await validateBlocks(sanitizedBlocks, services);
+  return sanitizedBlocks;
 }
 
 function normalizeDynamicEntityCollectionBlock(
@@ -730,6 +755,53 @@ async function withPublicCustomItemButtonBlocks(
   return { ...block, items: [], customItems: resolved };
 }
 
+async function withPublicHtmlSnippetButtonBlocks(
+  block: Record<string, unknown>,
+  services: PublicBlockServices,
+  context: DynamicEntityCollectionResolutionContext,
+  depth: number,
+): Promise<Record<string, unknown>> {
+  const snippets = block.snippets;
+  if (!Array.isArray(snippets)) {
+    return block;
+  }
+
+  const resolved = await Promise.all(
+    snippets.map(async (snippet) => {
+      if (!snippet || typeof snippet !== 'object') {
+        return snippet;
+      }
+      const typedSnippet = snippet as Record<string, unknown>;
+      const button =
+        typedSnippet.button && typeof typedSnippet.button === 'object'
+          ? (typedSnippet.button as Record<string, unknown>)
+          : undefined;
+      const embedded = button?.block;
+      if (!button || !embedded) {
+        return snippet;
+      }
+      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
+        const nextButton = { ...button };
+        delete nextButton.block;
+        return { ...typedSnippet, button: nextButton };
+      }
+      return {
+        ...typedSnippet,
+        button: {
+          ...button,
+          block: await toPublicOneBlock(
+            embedded as Record<string, unknown>,
+            services,
+            context,
+            depth + 1,
+          ),
+        },
+      };
+    }),
+  );
+  return { ...block, snippets: resolved };
+}
+
 async function toPublicOneBlock(
   block: PageBlock | Record<string, unknown>,
   services: PublicBlockServices,
@@ -794,6 +866,14 @@ async function toPublicOneBlock(
   }
   if (typedBlock.type === PageBlockType.Hero) {
     return withPublicHeroButtonBlocks(typedBlock, services, context, depth);
+  }
+  if (typedBlock.type === PageBlockType.Html) {
+    return withPublicHtmlSnippetButtonBlocks(
+      typedBlock,
+      services,
+      context,
+      depth,
+    );
   }
   return typedBlock;
 }

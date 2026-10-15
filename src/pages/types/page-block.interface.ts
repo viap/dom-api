@@ -26,6 +26,14 @@ export interface BlockButton {
   modalTitle?: string; // optional visible modal heading; only when type is 'block' or 'application'
 }
 
+export interface HtmlButtonSnippet {
+  id: string;
+  type: 'button';
+  button: BlockButton;
+}
+
+export type HtmlBlockSnippet = HtmlButtonSnippet;
+
 export interface MediaRef {
   mediaId: string;
   alt?: string;
@@ -175,6 +183,7 @@ export interface HtmlBlock extends PageBlockBase {
   type: PageBlockType.Html;
   template: HtmlBlockTemplate;
   content: string;
+  snippets?: HtmlBlockSnippet[];
 }
 
 export type PageBlock =

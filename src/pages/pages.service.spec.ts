@@ -1239,6 +1239,166 @@ describe('PagesService', () => {
     );
   });
 
+  it('preserves existing HTML snippets when an old-shaped page update omits them', async () => {
+    const marker =
+      '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+    const savedSnippets = [
+      {
+        id: 'saved',
+        type: 'button' as const,
+        button: {
+          label: 'Saved',
+          type: BlockButtonType.External,
+          url: 'https://example.com',
+        },
+      },
+    ];
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          blocks: [
+            {
+              id: 'html',
+              type: PageBlockType.Html,
+              template: 'vertical',
+              content: marker,
+              snippets: savedSnippets,
+            },
+          ],
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockPage),
+      }),
+    });
+
+    await service.update(mockPage._id, {
+      blocks: [
+        {
+          id: 'html',
+          type: PageBlockType.Html,
+          template: 'vertical',
+          content: marker,
+        },
+      ],
+    });
+
+    expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockPage._id,
+      expect.objectContaining({
+        blocks: [expect.objectContaining({ snippets: savedSnippets })],
+      }),
+      { new: true },
+    );
+  });
+
+  it('rejects an old-shaped page update when stored block ids make preservation ambiguous', async () => {
+    const marker =
+      '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+    const storedHtmlBlock = {
+      id: 'html',
+      type: PageBlockType.Html,
+      template: 'vertical',
+      content: marker,
+      snippets: [
+        {
+          id: 'saved',
+          type: 'button',
+          button: {
+            label: 'Saved',
+            type: BlockButtonType.External,
+            url: 'https://example.com',
+          },
+        },
+      ],
+    };
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          blocks: [storedHtmlBlock, storedHtmlBlock],
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockPage._id, {
+        blocks: [
+          {
+            id: 'html',
+            type: PageBlockType.Html,
+            template: 'vertical',
+            content: marker,
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'Cannot preserve omitted HTML snippets for ambiguous existing block id: html',
+    );
+    expect(mockPageModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('treats an explicit empty HTML snippet list as an intentional clear', async () => {
+    const marker =
+      '<span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span>';
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          blocks: [
+            {
+              id: 'html',
+              type: PageBlockType.Html,
+              content: marker,
+              snippets: [
+                {
+                  id: 'saved',
+                  type: 'button',
+                  button: {
+                    label: 'Saved',
+                    type: BlockButtonType.External,
+                    url: 'https://example.com',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockPage),
+      }),
+    });
+
+    await service.update(mockPage._id, {
+      blocks: [
+        {
+          id: 'html',
+          type: PageBlockType.Html,
+          template: 'vertical',
+          content: '<p>Cleared</p>',
+          snippets: [],
+        },
+      ],
+    });
+
+    expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockPage._id,
+      expect.objectContaining({
+        blocks: [expect.objectContaining({ snippets: [] })],
+      }),
+      { new: true },
+    );
+  });
+
   it('should throw when update result is unexpectedly null', async () => {
     mockPageModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnValue({

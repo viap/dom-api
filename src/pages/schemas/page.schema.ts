@@ -97,6 +97,18 @@ pageSchema.index(
   { 'blocks.customItems.button.block.items.mediaId': 1 },
   { sparse: true },
 );
+pageSchema.index(
+  { 'blocks.snippets.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.snippets.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.snippets.button.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
 // Nested Group child media paths — without these the media-cleanup $or (which
 // queries them) can't use any index and falls back to a full collection scan.
 pageSchema.index({ 'blocks.blocks.media.mediaId': 1 }, { sparse: true });
@@ -118,6 +130,18 @@ pageSchema.index(
 );
 pageSchema.index(
   { 'blocks.blocks.customItems.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.blocks.snippets.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.blocks.snippets.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.blocks.snippets.button.block.customItems.mediaId': 1 },
   { sparse: true },
 );
 pageSchema.index({ slug: 1 }, { unique: true });

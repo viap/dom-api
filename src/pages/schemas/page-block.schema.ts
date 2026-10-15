@@ -42,6 +42,15 @@ export const blockButtonSchema = new mongoose.Schema(
   { _id: false, id: false },
 );
 
+export const htmlButtonSnippetSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    type: { type: String, required: true, enum: ['button'] },
+    button: { type: blockButtonSchema, required: true },
+  },
+  { _id: false, id: false, strict: 'throw' },
+);
+
 export const mediaRefSchema = new mongoose.Schema(
   {
     mediaId: { type: String, required: true },
@@ -243,6 +252,7 @@ export const htmlBlockSchema = new mongoose.Schema(
       default: 'vertical',
     },
     content: { type: String, required: true },
+    snippets: { type: [htmlButtonSnippetSchema], default: undefined },
   },
   { _id: false, id: false, strict: 'throw' },
 );
