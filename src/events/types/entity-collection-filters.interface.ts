@@ -1,4 +1,11 @@
+import type { RandomOrdering } from '@/common/utils/ranked-query';
 import { EventType } from '../enums/event-type.enum';
+
+export interface EventCollectionContext {
+  now: Date;
+  domainId?: string;
+  ordering?: RandomOrdering;
+}
 
 export interface EventEntityCollectionFilters {
   types?: EventType[];

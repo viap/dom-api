@@ -1,4 +1,6 @@
 import * as Joi from 'joi';
+import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
@@ -172,6 +174,7 @@ const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
 };
 
 const blockButtonBaseFields = {
+  isVisible: Joi.boolean().optional(),
   label: Joi.string().trim().min(1).max(150).required(),
   targetId: Joi.string().trim().max(120).optional(),
   applicationProgramId: joiObjectId.optional(),
@@ -234,6 +237,9 @@ const pageBlockBaseSchema = {
 };
 
 const entityCollectionBaseSchema = {
+  itemOrder: Joi.string()
+    .valid(...Object.values(EntityCollectionItemOrder))
+    .optional(),
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.EntityCollection).required(),
   entityType: Joi.string()
@@ -420,7 +426,12 @@ const makeEntityCollectionBlockSchema = (buttonSchema: Joi.Schema) => {
         is: EntityCollectionEntityType.Events,
         then: eventFiltersSchema.required(),
       }),
-    limit: Joi.number().integer().min(1).max(24).default(12).optional(),
+    limit: Joi.number()
+      .integer()
+      .min(1)
+      .max(DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS)
+      .default(12)
+      .optional(),
   }).unknown(false);
   const customEntityCollectionItemSchema = Joi.object({
     mediaId: joiObjectId.optional(),
@@ -483,6 +494,8 @@ const entityCollectionBlockSchema =
 const htmlBlockSchema = makeHtmlBlockSchema(blockButtonSchema);
 
 const heroItemSchema = Joi.object({
+  buttons: Joi.array().items(blockButtonSchema).optional(),
+  isVisible: Joi.boolean().optional(),
   icon: Joi.string().trim().max(120).optional(),
   title: Joi.string().trim().min(1).max(150).required(),
   subtitle: Joi.string().trim().min(1).max(300).optional(),
@@ -494,6 +507,9 @@ const heroBlockSchema = Joi.object({
   type: Joi.string().valid(PageBlockType.Hero).required(),
   backgroundMedia: mediaRefSchema.optional(),
   items: Joi.array().items(heroItemSchema).optional(),
+  // Opt-in spacing keeps historical Hero padding values inactive; no migration required.
+  sectionSpacing: spacingSchema.optional(),
+  columns: Joi.number().integer().valid(2, 3, 4, 5).optional(),
 });
 
 export const pageBlockSchema = Joi.alternatives().try(

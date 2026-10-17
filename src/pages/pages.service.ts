@@ -6,6 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
+import type { RandomOrdering } from '@/common/utils/ranked-query';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
+import { EntityCollectionPreviewOwner } from '@/pages/types/page-block.interface';
+import {
+  createRandomOrdering,
+  orderBucket,
+} from '@/pages/utils/entity-collection-ordering';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -30,10 +37,7 @@ import { UpdatePageDto } from './dto/update-page.dto';
 import { PageStatus } from './enums/page-status.enum';
 import { PageQueryParams } from './types/query-params.interface';
 import { Page, PageDocument } from './schemas/page.schema';
-import {
-  DynamicEntityCollectionResolutionContext,
-  PageBlock,
-} from './types/page-block.interface';
+import { PageBlock } from './types/page-block.interface';
 import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
 import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
 import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
@@ -56,25 +60,40 @@ type PublicPageSource = {
   blocks?: Array<PageBlock | Record<string, unknown>>;
 } & Record<string, unknown>;
 
-export type EntityCollectionPreviewInput =
+export type EntityCollectionPreviewInput = (
   | {
-      entityType: EntityCollectionEntityType.People;
-      filters: PeopleEntityCollectionFilters;
-      limit?: number;
-      contextDomainId: string | null;
+      itemOrder: EntityCollectionItemOrder.Random;
+      blockId?: string;
+      blockPath: string[];
+      owner: EntityCollectionPreviewOwner;
     }
   | {
-      entityType: EntityCollectionEntityType.Partners;
-      filters: PartnerEntityCollectionFilters;
-      limit?: number;
-      contextDomainId: string | null;
+      itemOrder?: EntityCollectionItemOrder.Default;
+      blockId?: string;
+      blockPath?: string[];
+      owner?: EntityCollectionPreviewOwner;
     }
-  | {
-      entityType: EntityCollectionEntityType.Events;
-      filters: EventEntityCollectionFilters;
-      limit?: number;
-      contextDomainId: string | null;
-    };
+) &
+  (
+    | {
+        entityType: EntityCollectionEntityType.People;
+        filters: PeopleEntityCollectionFilters;
+        limit?: number;
+        contextDomainId: string | null;
+      }
+    | {
+        entityType: EntityCollectionEntityType.Partners;
+        filters: PartnerEntityCollectionFilters;
+        limit?: number;
+        contextDomainId: string | null;
+      }
+    | {
+        entityType: EntityCollectionEntityType.Events;
+        filters: EventEntityCollectionFilters;
+        limit?: number;
+        contextDomainId: string | null;
+      }
+  );
 
 @Injectable()
 export class PagesService {
@@ -586,36 +605,63 @@ export class PagesService {
     return resolveExistingIds(this.pageModel, ids);
   }
 
-  async previewEntityCollection(input: EntityCollectionPreviewInput) {
+  async previewEntityCollection(
+    input: EntityCollectionPreviewInput,
+    signal?: AbortSignal,
+  ) {
+    signal?.throwIfAborted();
     if (input.contextDomainId) {
       await this.domainsService.getActiveById(input.contextDomainId);
     }
-    const context: DynamicEntityCollectionResolutionContext = {
+    signal?.throwIfAborted();
+    const context = {
       domainId: input.contextDomainId || undefined,
       now: new Date(),
+      ordering: undefined as RandomOrdering | undefined,
     };
+    if (input.itemOrder === EntityCollectionItemOrder.Random) {
+      const owner =
+        input.owner?.kind === 'persistedPage'
+          ? { kind: 'page' as const, pageId: input.owner.pageId }
+          : input.owner;
+      context.ordering = createRandomOrdering(
+        { ...context, owner, blockPath: input.blockPath },
+        input.entityType,
+      );
+    }
+    const metadata = context.ordering
+      ? { orderBucket: orderBucket(context.now) }
+      : {};
     const limit = input.limit ?? 12;
     switch (input.entityType) {
       case EntityCollectionEntityType.People:
         return {
+          ...metadata,
           items: await this.peopleService.findDynamicPreviewItems(
             input.filters,
             limit,
+            context.ordering,
+            signal,
           ),
         };
       case EntityCollectionEntityType.Partners:
         return {
+          ...metadata,
           items: await this.partnersService.findDynamicPreviewItems(
             input.filters,
             limit,
+            context.ordering,
+            signal,
           ),
         };
       case EntityCollectionEntityType.Events:
         return {
+          ...metadata,
           items: await this.eventsService.findDynamicPreviewItems(
             input.filters,
             limit,
             context,
+            signal,
           ),
         };
       default:
@@ -660,14 +706,15 @@ export class PagesService {
       {
         findPublishedPeopleSummariesByIds: (ids) =>
           this.peopleService.findPublishedSummariesByIds(ids),
-        findDynamicPeopleSummaries: (filters, limit) =>
-          this.peopleService.findDynamicSummaries(filters, limit),
-        findDynamicPartnerSummaries: (filters, limit) =>
-          this.partnersService.findDynamicSummaries(filters, limit),
+        findDynamicPeopleSummaries: (filters, limit, ordering) =>
+          this.peopleService.findDynamicSummaries(filters, limit, ordering),
+        findDynamicPartnerSummaries: (filters, limit, ordering) =>
+          this.partnersService.findDynamicSummaries(filters, limit, ordering),
         findDynamicEventSummaries: (filters, limit, context) =>
           this.eventsService.findDynamicSummaries(filters, limit, context),
       },
       {
+        owner: { kind: 'page', pageId: String(page._id) },
         domainId: this.toIdString(page.domainId),
         now: new Date(),
       },

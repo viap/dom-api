@@ -1,0 +1,128 @@
+{
+  "page": {
+    "title": "Ordering compatibility",
+    "slug": "ordering-compatibility",
+    "blocks": [
+      {
+        "id": "random-root",
+        "type": "entityCollection",
+        "entityType": "custom",
+        "layout": "grid",
+        "items": [],
+        "customItems": [
+          {
+            "title": "A"
+          },
+          {
+            "title": "B"
+          }
+        ],
+        "itemOrder": "random"
+      },
+      {
+        "id": "group",
+        "type": "group",
+        "blocks": [
+          {
+            "id": "random-child",
+            "type": "entityCollection",
+            "entityType": "custom",
+            "layout": "grid",
+            "items": [],
+            "customItems": [
+              {
+                "title": "A"
+              },
+              {
+                "title": "B"
+              }
+            ],
+            "itemOrder": "random"
+          }
+        ]
+      },
+      {
+        "id": "modal-parent",
+        "type": "cta",
+        "buttons": [
+          {
+            "type": "block",
+            "label": "Open",
+            "block": {
+              "id": "random-modal",
+              "type": "entityCollection",
+              "entityType": "custom",
+              "layout": "grid",
+              "items": [],
+              "customItems": [
+                {
+                  "title": "A"
+                },
+                {
+                  "title": "B"
+                }
+              ],
+              "itemOrder": "random"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "eventBlocks": [
+    {
+      "id": "random-event",
+      "type": "entityCollection",
+      "entityType": "people",
+      "layout": "grid",
+      "items": ["507f1f77bcf86cd799439221", "507f1f77bcf86cd799439221"],
+      "itemOrder": "random"
+    }
+  ],
+  "dynamicBlock": {
+    "id": "random-dynamic",
+    "type": "entityCollection",
+    "entityType": "people",
+    "source": "dynamic",
+    "layout": "grid",
+    "items": [],
+    "filters": {},
+    "limit": 12,
+    "itemOrder": "random"
+  },
+  "dynamicLimitVariants": [
+    {
+      "id": "limit-24",
+      "type": "entityCollection",
+      "entityType": "people",
+      "source": "dynamic",
+      "layout": "grid",
+      "items": [],
+      "filters": {},
+      "limit": 24,
+      "itemOrder": "random"
+    },
+    {
+      "id": "limit-25",
+      "type": "entityCollection",
+      "entityType": "people",
+      "source": "dynamic",
+      "layout": "grid",
+      "items": [],
+      "filters": {},
+      "limit": 25,
+      "itemOrder": "random"
+    },
+    {
+      "id": "limit-100",
+      "type": "entityCollection",
+      "entityType": "people",
+      "source": "dynamic",
+      "layout": "grid",
+      "items": [],
+      "filters": {},
+      "limit": 100,
+      "itemOrder": "random"
+    }
+  ]
+}

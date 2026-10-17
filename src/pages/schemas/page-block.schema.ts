@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
@@ -21,6 +23,7 @@ const temporalModeValues = ['upcoming', 'past', 'custom'];
 
 export const blockButtonSchema = new mongoose.Schema(
   {
+    isVisible: { type: Boolean },
     label: { type: String, required: true, trim: true },
     type: {
       type: String,
@@ -75,9 +78,11 @@ export const relatedPeopleGroupSchema = new mongoose.Schema(
 
 export const heroItemSchema = new mongoose.Schema(
   {
+    isVisible: { type: Boolean },
     icon: { type: String },
     title: { type: String, required: true, trim: true },
     subtitle: { type: String },
+    buttons: { type: [blockButtonSchema], default: undefined },
     button: { type: blockButtonSchema },
   },
   { _id: false, id: false, strict: 'throw' },
@@ -160,6 +165,7 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
       type: [customEntityCollectionItemSchema],
       default: undefined,
     },
+    itemOrder: { type: String, enum: Object.values(EntityCollectionItemOrder) },
     source: { type: String, enum: ['manual', 'dynamic'] },
     filters: {
       type: new mongoose.Schema(
@@ -196,7 +202,7 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
         { _id: false, id: false, strict: 'throw' },
       ),
     },
-    limit: { type: Number, min: 1, max: 24 },
+    limit: { type: Number, min: 1, max: DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS },
     cardVariant: { type: String },
   },
   { _id: false, id: false, strict: 'throw' },
@@ -206,6 +212,9 @@ export const heroBlockSchema = new mongoose.Schema(
   {
     backgroundMedia: { type: mediaRefSchema },
     items: { type: [heroItemSchema], default: [] },
+    // Opt-in spacing keeps historical Hero padding values inactive; no migration required.
+    sectionSpacing: { type: String, enum: spacingValues },
+    columns: { type: Number, enum: [2, 3, 4, 5] },
   },
   { _id: false, id: false, strict: 'throw' },
 );

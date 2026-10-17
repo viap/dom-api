@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -155,16 +156,18 @@ export class PartnersService {
   async findDynamicSummaries(
     filters: PartnerEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
   ): Promise<Array<{ id: string; label: string }>> {
     const query: FilterQuery<PartnerDocument> = { isPublished: true };
     if (filters.types?.length) query.type = { $in: filters.types };
-    const partners = await this.partnerModel
-      .find(query)
-      .select({ _id: 1, title: 1 })
-      .sort({ title: 1, _id: 1 })
-      .limit(limit)
-      .lean()
-      .exec();
+    const partners = await findRanked(
+      this.partnerModel,
+      query,
+      { _id: 1, title: 1 },
+      { title: 1, _id: 1 },
+      limit,
+      ordering,
+    );
     return partners.map((partner) => ({
       id: partner._id.toString(),
       label: partner.title,
@@ -174,17 +177,24 @@ export class PartnersService {
   async findDynamicPreviewItems(
     filters: PartnerEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
+    signal?: AbortSignal,
   ) {
+    signal?.throwIfAborted();
     const query: FilterQuery<PartnerDocument> = { isPublished: true };
     if (filters.types?.length) query.type = { $in: filters.types };
-    const partners = await this.partnerModel
-      .find(query)
-      .select({ _id: 1, title: 1, type: 1 })
-      .sort({ title: 1, _id: 1 })
-      .limit(limit)
-      .lean()
-      .exec();
+    const partners = await findRanked(
+      this.partnerModel,
+      query,
+      { _id: 1, title: 1, type: 1 },
+      { title: 1, _id: 1 },
+      limit,
+      ordering,
+      'preview',
+      signal,
+    );
 
+    signal?.throwIfAborted();
     return partners.map((partner) => ({
       id: partner._id.toString(),
       label: partner.title,

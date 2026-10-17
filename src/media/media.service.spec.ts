@@ -681,6 +681,88 @@ describe('MediaService', () => {
         },
       ],
     });
+    const heroMediaBlock = {
+      id: 'hero-media',
+      type: PageBlockType.Hero,
+      items: [
+        {
+          title: 'Retained card',
+          buttons: [
+            { label: 'Link', type: 'external', url: 'https://example.com' },
+            {
+              ...modalButton({
+                id: 'hero-rich',
+                type: PageBlockType.RichText,
+                media: { mediaId: uploadedMediaId },
+                content: 'Retained text',
+              }),
+              isVisible: false,
+            },
+            modalButton({
+              id: 'hero-gallery',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }, { mediaId: 'keep-image' }],
+            }),
+            modalButton({
+              id: 'hero-empty-gallery',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }],
+            }),
+          ],
+        },
+        {
+          title: 'Retained empty card',
+          button: modalButton(customBlock('ignored-legacy', 'legacy')),
+          buttons: [
+            modalButton({
+              id: 'only-gallery',
+              type: PageBlockType.Gallery,
+              items: [{ mediaId: uploadedMediaId }],
+            }),
+          ],
+        },
+        {
+          title: 'Legacy rich',
+          button: {
+            ...modalButton({
+              id: 'legacy-rich',
+              type: PageBlockType.RichText,
+              media: { mediaId: uploadedMediaId },
+              content: 'Keep text',
+            }),
+            isVisible: false,
+          },
+        },
+        {
+          title: 'Legacy gallery',
+          button: modalButton({
+            id: 'legacy-gallery',
+            type: PageBlockType.Gallery,
+            items: [
+              { mediaId: uploadedMediaId },
+              { mediaId: 'keep-legacy-image' },
+            ],
+          }),
+        },
+        {
+          title: 'Legacy empty gallery',
+          button: modalButton({
+            id: 'legacy-empty',
+            type: PageBlockType.Gallery,
+            items: [{ mediaId: uploadedMediaId }],
+          }),
+        },
+        {
+          title: 'Authoritative empty array',
+          buttons: [],
+          button: modalButton({
+            id: 'ignored-legacy-rich',
+            type: PageBlockType.RichText,
+            media: { mediaId: uploadedMediaId },
+          }),
+        },
+      ],
+    };
     const pageDoc = {
       _id: '507f1f77bcf86cd799439271',
       blocks: [
@@ -701,6 +783,19 @@ describe('MediaService', () => {
               button: modalButton(
                 customBlock('hero-modal-custom', 'hero-other'),
               ),
+              buttons: [
+                {
+                  label: 'First',
+                  type: 'external',
+                  url: 'https://example.com',
+                },
+                {
+                  ...modalButton(
+                    customBlock('hero-later-hidden', 'hidden-other'),
+                  ),
+                  isVisible: false,
+                },
+              ],
             },
           ],
         },
@@ -760,6 +855,7 @@ describe('MediaService', () => {
             }),
           ],
         },
+        heroMediaBlock,
       ],
     };
     const eventDoc = {
@@ -778,8 +874,11 @@ describe('MediaService', () => {
           type: PageBlockType.RichText,
           media: { mediaId: uploadedMediaId },
         }),
+        heroMediaBlock,
       ],
     };
+
+    const sourceSnapshot = JSON.stringify([pageDoc, eventDoc]);
 
     mockMediaModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnThis(),
@@ -801,6 +900,35 @@ describe('MediaService', () => {
       ?.blocks as Array<Record<string, any>>;
     const updatedEventBlocks = mockDomainEventModel.updateOne.mock.calls[0]?.[1]
       ?.$set?.blocks as Array<Record<string, any>>;
+    expect(JSON.stringify([pageDoc, eventDoc])).toBe(sourceSnapshot);
+    for (const blocks of [updatedPageBlocks, updatedEventBlocks]) {
+      const hero = blocks.find((block) => block.id === 'hero-media');
+      expect(hero.items[0].buttons).toHaveLength(3);
+      expect(
+        hero.items[0].buttons.map((button) => button.block?.id ?? button.label),
+      ).toEqual(['Link', 'hero-rich', 'hero-gallery']);
+      expect(hero.items[0].buttons[1]).toMatchObject({
+        isVisible: false,
+        block: { content: 'Retained text' },
+      });
+      expect(hero.items[0].buttons[1].block.media).toBeUndefined();
+      expect(hero.items[0].buttons[2].block.items).toEqual([
+        { mediaId: 'keep-image' },
+      ]);
+      expect(hero.items[1].title).toBe('Retained empty card');
+      expect(hero.items[1].buttons).toEqual([]);
+      expect(hero.items[1].button).toEqual(heroMediaBlock.items[1].button);
+      expect(hero.items[2].button).toMatchObject({
+        isVisible: false,
+        block: { content: 'Keep text' },
+      });
+      expect(hero.items[2].button.block.media).toBeUndefined();
+      expect(hero.items[3].button.block.items).toEqual([
+        { mediaId: 'keep-legacy-image' },
+      ]);
+      expect(hero.items[4]).toEqual({ title: 'Legacy empty gallery' });
+      expect(hero.items[5]).toEqual(heroMediaBlock.items[5]);
+    }
     const findCustom = (
       blocks: Array<Record<string, any>>,
       id: string,
@@ -815,6 +943,9 @@ describe('MediaService', () => {
           if (button.block?.id === id) return button.block;
         }
         for (const item of block.items ?? []) {
+          for (const button of item.buttons ?? []) {
+            if (button.block?.id === id) return button.block;
+          }
           if (item.button?.block?.id === id) return item.button.block;
         }
         for (const item of block.customItems ?? []) {
@@ -838,6 +969,22 @@ describe('MediaService', () => {
       });
     };
 
+    expect(mockPageModel.find.mock.calls[0][0].$or).toEqual(
+      expect.arrayContaining([
+        { 'blocks.items.button.block.media.mediaId': uploadedMediaId },
+        { 'blocks.items.button.block.items.mediaId': uploadedMediaId },
+        { 'blocks.items.buttons.block.customItems.mediaId': uploadedMediaId },
+        { 'blocks.items.buttons.block.media.mediaId': uploadedMediaId },
+        { 'blocks.items.buttons.block.items.mediaId': uploadedMediaId },
+      ]),
+    );
+    expect(mockDomainEventModel.find.mock.calls[1][0].$or).toEqual(
+      expect.arrayContaining([
+        { 'blocks.items.button.block.media.mediaId': uploadedMediaId },
+        { 'blocks.items.button.block.items.mediaId': uploadedMediaId },
+      ]),
+    );
+    expect(updatedPageBlocks[2].items[0].buttons[1].isVisible).toBe(false);
     assertCustomMediaCleanup(updatedPageBlocks, 'page-custom', 'page-other');
     assertCustomMediaCleanup(
       updatedPageBlocks,
@@ -846,8 +993,8 @@ describe('MediaService', () => {
     );
     assertCustomMediaCleanup(
       updatedPageBlocks,
-      'hero-modal-custom',
-      'hero-other',
+      'hero-later-hidden',
+      'hidden-other',
     );
     assertCustomMediaCleanup(
       updatedPageBlocks,

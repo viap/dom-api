@@ -6,6 +6,7 @@ import {
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { createRandomOrdering } from '@/pages/utils/entity-collection-ordering';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
 import { MediaService } from '@/media/media.service';
@@ -93,6 +94,7 @@ describe('EventsService', () => {
     findManyByIds: jest.fn(),
   };
   const mockPeopleService = {
+    findDynamicSummaries: jest.fn(),
     exists: jest.fn(),
     existingIds: jest.fn(),
     findPublishedSummariesByIds: jest.fn(),
@@ -1336,5 +1338,112 @@ describe('EventsService', () => {
         { new: true, runValidators: true },
       );
     });
+  });
+  it.each(['list', 'bulk'] as const)(
+    '%s resolves 100 Event block trees without Random scans',
+    async (mode) => {
+      const dynamic = {
+        id: 'random',
+        type: 'entityCollection',
+        entityType: 'people',
+        source: 'dynamic',
+        itemOrder: 'random',
+        items: [],
+        filters: {},
+        limit: 100,
+      };
+      const events = Array.from({ length: 100 }, () => ({
+        ...mockEvent,
+        _id: new Types.ObjectId().toString(),
+        blocks: [
+          dynamic,
+          {
+            id: 'parent',
+            type: 'cta',
+            buttons: [{ type: 'block', block: { ...dynamic, id: 'child' } }],
+          },
+        ],
+      }));
+      const saved = JSON.stringify(events);
+      const query = {
+        sort: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(events),
+      };
+      mockEventModel.find.mockReturnValue(query);
+      mockPeopleService.findDynamicSummaries.mockImplementation(
+        async (_filters, _limit, ordering) => {
+          if (ordering) throw new Error('List must not start Random work');
+          return [{ id: 'default', label: 'Default' }];
+        },
+      );
+      const result =
+        mode === 'list'
+          ? await service.findAll({ limit: '100' })
+          : (await service.findManyByIds(events.map((event) => event._id)))
+              .items;
+      expect(result).toHaveLength(100);
+      expect(mockPeopleService.findDynamicSummaries).toHaveBeenCalledTimes(200);
+      expect(
+        mockPeopleService.findDynamicSummaries.mock.calls.every(
+          (args) => args[2] === undefined,
+        ),
+      ).toBe(true);
+      expect(result[0].blocks).toMatchObject([
+        { items: ['default'] },
+        { buttons: [{ block: { items: ['default'] } }] },
+      ]);
+      expect(JSON.stringify(events)).toBe(saved);
+    },
+  );
+  it('supplies persisted Event owner to embedded Random resolution', async () => {
+    mockEventModel.findOne.mockReturnValue({
+      lean: () => ({
+        exec: async () => ({
+          ...mockEvent,
+          blocks: [
+            {
+              id: 'parent',
+              type: 'cta',
+              buttons: [
+                {
+                  type: 'block',
+                  label: 'Open',
+                  block: {
+                    id: 'child',
+                    type: 'entityCollection',
+                    entityType: 'people',
+                    source: 'dynamic',
+                    layout: 'grid',
+                    items: [],
+                    filters: {},
+                    itemOrder: 'random',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    });
+    mockPeopleService.findDynamicSummaries.mockResolvedValue([
+      { id: 'chosen', label: 'Chosen' },
+    ]);
+    await service.findOne(mockEvent._id);
+    const context =
+      mockPeopleService.findDynamicSummaries.mock.calls.at(-1)?.[2];
+    expect(context).toEqual(
+      createRandomOrdering(
+        {
+          now: new Date(),
+          domainId: mockEvent.domainId,
+          owner: { kind: 'event', eventId: mockEvent._id },
+          blockPath: ['parent', 'child'],
+        },
+        'people',
+      ),
+    );
   });
 });

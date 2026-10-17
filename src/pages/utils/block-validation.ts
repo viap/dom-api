@@ -1,4 +1,24 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  getHeroItemButtons,
+  isButtonVisible,
+  withHeroItemButtons,
+} from './block-buttons';
+import { BadRequestException, Logger } from '@nestjs/common';
+import {
+  permuteItems,
+  RandomOrdering,
+  RandomScanUnavailableException,
+} from '@/common/utils/ranked-query';
+import {
+  canonicalFilters,
+  publicRandomSelections,
+} from './random-selection-cache';
+import {
+  orderBucket,
+  createRandomOrdering,
+} from './entity-collection-ordering';
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
+import { EventCollectionContext } from '@/events/types/entity-collection-filters.interface';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
@@ -17,6 +37,7 @@ import {
   HtmlBlock,
   PageBlock,
   PageRootBlock,
+  PersistedEntityCollectionOwner,
   RichTextBlock,
 } from '../types/page-block.interface';
 import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
@@ -53,15 +74,17 @@ export interface PublicBlockServices {
   findDynamicPeopleSummaries: (
     filters: PeopleEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
   ) => Promise<Array<{ id: string; label: string }>>;
   findDynamicPartnerSummaries: (
     filters: PartnerEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
   ) => Promise<Array<{ id: string; label: string }>>;
   findDynamicEventSummaries: (
     filters: EventEntityCollectionFilters,
     limit: number,
-    context: DynamicEntityCollectionResolutionContext,
+    context: EventCollectionContext,
   ) => Promise<Array<{ id: string; label: string }>>;
 }
 
@@ -267,9 +290,7 @@ function validateHeroBlock(
   }
 
   for (const item of block.items || []) {
-    if (item.button) {
-      collectButtonRefs([item.button], refs, depth);
-    }
+    collectButtonRefs(getHeroItemButtons(item), refs, depth);
   }
 }
 
@@ -448,6 +469,14 @@ function sanitizeEmbeddedButtonBlocks(
 }
 
 function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
+  if (
+    block.type === PageBlockType.EntityCollection &&
+    (block.itemOrder === EntityCollectionItemOrder.Default ||
+      block.itemOrder === undefined)
+  ) {
+    block = { ...block };
+    delete block.itemOrder;
+  }
   if (block.type === PageBlockType.Group) {
     // Security: nested HTML/richText children are sanitized and dynamic
     // collections normalized, same as root. Children are leaf types (no group).
@@ -543,21 +572,11 @@ function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
     return {
       ...block,
       items: block.items?.map((item) => {
-        if (!item.button?.block) {
-          return item;
-        }
-        if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
-          const restButton = { ...item.button };
-          delete restButton.block;
-          return { ...item, button: restButton };
-        }
-        return {
-          ...item,
-          button: {
-            ...item.button,
-            block: sanitizeOneBlock(item.button.block, depth + 1) as PageBlock,
-          },
-        };
+        const buttons = sanitizeEmbeddedButtonBlocks(
+          getHeroItemButtons(item),
+          depth,
+        );
+        return withHeroItemButtons(item, buttons);
       }),
     };
   }
@@ -604,11 +623,61 @@ function normalizeDynamicEntityCollectionBlock(
 // Keep in sync with dom-web MAX_EMBEDDED_BLOCK_DEPTH (pageBlockReferences.ts).
 const MAX_EMBEDDED_BLOCK_DEPTH = 1;
 
+export interface PublicBlockConversionPolicy {
+  dynamicRandom: 'enabled' | 'default';
+}
+
+type ResolveDynamicSelection = (
+  block: Record<string, unknown>,
+  context: DynamicEntityCollectionResolutionContext,
+  load: (ordering?: RandomOrdering) => Promise<string[]>,
+) => Promise<string[]>;
+const orderingLogger = new Logger('PublicCollectionOrdering');
+
 export async function toPublicBlocks(
   blocks: Array<PageBlock | Record<string, unknown>>,
   services: PublicBlockServices,
-  context: DynamicEntityCollectionResolutionContext,
+  context: Omit<DynamicEntityCollectionResolutionContext, 'owner'> & {
+    owner: PersistedEntityCollectionOwner;
+  },
+  policy: PublicBlockConversionPolicy = { dynamicRandom: 'enabled' },
 ): Promise<Array<PageBlock | Record<string, unknown>>> {
+  const selectionCache = publicRandomSelections;
+  const resolveSelection: ResolveDynamicSelection = async (
+    block,
+    ctx,
+    load,
+  ) => {
+    const ordering = ctx.ordering;
+    if (!ordering || policy.dynamicRandom === 'default') return load();
+    try {
+      return await selectionCache.resolve(
+        JSON.stringify([
+          'id-rank-v2',
+          ordering.seed,
+          block.entityType,
+          canonicalFilters(block.filters || {}),
+          ctx.domainId?.toLowerCase() ?? null,
+          typeof block.limit === 'number' ? block.limit : 12,
+        ]),
+        orderBucket(ctx.now),
+        (scanStarted) => {
+          scanStarted();
+          return load(ordering);
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof RandomScanUnavailableException)) throw error;
+      orderingLogger.warn({
+        event: 'random_default_fallback',
+        reason: error.reason,
+        owner: ctx.owner,
+        blockPath: ctx.blockPath,
+        entityType: block.entityType,
+      });
+      return load();
+    }
+  };
   const visibleBlocks = blocks.filter((block) => {
     if (!block || typeof block !== 'object') {
       return false;
@@ -617,7 +686,9 @@ export async function toPublicBlocks(
     return typedBlock.isVisible !== false;
   });
   const resolvedBlocks = await Promise.all(
-    visibleBlocks.map((block) => toPublicOneBlock(block, services, context, 0)),
+    visibleBlocks.map((block) =>
+      toPublicOneBlock(block, services, context, 0, resolveSelection),
+    ),
   );
   return resolvedBlocks.filter(Boolean) as Array<
     PageBlock | Record<string, unknown>
@@ -629,13 +700,14 @@ async function withPublicButtonBlocks(
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
   depth: number,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
   const buttons = block.buttons;
   if (!Array.isArray(buttons)) {
     return block;
   }
   const resolved = await Promise.all(
-    buttons.map(async (button) => {
+    buttons.filter(isButtonVisible).map(async (button) => {
       const embedded =
         button && typeof button === 'object'
           ? (button as Record<string, unknown>).block
@@ -657,6 +729,7 @@ async function withPublicButtonBlocks(
           services,
           context,
           depth + 1,
+          resolveSelection,
         ),
       };
     }),
@@ -669,42 +742,26 @@ async function withPublicHeroButtonBlocks(
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
   depth: number,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
   const items = block.items;
   if (!Array.isArray(items)) {
     return block;
   }
   const resolved = await Promise.all(
-    items.map(async (item) => {
-      const button =
-        item && typeof item === 'object'
-          ? (item as Record<string, unknown>).button
-          : undefined;
-      const embedded =
-        button && typeof button === 'object'
-          ? (button as Record<string, unknown>).block
-          : undefined;
-      if (!embedded) {
-        return item;
-      }
-      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
-        const nextButton = { ...(button as Record<string, unknown>) };
-        delete nextButton.block;
-        return { ...(item as Record<string, unknown>), button: nextButton };
-      }
-      return {
-        ...(item as Record<string, unknown>),
-        button: {
-          ...(button as Record<string, unknown>),
-          block: await toPublicOneBlock(
-            embedded as Record<string, unknown>,
-            services,
-            context,
-            depth + 1,
-          ),
-        },
-      };
-    }),
+    items
+      .filter((item) => item?.isVisible !== false)
+      .map(async (item) => {
+        if (!item || typeof item !== 'object') return item;
+        const result = await withPublicButtonBlocks(
+          { buttons: getHeroItemButtons(item) },
+          services,
+          context,
+          depth,
+          resolveSelection,
+        );
+        return withHeroItemButtons(item, result.buttons as unknown[]);
+      }),
   );
   return { ...block, items: resolved };
 }
@@ -714,6 +771,7 @@ async function withPublicCustomItemButtonBlocks(
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
   depth: number,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
   const customItems = block.customItems;
   if (!Array.isArray(customItems)) {
@@ -729,6 +787,8 @@ async function withPublicCustomItemButtonBlocks(
         typedItem.button && typeof typedItem.button === 'object'
           ? (typedItem.button as Record<string, unknown>)
           : undefined;
+      if (button && !isButtonVisible(button))
+        return { ...typedItem, button: undefined };
       const embedded = button?.block;
       if (!button || !embedded) {
         return item;
@@ -747,6 +807,7 @@ async function withPublicCustomItemButtonBlocks(
             services,
             context,
             depth + 1,
+            resolveSelection,
           ),
         },
       };
@@ -760,6 +821,7 @@ async function withPublicHtmlSnippetButtonBlocks(
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
   depth: number,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
   const snippets = block.snippets;
   if (!Array.isArray(snippets)) {
@@ -776,6 +838,12 @@ async function withPublicHtmlSnippetButtonBlocks(
         typedSnippet.button && typeof typedSnippet.button === 'object'
           ? (typedSnippet.button as Record<string, unknown>)
           : undefined;
+      // Preserve marker configuration without resolving hidden actions.
+      if (button && !isButtonVisible(button))
+        return {
+          ...typedSnippet,
+          button: { type: button.type, label: button.label, isVisible: false },
+        };
       const embedded = button?.block;
       if (!button || !embedded) {
         return snippet;
@@ -794,6 +862,7 @@ async function withPublicHtmlSnippetButtonBlocks(
             services,
             context,
             depth + 1,
+            resolveSelection,
           ),
         },
       };
@@ -807,8 +876,41 @@ async function toPublicOneBlock(
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
   depth: number,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
-  const typedBlock = block as Record<string, unknown>;
+  const typedBlock = { ...block } as Record<string, unknown>;
+  const blockPath = [...(context.blockPath ?? []), String(typedBlock.id)];
+  context = {
+    ...context,
+    blockPath,
+    ordering: undefined,
+  };
+  if (typedBlock.type === PageBlockType.EntityCollection) {
+    if (typedBlock.itemOrder === EntityCollectionItemOrder.Random) {
+      context.ordering = createRandomOrdering(
+        { ...context, blockPath },
+        String(typedBlock.entityType),
+      );
+      if (typedBlock.entityType === EntityCollectionEntityType.Custom) {
+        typedBlock.customItems = permuteItems(
+          Array.isArray(typedBlock.customItems) ? typedBlock.customItems : [],
+          context.ordering.seed,
+          (_, index) => index,
+        );
+      } else if (typedBlock.source !== 'dynamic') {
+        typedBlock.items = permuteItems(
+          Array.isArray(typedBlock.items)
+            ? typedBlock.items.filter(
+                (item): item is string => typeof item === 'string',
+              )
+            : [],
+          context.ordering.seed,
+          (id) => id,
+        );
+      }
+    }
+    delete typedBlock.itemOrder;
+  }
   if (typedBlock.type === PageBlockType.Group) {
     // Drop hidden children, resolve/strip each visible child (same rules as a
     // root block). Group is dead code for events (no groups reach here).
@@ -826,6 +928,7 @@ async function toPublicOneBlock(
           services,
           context,
           depth,
+          resolveSelection,
         ),
       ),
     );
@@ -833,7 +936,13 @@ async function toPublicOneBlock(
   }
   if (typedBlock.type === PageBlockType.RichText) {
     const publicBlock = await toPublicRichTextBlock(typedBlock, services);
-    return withPublicButtonBlocks(publicBlock, services, context, depth);
+    return withPublicButtonBlocks(
+      publicBlock,
+      services,
+      context,
+      depth,
+      resolveSelection,
+    );
   }
   if (
     typedBlock.type === PageBlockType.EntityCollection &&
@@ -848,13 +957,19 @@ async function toPublicOneBlock(
       services,
       context,
       depth,
+      resolveSelection,
     );
   }
   if (
     typedBlock.type === PageBlockType.EntityCollection &&
     typedBlock.source === 'dynamic'
   ) {
-    return toPublicDynamicEntityCollectionBlock(typedBlock, services, context);
+    return toPublicDynamicEntityCollectionBlock(
+      typedBlock,
+      services,
+      context,
+      resolveSelection,
+    );
   }
   if (typedBlock.type === PageBlockType.EntityCollection) {
     const publicBlock = { ...typedBlock };
@@ -862,10 +977,22 @@ async function toPublicOneBlock(
     return publicBlock;
   }
   if (typedBlock.type === PageBlockType.Cta) {
-    return withPublicButtonBlocks(typedBlock, services, context, depth);
+    return withPublicButtonBlocks(
+      typedBlock,
+      services,
+      context,
+      depth,
+      resolveSelection,
+    );
   }
   if (typedBlock.type === PageBlockType.Hero) {
-    return withPublicHeroButtonBlocks(typedBlock, services, context, depth);
+    return withPublicHeroButtonBlocks(
+      typedBlock,
+      services,
+      context,
+      depth,
+      resolveSelection,
+    );
   }
   if (typedBlock.type === PageBlockType.Html) {
     return withPublicHtmlSnippetButtonBlocks(
@@ -873,6 +1000,7 @@ async function toPublicOneBlock(
       services,
       context,
       depth,
+      resolveSelection,
     );
   }
   return typedBlock;
@@ -882,44 +1010,56 @@ async function toPublicDynamicEntityCollectionBlock(
   block: Record<string, unknown>,
   services: PublicBlockServices,
   context: DynamicEntityCollectionResolutionContext,
+  resolveSelection: ResolveDynamicSelection,
 ): Promise<Record<string, unknown>> {
   const entityType = block.entityType as EntityCollectionEntityType;
   const filters = (block.filters ||
     {}) as DynamicEntityCollectionBlock['filters'];
   const limit = typeof block.limit === 'number' ? block.limit : 12;
-  let summaries: Array<{ id: string; label: string }>;
+  const resolve = async (ordering?: RandomOrdering) => {
+    let summaries: Array<{ id: string; label: string }>;
 
-  switch (entityType) {
-    case EntityCollectionEntityType.People:
-      summaries = await services.findDynamicPeopleSummaries(
-        filters as PeopleEntityCollectionFilters,
-        limit,
-      );
-      break;
-    case EntityCollectionEntityType.Partners:
-      summaries = await services.findDynamicPartnerSummaries(
-        filters as PartnerEntityCollectionFilters,
-        limit,
-      );
-      break;
-    case EntityCollectionEntityType.Events:
-      summaries = await services.findDynamicEventSummaries(
-        filters as EventEntityCollectionFilters,
-        limit,
-        context,
-      );
-      break;
-    default:
-      throw new BadRequestException(
-        `Unsupported entity collection type: ${entityType}`,
-      );
-  }
+    switch (entityType) {
+      case EntityCollectionEntityType.People:
+        summaries = await services.findDynamicPeopleSummaries(
+          filters as PeopleEntityCollectionFilters,
+          limit,
+          ...(ordering ? [ordering] : []),
+        );
+        break;
+      case EntityCollectionEntityType.Partners:
+        summaries = await services.findDynamicPartnerSummaries(
+          filters as PartnerEntityCollectionFilters,
+          limit,
+          ...(ordering ? [ordering] : []),
+        );
+        break;
+      case EntityCollectionEntityType.Events:
+        summaries = await services.findDynamicEventSummaries(
+          filters as EventEntityCollectionFilters,
+          limit,
+          {
+            now: context.now,
+            domainId: context.domainId,
+            ordering,
+          },
+        );
+        break;
+      default:
+        throw new BadRequestException(
+          `Unsupported entity collection type: ${entityType}`,
+        );
+    }
+
+    return summaries.map((summary) => summary.id);
+  };
+  const ids = await resolveSelection(block, context, resolve);
 
   const publicBlock = { ...block };
   delete publicBlock.source;
   delete publicBlock.filters;
   delete publicBlock.limit;
-  return { ...publicBlock, items: summaries.map((summary) => summary.id) };
+  return { ...publicBlock, items: ids };
 }
 
 async function toPublicRichTextBlock(

@@ -1,3 +1,5 @@
+import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
+import type { RandomOrdering } from '@/common/utils/ranked-query';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
@@ -14,6 +16,7 @@ export type BlockTextAlign = 'left' | 'center' | 'right';
 export type MediaPosition = 'left' | 'right' | 'top' | 'bottom';
 
 export interface BlockButton {
+  isVisible?: boolean;
   label: string;
   type: BlockButtonType;
   targetId?: string;
@@ -92,6 +95,7 @@ export interface EntityCollectionBlockBase extends PageBlockBase {
   entityType: EntityCollectionEntityType;
   layout: EntityCollectionLayout;
   cardVariant?: string;
+  itemOrder?: EntityCollectionItemOrder;
 }
 
 export interface ManualEntityCollectionBlock extends EntityCollectionBlockBase {
@@ -132,15 +136,31 @@ export type EntityCollectionBlock =
   | DynamicEntityCollectionBlock
   | CustomEntityCollectionBlock;
 
+export type PersistedEntityCollectionOwner =
+  | { kind: 'page'; pageId: string }
+  | { kind: 'event'; eventId: string };
+
+export type EntityCollectionPreviewOwner =
+  | { kind: 'page'; pageId: string }
+  | { kind: 'persistedPage'; pageId: string }
+  | { kind: 'draftPage'; draftToken: string };
+
 export type DynamicEntityCollectionResolutionContext = {
+  owner:
+    | PersistedEntityCollectionOwner
+    | { kind: 'draftPage'; draftToken: string };
+  blockPath?: string[];
+  ordering?: RandomOrdering;
   domainId?: string;
   now: Date;
 };
 
 export interface HeroBlockItem {
+  isVisible?: boolean;
   icon?: string;
   title: string;
   subtitle?: string;
+  buttons?: BlockButton[];
   button?: BlockButton;
 }
 
@@ -148,6 +168,8 @@ export interface HeroBlock extends PageBlockBase {
   type: PageBlockType.Hero;
   backgroundMedia?: MediaRef;
   items?: HeroBlockItem[];
+  sectionSpacing?: BlockSpacing;
+  columns?: 2 | 3 | 4 | 5;
 }
 
 export interface CtaBlock extends PageBlockBase {

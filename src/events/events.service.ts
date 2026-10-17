@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -35,6 +36,7 @@ import {
   prepareBlocksForWrite,
   PublicBlockServices,
   toPublicBlocks,
+  PublicBlockConversionPolicy,
 } from '@/pages/utils/block-validation';
 import { preserveOmittedHtmlSnippets } from '@/pages/utils/html-snippet-preservation';
 import { PartnersService } from '@/partners/partners.service';
@@ -52,7 +54,7 @@ import {
   eventDateToUtcStartIsoString,
   normalizeEventSchedule,
 } from './utils/event-schedule';
-import { DynamicEntityCollectionResolutionContext } from '@/pages/types/page-block.interface';
+import { EventCollectionContext } from '@/events/types/entity-collection-filters.interface';
 import { EventEntityCollectionFilters } from './types/entity-collection-filters.interface';
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
@@ -166,6 +168,7 @@ export class EventsService {
           domainId ? domainSlugById.get(domainId) : undefined,
           mediaById,
           locationById,
+          { dynamicRandom: 'default' },
         );
       }),
     );
@@ -267,6 +270,7 @@ export class EventsService {
           undefined,
           mediaById,
           locationById,
+          { dynamicRandom: 'default' },
         ),
       ),
     );
@@ -398,7 +402,7 @@ export class EventsService {
   async findDynamicSummaries(
     filters: EventEntityCollectionFilters,
     limit: number,
-    context: DynamicEntityCollectionResolutionContext,
+    context: EventCollectionContext,
   ): Promise<Array<{ id: string; label: string }>> {
     const domainIds = context.domainId
       ? [context.domainId]
@@ -410,35 +414,13 @@ export class EventsService {
     const query = this.buildDynamicSummaryQuery(filters, domainIds);
     const now = context.now.toISOString();
     const temporal = filters.temporal;
-    if (temporal?.mode === 'upcoming') {
-      query.endAt = { $gte: now };
+    this.applyTemporalFilter(query, filters, context.now);
+    if (context.ordering || temporal) {
       return this.findDynamicSummaryQuery(
         query,
-        { startAt: 1, title: 1, _id: 1 },
+        { startAt: temporal?.mode === 'past' ? -1 : 1, title: 1, _id: 1 },
         limit,
-      );
-    }
-    if (temporal?.mode === 'past') {
-      query.endAt = { $lt: now };
-      return this.findDynamicSummaryQuery(
-        query,
-        { startAt: -1, title: 1, _id: 1 },
-        limit,
-      );
-    }
-    if (temporal?.mode === 'custom') {
-      if (temporal.from)
-        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
-      if (temporal.to) {
-        const toExclusive = new Date(`${temporal.to}T12:00:00.000Z`);
-        toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
-        const nextDate = toExclusive.toISOString().slice(0, 10);
-        query.startAt = { $lt: eventDateToUtcStartIsoString(nextDate) };
-      }
-      return this.findDynamicSummaryQuery(
-        query,
-        { startAt: 1, title: 1, _id: 1 },
-        limit,
+        context.ordering,
       );
     }
 
@@ -459,52 +441,38 @@ export class EventsService {
   async findDynamicPreviewItems(
     filters: EventEntityCollectionFilters,
     limit: number,
-    context: DynamicEntityCollectionResolutionContext,
+    context: EventCollectionContext,
+    signal?: AbortSignal,
   ) {
+    signal?.throwIfAborted();
     const domainIds = context.domainId
       ? [context.domainId]
       : (await this.domainsService.findAll()).map((domain) =>
           domain._id.toString(),
         );
+    signal?.throwIfAborted();
     if (!domainIds.length) return [];
 
     const query = this.buildDynamicSummaryQuery(filters, domainIds);
     const now = context.now.toISOString();
     const temporal = filters.temporal;
     let events;
-    if (temporal?.mode === 'upcoming') {
-      query.endAt = { $gte: now };
+    this.applyTemporalFilter(query, filters, context.now);
+    if (context.ordering || temporal) {
       events = await this.findDynamicPreviewQuery(
         query,
-        { startAt: 1, title: 1, _id: 1 },
+        { startAt: temporal?.mode === 'past' ? -1 : 1, title: 1, _id: 1 },
         limit,
-      );
-    } else if (temporal?.mode === 'past') {
-      query.endAt = { $lt: now };
-      events = await this.findDynamicPreviewQuery(
-        query,
-        { startAt: -1, title: 1, _id: 1 },
-        limit,
-      );
-    } else if (temporal?.mode === 'custom') {
-      if (temporal.from)
-        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
-      if (temporal.to) {
-        const toExclusive = new Date(`${temporal.to}T12:00:00.000Z`);
-        toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
-        const nextDate = toExclusive.toISOString().slice(0, 10);
-        query.startAt = { $lt: eventDateToUtcStartIsoString(nextDate) };
-      }
-      events = await this.findDynamicPreviewQuery(
-        query,
-        { startAt: 1, title: 1, _id: 1 },
-        limit,
+        context.ordering,
+        signal,
       );
     } else {
       const upcoming = await this.findDynamicPreviewQuery(
         { ...query, endAt: { $gte: now } },
         { startAt: 1, title: 1, _id: 1 },
         limit,
+        undefined,
+        signal,
       );
       events =
         upcoming.length >= limit
@@ -515,13 +483,17 @@ export class EventsService {
                 { ...query, endAt: { $lt: now } },
                 { startAt: -1, title: 1, _id: 1 },
                 limit - upcoming.length,
+                undefined,
+                signal,
               )),
             ];
     }
 
+    signal?.throwIfAborted();
     const locationTitles = await this.resolveLocationTitles(
       events.map((event) => event.locationId),
     );
+    signal?.throwIfAborted();
     return events.map((event) => {
       const locationTitle = event.locationId
         ? locationTitles.get(event.locationId.toString())
@@ -538,6 +510,29 @@ export class EventsService {
         },
       };
     });
+  }
+
+  private applyTemporalFilter(
+    query: FilterQuery<DomainEventDocument>,
+    filters: EventEntityCollectionFilters,
+    now: Date,
+  ): void {
+    const temporal = filters.temporal;
+    if (temporal?.mode === 'upcoming')
+      query.endAt = { $gte: now.toISOString() };
+    else if (temporal?.mode === 'past')
+      query.endAt = { $lt: now.toISOString() };
+    else if (temporal?.mode === 'custom') {
+      if (temporal.from)
+        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
+      if (temporal.to) {
+        const next = new Date(`${temporal.to}T12:00:00.000Z`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        query.startAt = {
+          $lt: eventDateToUtcStartIsoString(next.toISOString().slice(0, 10)),
+        };
+      }
+    }
   }
 
   private buildDynamicSummaryQuery(
@@ -569,14 +564,16 @@ export class EventsService {
     query: FilterQuery<DomainEventDocument>,
     sort: Record<string, 1 | -1>,
     limit: number,
+    ordering?: RandomOrdering,
   ): Promise<Array<{ id: string; label: string }>> {
-    const events = await this.eventModel
-      .find(query)
-      .select({ _id: 1, title: 1 })
-      .sort(sort)
-      .limit(limit)
-      .lean()
-      .exec();
+    const events = await findRanked(
+      this.eventModel,
+      query,
+      { _id: 1, title: 1 },
+      sort,
+      limit,
+      ordering,
+    );
     return events.map((event) => ({
       id: event._id.toString(),
       label: event.title,
@@ -587,10 +584,13 @@ export class EventsService {
     query: FilterQuery<DomainEventDocument>,
     sort: Record<string, 1 | -1>,
     limit: number,
+    ordering?: RandomOrdering,
+    signal?: AbortSignal,
   ) {
-    return this.eventModel
-      .find(query)
-      .select({
+    return findRanked(
+      this.eventModel,
+      query,
+      {
         _id: 1,
         title: 1,
         type: 1,
@@ -598,11 +598,13 @@ export class EventsService {
         endAt: 1,
         schedule: 1,
         locationId: 1,
-      })
-      .sort(sort)
-      .limit(limit)
-      .lean()
-      .exec();
+      },
+      sort,
+      limit,
+      ordering,
+      'preview',
+      signal,
+    );
   }
 
   private async resolveLocationTitles(
@@ -636,6 +638,7 @@ export class EventsService {
     domainSlug?: string,
     mediaById: Map<string, MediaDocument> = new Map(),
     locationById: Map<string, PublicEventLocation> = new Map(),
+    policy: PublicBlockConversionPolicy = { dynamicRandom: 'enabled' },
   ): Promise<DomainEventDocument> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
@@ -645,9 +648,11 @@ export class EventsService {
       blocks,
       this.getPublicBlockServices(),
       {
+        owner: { kind: 'event', eventId: String(eventObj._id) },
         domainId: this.toIdString(eventObj.domainId),
         now: new Date(),
       },
+      policy,
     );
 
     let count = registeredCount;
@@ -852,10 +857,10 @@ export class EventsService {
     return {
       findPublishedPeopleSummariesByIds: (ids) =>
         this.peopleService.findPublishedSummariesByIds(ids),
-      findDynamicPeopleSummaries: (filters, limit) =>
-        this.peopleService.findDynamicSummaries(filters, limit),
-      findDynamicPartnerSummaries: (filters, limit) =>
-        this.partnersService.findDynamicSummaries(filters, limit),
+      findDynamicPeopleSummaries: (filters, limit, ordering) =>
+        this.peopleService.findDynamicSummaries(filters, limit, ordering),
+      findDynamicPartnerSummaries: (filters, limit, ordering) =>
+        this.partnersService.findDynamicSummaries(filters, limit, ordering),
       findDynamicEventSummaries: (filters, limit, context) =>
         this.findDynamicSummaries(filters, limit, context),
     };

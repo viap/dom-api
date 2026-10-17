@@ -86,6 +86,14 @@ pageSchema.index(
   { sparse: true },
 );
 pageSchema.index(
+  { 'blocks.items.button.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.items.button.block.items.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
   { 'blocks.customItems.button.block.customItems.mediaId': 1 },
   { sparse: true },
 );
@@ -165,4 +173,17 @@ pageSchema.index(
       domainId: { $exists: false },
     },
   },
+);
+
+pageSchema.index(
+  { 'blocks.items.buttons.block.customItems.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.items.buttons.block.media.mediaId': 1 },
+  { sparse: true },
+);
+pageSchema.index(
+  { 'blocks.items.buttons.block.items.mediaId': 1 },
+  { sparse: true },
 );

@@ -1,4 +1,13 @@
 import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
+import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
+import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
@@ -16,14 +25,6 @@ import { MediaService } from '@/media/media.service';
 import { LocationsService } from '@/locations/locations.service';
 import { UsersService } from '@/users/users.service';
 import { BulkResolveResponse } from '@/common/types/bulk-resolve.types';
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
 import { CreatePersonDto } from './dto/create-person.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import { Person, PersonDocument } from './schemas/person.schema';
@@ -178,15 +179,16 @@ export class PeopleService {
   async findDynamicSummaries(
     filters: PeopleEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
   ): Promise<Array<{ id: string; label: string }>> {
-    const query = this.buildDynamicSummaryQuery(filters);
-    const people = await this.personModel
-      .find(query)
-      .select({ _id: 1, fullName: 1 })
-      .sort({ fullName: 1, _id: 1 })
-      .limit(limit)
-      .lean()
-      .exec();
+    const people = await findRanked(
+      this.personModel,
+      this.buildDynamicSummaryQuery(filters),
+      { _id: 1, fullName: 1 },
+      { fullName: 1, _id: 1 },
+      limit,
+      ordering,
+    );
     return people.map((person) => ({
       id: person._id.toString(),
       label: person.fullName,
@@ -196,25 +198,33 @@ export class PeopleService {
   async findDynamicPreviewItems(
     filters: PeopleEntityCollectionFilters,
     limit: number,
+    ordering?: RandomOrdering,
+    signal?: AbortSignal,
   ) {
-    const people = await this.personModel
-      .find(this.buildDynamicSummaryQuery(filters))
-      .select({
+    signal?.throwIfAborted();
+    const people = await findRanked(
+      this.personModel,
+      this.buildDynamicSummaryQuery(filters),
+      {
         _id: 1,
         fullName: 1,
         title: 1,
         roles: 1,
         specializations: 1,
         workLocationId: 1,
-      })
-      .sort({ fullName: 1, _id: 1 })
-      .limit(limit)
-      .lean()
-      .exec();
+      },
+      { fullName: 1, _id: 1 },
+      limit,
+      ordering,
+      'preview',
+      signal,
+    );
+    signal?.throwIfAborted();
     const locationTitles = await this.resolveLocationTitles(
       people.map((person) => person.workLocationId),
     );
 
+    signal?.throwIfAborted();
     return people.map((person) => {
       const professionalTitle = person.title?.trim();
       const specializations = person.specializations

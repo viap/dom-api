@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import { EntityCollectionItemOrder } from './enums/entity-collection-item-order.enum';
+import { createRandomOrdering } from './utils/entity-collection-ordering';
 import { EventsService } from '@/events/events.service';
 import { DomainsService } from '@/domains/domains.service';
 import { MediaService } from '@/media/media.service';
@@ -186,7 +188,29 @@ describe('PagesService', () => {
     expect(mockPeopleService.findDynamicPreviewItems).toHaveBeenCalledWith(
       { roles: [PersonRole.Team] },
       4,
+      undefined,
+      undefined,
     );
+  });
+
+  it('does not start preview resolution after cancellation during domain validation', async () => {
+    const cancellation = new AbortController();
+    const reason = new Error('preview cancelled');
+    mockDomainsService.getActiveById.mockImplementationOnce(async () => {
+      cancellation.abort(reason);
+      return {};
+    });
+    await expect(
+      service.previewEntityCollection(
+        {
+          entityType: EntityCollectionEntityType.People,
+          filters: {},
+          contextDomainId: '507f1f77bcf86cd799439221',
+        },
+        cancellation.signal,
+      ),
+    ).rejects.toBe(reason);
+    expect(mockPeopleService.findDynamicPreviewItems).not.toHaveBeenCalled();
   });
 
   it('should be defined', () => {
@@ -1415,5 +1439,112 @@ describe('PagesService', () => {
     await expect(
       service.update(mockPage._id, { title: 'Updated' }),
     ).rejects.toThrow(NotFoundException);
+  });
+  it('returns Random preview metadata with normalized persisted/draft identity', async () => {
+    mockPeopleService.findDynamicPreviewItems.mockResolvedValue([
+      { id: 'selected', label: 'Selected' },
+    ]);
+    for (const owner of [
+      { kind: 'persistedPage' as const, pageId: mockPage._id },
+      {
+        kind: 'draftPage' as const,
+        draftToken: 'a44a9bc6-534f-4eb5-97c1-1de29a5ec294',
+      },
+    ]) {
+      const result = await service.previewEntityCollection({
+        entityType: EntityCollectionEntityType.People,
+        filters: {},
+        contextDomainId: mockPage.domainId,
+        itemOrder: EntityCollectionItemOrder.Random,
+        blockId: 'child',
+        blockPath: ['parent', 'child'],
+        owner,
+      });
+      const context =
+        mockPeopleService.findDynamicPreviewItems.mock.calls.at(-1)?.[2];
+      expect(result).toEqual({
+        items: [{ id: 'selected', label: 'Selected' }],
+        orderBucket: new Date().toISOString().slice(0, 10),
+      });
+      expect(context).toEqual(
+        createRandomOrdering(
+          {
+            now: new Date(),
+            domainId: mockPage.domainId,
+            owner:
+              owner.kind === 'persistedPage'
+                ? { kind: 'page', pageId: mockPage._id }
+                : owner,
+            blockPath: ['parent', 'child'],
+          },
+          'people',
+        ),
+      );
+    }
+  });
+
+  it('keeps repeated admin Random previews fresh', async () => {
+    mockPeopleService.findDynamicPreviewItems.mockResolvedValue([
+      { id: 'a', label: 'A' },
+    ]);
+    const request = {
+      entityType: EntityCollectionEntityType.People as const,
+      filters: {},
+      contextDomainId: null,
+      itemOrder: EntityCollectionItemOrder.Random as const,
+      blockPath: ['fresh-preview'],
+      owner: { kind: 'page' as const, pageId: mockPage._id },
+    };
+    const before = mockPeopleService.findDynamicPreviewItems.mock.calls.length;
+    await service.previewEntityCollection(request);
+    await service.previewEntityCollection(request);
+    expect(mockPeopleService.findDynamicPreviewItems).toHaveBeenCalledTimes(
+      before + 2,
+    );
+  });
+
+  it('supplies persisted Page owner and ancestor path to public Random resolution', async () => {
+    mockPageModel.findOne.mockReturnValue({
+      lean: () => ({
+        exec: async () => ({
+          ...mockPage,
+          blocks: [
+            {
+              id: 'group',
+              type: 'group',
+              blocks: [
+                {
+                  id: 'child',
+                  type: 'entityCollection',
+                  entityType: 'people',
+                  source: 'dynamic',
+                  layout: 'grid',
+                  items: [],
+                  filters: {},
+                  itemOrder: 'random',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    });
+    mockPeopleService.findDynamicSummaries.mockResolvedValue([
+      { id: 'chosen', label: 'Chosen' },
+    ]);
+    await service.findOne(mockPage._id);
+    const context =
+      mockPeopleService.findDynamicSummaries.mock.calls.at(-1)?.[2];
+    expect(context).toEqual(
+      createRandomOrdering(
+        {
+          now: new Date(),
+          domainId: mockPage.domainId,
+          owner: { kind: 'page', pageId: mockPage._id },
+          blockPath: ['group', 'child'],
+        },
+        'people',
+      ),
+    );
   });
 });
