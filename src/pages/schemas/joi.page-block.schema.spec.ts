@@ -1556,3 +1556,140 @@ describe('HTML button snippet schema', () => {
     ).toBeDefined();
   });
 });
+
+describe('Hero optional presentation settings', () => {
+  const hero = {
+    id: 'hero',
+    type: 'hero',
+    items: [{ title: 'Hidden', isVisible: false }],
+  };
+  it.each([2, 3, 4, 5])(
+    'accepts %i columns through create and update',
+    (columns) => {
+      for (const sectionSpacing of ['none', 'sm', 'md', 'lg', 'xl']) {
+        for (const schema of [createPageSchema, updatePageSchema]) {
+          const { error, value } = schema.validate({
+            title: 'Hero',
+            slug: 'hero',
+            blocks: [{ ...hero, columns, sectionSpacing }],
+          });
+          expect(error).toBeUndefined();
+          expect(value.blocks[0]).toMatchObject({
+            columns,
+            sectionSpacing,
+            items: [{ title: 'Hidden', isVisible: false }],
+          });
+        }
+      }
+    },
+  );
+  it.each([
+    { columns: 1 },
+    { columns: 6 },
+    { columns: 2.5 },
+    { sectionSpacing: 'huge' },
+    { items: [{ title: 'Item', isVisible: 'invalid' }] },
+  ])('rejects invalid settings %j', (settings) => {
+    expect(
+      updatePageSchema.validate({ blocks: [{ ...hero, ...settings }] }).error,
+    ).toBeDefined();
+  });
+  it('keeps legacy properties optional and hidden item validation intact', () => {
+    const { value, error } = updatePageSchema.validate({
+      blocks: [
+        {
+          id: 'old',
+          type: 'hero',
+          padding: 'md',
+          items: [{ title: 'Legacy' }],
+        },
+      ],
+    });
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].sectionSpacing).toBeUndefined();
+    expect(value.blocks[0].columns).toBeUndefined();
+    expect(value.blocks[0].items[0].isVisible).toBeUndefined();
+    expect(
+      updatePageSchema.validate({
+        blocks: [{ ...hero, items: [{ title: '', isVisible: false }] }],
+      }).error,
+    ).toBeDefined();
+  });
+});
+
+describe('Hero button arrays and shared visibility', () => {
+  const button = {
+    label: 'Link',
+    type: 'external',
+    url: 'https://example.com',
+  };
+  it.each([undefined, true, false])(
+    'accepts optional visibility %s in arrays and legacy buttons',
+    (isVisible) => {
+      const result = createPageSchema.validate({
+        title: 'Hero',
+        slug: 'hero',
+        blocks: [
+          {
+            id: 'hero',
+            type: 'hero',
+            items: [
+              { title: 'Legacy', button: { ...button, isVisible } },
+              {
+                title: 'Multiple',
+                buttons: [button, { ...button, isVisible }],
+              },
+              { title: 'Empty wins', button, buttons: [] },
+            ],
+          },
+        ],
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.value.blocks[0].items[2].buttons).toEqual([]);
+    },
+  );
+  it.each([
+    { ...button, isVisible: 'invalid' },
+    { ...button, unknown: true },
+    { label: 'Missing URL', type: 'external' },
+  ])('validates every array button %j', (invalid) => {
+    expect(
+      createPageSchema.validate({
+        title: 'Hero',
+        slug: 'hero',
+        blocks: [
+          {
+            id: 'hero',
+            type: 'hero',
+            items: [{ title: 'Card', buttons: [button, invalid] }],
+          },
+        ],
+      }).error,
+    ).toBeDefined();
+  });
+  it('retains modal-depth restrictions in later hidden buttons', () => {
+    const nested = {
+      ...button,
+      type: 'block',
+      isVisible: false,
+      block: {
+        id: 'inner',
+        type: 'richText',
+        buttons: [{ label: 'Forbidden', type: 'application' }],
+      },
+    };
+    expect(
+      createPageSchema.validate({
+        title: 'Hero',
+        slug: 'hero',
+        blocks: [
+          {
+            id: 'hero',
+            type: 'hero',
+            items: [{ title: 'Card', buttons: [button, nested] }],
+          },
+        ],
+      }).error,
+    ).toBeDefined();
+  });
+});

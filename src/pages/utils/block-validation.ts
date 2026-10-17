@@ -1,3 +1,8 @@
+import {
+  getHeroItemButtons,
+  isButtonVisible,
+  withHeroItemButtons,
+} from './block-buttons';
 import { BadRequestException, Logger } from '@nestjs/common';
 import {
   permuteItems,
@@ -285,9 +290,7 @@ function validateHeroBlock(
   }
 
   for (const item of block.items || []) {
-    if (item.button) {
-      collectButtonRefs([item.button], refs, depth);
-    }
+    collectButtonRefs(getHeroItemButtons(item), refs, depth);
   }
 }
 
@@ -569,21 +572,11 @@ function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
     return {
       ...block,
       items: block.items?.map((item) => {
-        if (!item.button?.block) {
-          return item;
-        }
-        if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
-          const restButton = { ...item.button };
-          delete restButton.block;
-          return { ...item, button: restButton };
-        }
-        return {
-          ...item,
-          button: {
-            ...item.button,
-            block: sanitizeOneBlock(item.button.block, depth + 1) as PageBlock,
-          },
-        };
+        const buttons = sanitizeEmbeddedButtonBlocks(
+          getHeroItemButtons(item),
+          depth,
+        );
+        return withHeroItemButtons(item, buttons);
       }),
     };
   }
@@ -714,7 +707,7 @@ async function withPublicButtonBlocks(
     return block;
   }
   const resolved = await Promise.all(
-    buttons.map(async (button) => {
+    buttons.filter(isButtonVisible).map(async (button) => {
       const embedded =
         button && typeof button === 'object'
           ? (button as Record<string, unknown>).block
@@ -756,37 +749,19 @@ async function withPublicHeroButtonBlocks(
     return block;
   }
   const resolved = await Promise.all(
-    items.map(async (item) => {
-      const button =
-        item && typeof item === 'object'
-          ? (item as Record<string, unknown>).button
-          : undefined;
-      const embedded =
-        button && typeof button === 'object'
-          ? (button as Record<string, unknown>).block
-          : undefined;
-      if (!embedded) {
-        return item;
-      }
-      if (depth >= MAX_EMBEDDED_BLOCK_DEPTH) {
-        const nextButton = { ...(button as Record<string, unknown>) };
-        delete nextButton.block;
-        return { ...(item as Record<string, unknown>), button: nextButton };
-      }
-      return {
-        ...(item as Record<string, unknown>),
-        button: {
-          ...(button as Record<string, unknown>),
-          block: await toPublicOneBlock(
-            embedded as Record<string, unknown>,
-            services,
-            context,
-            depth + 1,
-            resolveSelection,
-          ),
-        },
-      };
-    }),
+    items
+      .filter((item) => item?.isVisible !== false)
+      .map(async (item) => {
+        if (!item || typeof item !== 'object') return item;
+        const result = await withPublicButtonBlocks(
+          { buttons: getHeroItemButtons(item) },
+          services,
+          context,
+          depth,
+          resolveSelection,
+        );
+        return withHeroItemButtons(item, result.buttons as unknown[]);
+      }),
   );
   return { ...block, items: resolved };
 }
@@ -812,6 +787,8 @@ async function withPublicCustomItemButtonBlocks(
         typedItem.button && typeof typedItem.button === 'object'
           ? (typedItem.button as Record<string, unknown>)
           : undefined;
+      if (button && !isButtonVisible(button))
+        return { ...typedItem, button: undefined };
       const embedded = button?.block;
       if (!button || !embedded) {
         return item;
@@ -861,6 +838,12 @@ async function withPublicHtmlSnippetButtonBlocks(
         typedSnippet.button && typeof typedSnippet.button === 'object'
           ? (typedSnippet.button as Record<string, unknown>)
           : undefined;
+      // Preserve marker configuration without resolving hidden actions.
+      if (button && !isButtonVisible(button))
+        return {
+          ...typedSnippet,
+          button: { type: button.type, label: button.label, isVisible: false },
+        };
       const embedded = button?.block;
       if (!button || !embedded) {
         return snippet;

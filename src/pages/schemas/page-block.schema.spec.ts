@@ -260,3 +260,114 @@ describe('Dynamic collection persistence limit', () => {
     },
   );
 });
+
+describe('Hero optional presentation persistence', () => {
+  it.each([2, 3, 4, 5])(
+    'round-trips %i columns and hidden item data',
+    (columns) => {
+      const hero = {
+        id: 'hero',
+        type: 'hero',
+        sectionSpacing: 'none',
+        columns,
+        items: [
+          {
+            title: 'Hidden',
+            subtitle: 'Keep me',
+            icon: 'Users',
+            isVisible: false,
+            button: {
+              label: 'Details',
+              type: 'block',
+              block: {
+                id: 'details',
+                type: 'richText',
+                description: '<p>Details</p>',
+              },
+            },
+          },
+          { title: 'Legacy visible' },
+        ],
+      };
+      const doc = new PageModel({ ...basePage, blocks: [hero] });
+      expect(doc.validateSync()).toBeUndefined();
+      const reloaded = new PageModel(doc.toObject());
+      expect(reloaded.validateSync()).toBeUndefined();
+      expect(reloaded.toObject().blocks[0]).toMatchObject(hero);
+      const event = new EventModel({ ...baseEvent, blocks: [hero] });
+      expect(event.validateSync()).toBeUndefined();
+      expect(event.toObject().blocks[0]).toMatchObject(hero);
+    },
+  );
+  it.each([
+    { columns: 1 },
+    { columns: 6 },
+    { columns: 2.5 },
+    { sectionSpacing: 'huge' },
+  ])('rejects invalid values %j', (settings) => {
+    expect(
+      new PageModel({
+        ...basePage,
+        blocks: [{ id: 'hero', type: 'hero', ...settings }],
+      }).validateSync(),
+    ).toBeDefined();
+  });
+  it('does not introduce settings on old content', () => {
+    const stored = new PageModel({
+      ...basePage,
+      blocks: [{ id: 'old', type: 'hero', items: [{ title: 'Legacy' }] }],
+    }).toObject().blocks[0] as Record<string, any>;
+    expect(stored.sectionSpacing).toBeUndefined();
+    expect(stored.columns).toBeUndefined();
+    expect(stored.items[0].isVisible).toBeUndefined();
+  });
+});
+
+it('persists optional Hero button arrays and hidden configuration without defaulting legacy arrays', () => {
+  const button = {
+    label: 'Link',
+    type: 'external',
+    url: 'https://example.com',
+    isVisible: false,
+  };
+  const hero = {
+    id: 'hero',
+    type: 'hero',
+    items: [
+      { title: 'Legacy', button },
+      { title: 'Many', buttons: [{ ...button, isVisible: true }, button] },
+      { title: 'Empty', button, buttons: [] },
+    ],
+  };
+  for (const doc of [
+    new PageModel({ ...basePage, blocks: [hero] }),
+    new EventModel({ ...baseEvent, blocks: [hero] }),
+  ]) {
+    expect(doc.validateSync()).toBeUndefined();
+    const saved = JSON.parse(JSON.stringify(doc.toObject())).blocks[0];
+    expect(saved).toMatchObject(hero);
+    expect(saved.items[0].buttons).toBeUndefined();
+    expect(saved.items[2].buttons).toEqual([]);
+  }
+});
+
+describe('legacy Hero embedded media lookup indexes', () => {
+  it.each([
+    ['page', pageSchema],
+    ['event', domainEventSchema],
+  ] as const)(
+    '%s indexes rich text and gallery media without a database connection',
+    (_name, schema) => {
+      for (const path of [
+        'blocks.items.button.block.media.mediaId',
+        'blocks.items.button.block.items.mediaId',
+      ]) {
+        expect(schema.indexes()).toEqual(
+          expect.arrayContaining([
+            [{ [path]: 1 }, expect.objectContaining({ sparse: true })],
+          ]),
+        );
+      }
+    },
+  );
+});

@@ -662,14 +662,37 @@ export class MediaService {
           return rawItem;
         }
         const item = rawItem as Record<string, unknown>;
+        if (Array.isArray(item.buttons)) {
+          const results = item.buttons.map((button) =>
+            cleanupCustomCollectionButton(
+              button,
+              `${pathPrefix}.items.buttons.block`,
+              false,
+            ),
+          );
+          if (!results.some((result) => result.changed)) return rawItem;
+          itemsChanged = true;
+          return {
+            ...item,
+            buttons: results
+              .filter((result) => !result.drop)
+              .map((result) => result.button),
+          };
+        }
         const result = cleanupCustomCollectionButton(
           item.button,
           `${pathPrefix}.items.button.block`,
+          false,
         );
         if (!result.changed) {
           return rawItem;
         }
         itemsChanged = true;
+        if (result.drop) {
+          const nextItem = { ...item };
+          delete nextItem.button;
+          return nextItem;
+        }
         return { ...item, button: result.button };
       });
       if (itemsChanged) {
@@ -802,6 +825,11 @@ export class MediaService {
           { 'blocks.customItems.mediaId': mediaId },
           { 'blocks.buttons.block.customItems.mediaId': mediaId },
           { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.media.mediaId': mediaId },
+          { 'blocks.items.button.block.items.mediaId': mediaId },
+          { 'blocks.items.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.buttons.block.media.mediaId': mediaId },
+          { 'blocks.items.buttons.block.items.mediaId': mediaId },
           { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
           { 'blocks.customItems.button.block.media.mediaId': mediaId },
           { 'blocks.customItems.button.block.items.mediaId': mediaId },
@@ -914,6 +942,11 @@ export class MediaService {
           { 'blocks.customItems.mediaId': mediaId },
           { 'blocks.buttons.block.customItems.mediaId': mediaId },
           { 'blocks.items.button.block.customItems.mediaId': mediaId },
+          { 'blocks.items.button.block.media.mediaId': mediaId },
+          { 'blocks.items.button.block.items.mediaId': mediaId },
+          { 'blocks.items.buttons.block.customItems.mediaId': mediaId },
+          { 'blocks.items.buttons.block.media.mediaId': mediaId },
+          { 'blocks.items.buttons.block.items.mediaId': mediaId },
           { 'blocks.customItems.button.block.customItems.mediaId': mediaId },
           { 'blocks.customItems.button.block.media.mediaId': mediaId },
           { 'blocks.customItems.button.block.items.mediaId': mediaId },

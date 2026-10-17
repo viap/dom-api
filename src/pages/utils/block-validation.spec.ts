@@ -1,3 +1,4 @@
+import { withHeroItemButtons } from './block-buttons';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { PageBlock, PageRootBlock } from '../types/page-block.interface';
 import { prepareBlocksForWrite, toPublicBlocks } from './block-validation';
@@ -23,6 +24,192 @@ describe('toPublicBlocks', () => {
   };
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('filters hidden buttons before resolution across public consumers and respects Hero array precedence', async () => {
+    const hidden = {
+      label: 'Hidden',
+      type: 'block',
+      isVisible: false,
+      block: {
+        id: 'dynamic',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        source: 'dynamic',
+        filters: {},
+        items: [],
+      },
+    };
+    const visible = {
+      label: 'Visible',
+      type: 'external',
+      url: 'https://example.com',
+    };
+    const source = [
+      {
+        id: 'hero',
+        type: 'hero',
+        items: [
+          {
+            title: 'Many',
+            button: hidden,
+            buttons: [visible, hidden, visible],
+          },
+          { title: 'Empty', button: visible, buttons: [] },
+          { title: 'Legacy', button: hidden },
+        ],
+      },
+      { id: 'cta', type: 'cta', buttons: [hidden, visible] },
+      { id: 'text', type: 'richText', buttons: [hidden] },
+      {
+        id: 'custom',
+        type: 'entityCollection',
+        entityType: 'custom',
+        layout: 'grid',
+        items: [],
+        customItems: [{ title: 'Card', button: hidden }],
+      },
+      {
+        id: 'html',
+        type: 'html',
+        template: 'vertical',
+        content:
+          '<p>Before</p><span data-dom-html-snippet="button" data-dom-html-snippet-id="saved"></span><p>After</p>',
+        snippets: [{ id: 'saved', type: 'button', button: hidden }],
+      },
+    ];
+    const snapshot = JSON.stringify(source);
+    const result = (await toPublicBlocks(
+      source,
+      baseServices,
+      context,
+    )) as Record<string, any>[];
+    expect(result[0].items[0].buttons).toEqual([visible, visible]);
+    expect(result[0].items[0].button).toBeUndefined();
+    expect(result[0].items[1].buttons).toEqual([]);
+    expect(result[0].items[2].button).toBeUndefined();
+    expect(result[1].buttons).toEqual([visible]);
+    expect(result[2].buttons).toEqual([]);
+    expect(result[3].customItems[0].button).toBeUndefined();
+    expect(result[4].snippets[0]).toEqual({
+      id: 'saved',
+      type: 'button',
+      button: { type: hidden.type, label: hidden.label, isVisible: false },
+    });
+    expect(JSON.stringify(result[4])).not.toContain('"source"');
+    expect(JSON.stringify(result[4])).not.toContain('"filters"');
+    expect(result[4].content).toBe(source[4].content);
+    expect(baseServices.findDynamicPeopleSummaries).not.toHaveBeenCalled();
+    expect(JSON.stringify(source)).toBe(snapshot);
+  });
+
+  it.each(['external', 'page', 'domain', 'application', 'block'])(
+    'reduces hidden %s snippets to a public placeholder',
+    async (type) => {
+      const button = {
+        type,
+        label: 'Staged action',
+        isVisible: false,
+        url: 'https://private.example.com',
+        targetId: 'private-target',
+        applicationProgramId: 'private-program',
+        applicationEventId: 'private-event',
+        applicationModalTitle: 'Private title',
+        openInNewTab: true,
+        style: 'outline',
+        block: {
+          id: 'private-block',
+          type: 'entityCollection',
+          entityType: 'people',
+          layout: 'grid',
+          source: 'dynamic',
+          filters: {},
+          limit: 12,
+          items: [],
+        },
+      };
+      const source = [
+        {
+          id: 'html',
+          type: 'html',
+          template: 'vertical',
+          content:
+            '<p>Before</p><span data-dom-html-snippet="button" data-dom-html-snippet-id="hidden"></span><p>After</p>',
+          snippets: [{ id: 'hidden', type: 'button', button }],
+        },
+      ];
+      const before = JSON.stringify(source);
+      const result = await toPublicBlocks(source, baseServices, context);
+      expect(result).toEqual([
+        {
+          ...source[0],
+          snippets: [
+            {
+              id: 'hidden',
+              type: 'button',
+              button: { type, label: 'Staged action', isVisible: false },
+            },
+          ],
+        },
+      ]);
+      expect(baseServices.findDynamicPeopleSummaries).not.toHaveBeenCalled();
+      expect(JSON.stringify(source)).toBe(before);
+    },
+  );
+
+  it('filters hidden Hero items before resolving buttons without mutating admin data', async () => {
+    const blocks: Record<string, unknown>[] = [
+      {
+        id: 'hero',
+        type: PageBlockType.Hero,
+        sectionSpacing: 'sm',
+        columns: 4,
+        items: [
+          { title: 'First' },
+          {
+            title: 'Hidden',
+            isVisible: false,
+            button: {
+              label: 'Hidden action',
+              type: 'block',
+              block: {
+                id: 'hidden-dynamic',
+                type: PageBlockType.EntityCollection,
+                entityType: 'people',
+                layout: 'grid',
+                source: 'dynamic',
+                filters: {},
+                items: [],
+                limit: 4,
+              },
+            },
+          },
+          { title: 'Last', isVisible: true },
+        ],
+      },
+    ];
+    const before = JSON.stringify(blocks);
+    const result = await toPublicBlocks(blocks, baseServices, context);
+    expect(result[0]).toMatchObject({
+      sectionSpacing: 'sm',
+      columns: 4,
+      items: [{ title: 'First' }, { title: 'Last' }],
+    });
+    expect(baseServices.findDynamicPeopleSummaries).not.toHaveBeenCalled();
+    expect(JSON.stringify(blocks)).toBe(before);
+  });
+
+  it.each([{ items: [] }, { items: [{ title: 'Hidden', isVisible: false }] }])(
+    'returns empty Hero public items for %j',
+    async ({ items }) => {
+      const result = await toPublicBlocks(
+        [{ id: 'hero', type: PageBlockType.Hero, title: 'Heading', items }],
+        baseServices,
+        context,
+      );
+      expect(result[0]).toMatchObject({ title: 'Heading', items: [] });
+    },
+  );
 
   it('materializes dynamic blocks concurrently, preserves order, and strips editor fields', async () => {
     let releasePeople!: () => void;
@@ -294,6 +481,56 @@ describe('prepareBlocksForWrite embedded blocks', () => {
     pagesExistingIds: async (ids: string[]) => new Set(ids),
     domainsGetActiveById: async () => ({}),
   };
+
+  it('validates later hidden Hero references and normalizes their embedded blocks', async () => {
+    const pageId = '507f1f77bcf86cd799439251';
+    const pagesExistingIds = jest.fn().mockResolvedValue(new Set([pageId]));
+    const source = [
+      {
+        id: 'hero',
+        type: 'hero',
+        items: [
+          {
+            title: 'Card',
+            buttons: [
+              { label: 'First', type: 'external', url: 'https://example.com' },
+              {
+                label: 'Page',
+                type: 'page',
+                isVisible: false,
+                targetId: pageId,
+              },
+              {
+                label: 'Modal',
+                type: 'block',
+                isVisible: false,
+                block: {
+                  id: 'inner',
+                  type: 'html',
+                  template: 'vertical',
+                  content:
+                    '<p>Keep</p><iframe src="https://evil.com"></iframe>',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ] as unknown as PageRootBlock[];
+    const saved = (await prepareBlocksForWrite(source, {
+      ...allExist,
+      pagesExistingIds,
+    })) as Record<string, any>[];
+    expect(pagesExistingIds).toHaveBeenCalledWith([pageId]);
+    expect(saved[0].items[0].buttons[2].block.content).toBe('<p>Keep</p>');
+    expect(saved[0].items[0].buttons[2].isVisible).toBe(false);
+    await expect(
+      prepareBlocksForWrite(source, {
+        ...allExist,
+        pagesExistingIds: async () => new Set<string>(),
+      }),
+    ).rejects.toThrow();
+  });
 
   const ctaWithBlockButton = (block: unknown) =>
     [
@@ -694,4 +931,44 @@ describe('HTML button snippet validation and public conversion', () => {
       (html as Record<string, any>).snippets[0].button.block.items,
     ).toEqual(['resolved-event']);
   });
+});
+
+describe('withHeroItemButtons', () => {
+  const legacy = { label: 'Legacy' };
+  const first = { label: 'First', isVisible: false };
+  const last = { label: 'Last' };
+
+  it.each([
+    {
+      item: { title: 'Missing' },
+      expected: { title: 'Missing', button: first },
+    },
+    {
+      item: { title: 'Legacy', button: legacy },
+      expected: { title: 'Legacy', button: first },
+    },
+    {
+      item: { title: 'Empty array', button: legacy, buttons: [] },
+      expected: {
+        title: 'Empty array',
+        button: undefined,
+        buttons: [first, last],
+      },
+    },
+    {
+      item: { title: 'Array', button: legacy, buttons: [legacy] },
+      expected: { title: 'Array', button: undefined, buttons: [first, last] },
+    },
+  ])(
+    'preserves the authored shape for $item.title without mutation',
+    ({ item, expected }) => {
+      const before = structuredClone(item);
+      const buttons = [first, last];
+      const result = withHeroItemButtons(item, buttons);
+      expect(result).toEqual(expected);
+      expect(result).not.toBe(item);
+      expect(item).toEqual(before);
+      expect(buttons).toEqual([first, last]);
+    },
+  );
 });

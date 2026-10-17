@@ -28,7 +28,10 @@ function childBlocks(block: BlockRecord): BlockRecord[] {
   }
   if (Array.isArray(block.items)) {
     for (const item of block.items) {
-      if (isRecord(item)) addButtonBlock(item.button);
+      if (isRecord(item)) {
+        if (Array.isArray(item.buttons)) item.buttons.forEach(addButtonBlock);
+        else addButtonBlock(item.button);
+      }
     }
   }
   if (Array.isArray(block.customItems)) {
@@ -130,7 +133,9 @@ export function preserveOmittedHtmlSnippets(
       next = {
         ...next,
         items: next.items.map((item) =>
-          isRecord(item) && item.button
+          isRecord(item) && Array.isArray(item.buttons)
+            ? { ...item, buttons: item.buttons.map(rewriteButton) }
+            : isRecord(item) && item.button
             ? { ...item, button: rewriteButton(item.button) }
             : item,
         ),

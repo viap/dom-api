@@ -72,3 +72,35 @@ describe('preserveOmittedHtmlSnippets', () => {
     ).toThrow(/ambiguous existing block id/);
   });
 });
+
+it('preserves omitted snippets in later hidden Hero buttons without reviving a legacy fallback', () => {
+  const make = (saved: boolean) =>
+    [
+      {
+        id: 'hero',
+        type: PageBlockType.Hero,
+        items: [
+          {
+            title: 'Card',
+            buttons: [
+              { label: 'First', type: 'external', url: 'https://example.com' },
+              {
+                label: 'Hidden',
+                type: 'block',
+                isVisible: false,
+                block: html('inner', saved),
+              },
+            ],
+          },
+        ],
+      },
+    ] as unknown as PageRootBlock[];
+  const existing = make(true);
+  const incoming = make(false);
+  const result = preserveOmittedHtmlSnippets(incoming, existing) as any[];
+  expect(result[0].items[0].buttons[1].block.snippets).toEqual(snippets);
+  expect(result[0].items[0].buttons[1].isVisible).toBe(false);
+  expect(
+    (incoming[0] as any).items[0].buttons[1].block.snippets,
+  ).toBeUndefined();
+});

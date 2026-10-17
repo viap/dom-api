@@ -174,6 +174,7 @@ const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
 };
 
 const blockButtonBaseFields = {
+  isVisible: Joi.boolean().optional(),
   label: Joi.string().trim().min(1).max(150).required(),
   targetId: Joi.string().trim().max(120).optional(),
   applicationProgramId: joiObjectId.optional(),
@@ -493,6 +494,8 @@ const entityCollectionBlockSchema =
 const htmlBlockSchema = makeHtmlBlockSchema(blockButtonSchema);
 
 const heroItemSchema = Joi.object({
+  buttons: Joi.array().items(blockButtonSchema).optional(),
+  isVisible: Joi.boolean().optional(),
   icon: Joi.string().trim().max(120).optional(),
   title: Joi.string().trim().min(1).max(150).required(),
   subtitle: Joi.string().trim().min(1).max(300).optional(),
@@ -504,6 +507,9 @@ const heroBlockSchema = Joi.object({
   type: Joi.string().valid(PageBlockType.Hero).required(),
   backgroundMedia: mediaRefSchema.optional(),
   items: Joi.array().items(heroItemSchema).optional(),
+  // Opt-in spacing keeps historical Hero padding values inactive; no migration required.
+  sectionSpacing: spacingSchema.optional(),
+  columns: Joi.number().integer().valid(2, 3, 4, 5).optional(),
 });
 
 export const pageBlockSchema = Joi.alternatives().try(

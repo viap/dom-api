@@ -16,6 +16,7 @@ export type BlockTextAlign = 'left' | 'center' | 'right';
 export type MediaPosition = 'left' | 'right' | 'top' | 'bottom';
 
 export interface BlockButton {
+  isVisible?: boolean;
   label: string;
   type: BlockButtonType;
   targetId?: string;
@@ -155,9 +156,11 @@ export type DynamicEntityCollectionResolutionContext = {
 };
 
 export interface HeroBlockItem {
+  isVisible?: boolean;
   icon?: string;
   title: string;
   subtitle?: string;
+  buttons?: BlockButton[];
   button?: BlockButton;
 }
 
@@ -165,6 +168,8 @@ export interface HeroBlock extends PageBlockBase {
   type: PageBlockType.Hero;
   backgroundMedia?: MediaRef;
   items?: HeroBlockItem[];
+  sectionSpacing?: BlockSpacing;
+  columns?: 2 | 3 | 4 | 5;
 }
 
 export interface CtaBlock extends PageBlockBase {
