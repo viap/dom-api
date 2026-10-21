@@ -1,3 +1,4 @@
+import { ComponentSize } from '@/common/enums/component-size.enum';
 import {
   BadRequestException,
   ConflictException,
@@ -128,6 +129,44 @@ describe('EventsService', () => {
       exec,
     };
   };
+
+  it.each([
+    ['omitted blocks', undefined],
+    ['replacement without size', {}],
+    ['explicit Medium reset', { size: ComponentSize.Medium }],
+  ] as const)('updates button sizes: %s', async (_name, sizeFields) => {
+    const button = {
+      label: 'Read',
+      type: BlockButtonType.External,
+      url: 'https://example.com',
+    };
+    const block = {
+      id: 'cta',
+      type: PageBlockType.Cta as const,
+      buttons: [{ ...button, size: ComponentSize.ExtraLarge }],
+    };
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: () => ({ exec: async () => ({ ...mockEvent, blocks: [block] }) }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: () => ({ exec: async () => mockEvent }),
+    });
+    await service.update(
+      mockEvent._id,
+      sizeFields === undefined
+        ? { title: 'Updated title' }
+        : { blocks: [{ ...block, buttons: [{ ...button, ...sizeFields }] }] },
+    );
+    const update = mockEventModel.findByIdAndUpdate.mock.calls[0][1];
+    if (sizeFields === undefined) {
+      expect(update).not.toHaveProperty('blocks');
+    } else {
+      expect(update.blocks[0].buttons).toStrictEqual([
+        { ...button, ...sizeFields },
+      ]);
+    }
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

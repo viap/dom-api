@@ -1,3 +1,4 @@
+import { ComponentSize } from '@/common/enums/component-size.enum';
 import {
   BadRequestException,
   ConflictException,
@@ -96,6 +97,44 @@ describe('PagesService', () => {
     existingIds: jest.fn(),
     existingPublishedIds: jest.fn(),
   };
+
+  it.each([
+    ['omitted blocks', undefined],
+    ['replacement without size', {}],
+    ['explicit Medium reset', { size: ComponentSize.Medium }],
+  ] as const)('updates button sizes: %s', async (_name, sizeFields) => {
+    const button = {
+      label: 'Read',
+      type: BlockButtonType.External,
+      url: 'https://example.com',
+    };
+    const block = {
+      id: 'cta',
+      type: PageBlockType.Cta as const,
+      buttons: [{ ...button, size: ComponentSize.ExtraLarge }],
+    };
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findById.mockReturnValue({
+      lean: () => ({ exec: async () => ({ ...mockPage, blocks: [block] }) }),
+    });
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: () => ({ exec: async () => mockPage }),
+    });
+    await service.update(
+      mockPage._id,
+      sizeFields === undefined
+        ? { title: 'Updated title' }
+        : { blocks: [{ ...block, buttons: [{ ...button, ...sizeFields }] }] },
+    );
+    const update = mockPageModel.findByIdAndUpdate.mock.calls[0][1];
+    if (sizeFields === undefined) {
+      expect(update).not.toHaveProperty('blocks');
+    } else {
+      expect(update.blocks[0].buttons).toStrictEqual([
+        { ...button, ...sizeFields },
+      ]);
+    }
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

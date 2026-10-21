@@ -248,3 +248,5 @@ ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 
 - Hero button consumers use `getHeroItemButtons`: a present `buttons` array (including empty) overrides legacy `button`. Missing `isVisible` means visible; keep hidden buttons in editor/write traversal and filter only public actions. New editor saves emit arrays. Release API support before the editor; no backfill is required. Rollback is lossy: older readers cannot reliably display new arrays and older editor saves may discard them; see workspace `ai-context/api-contracts.md`.
+
+- Follow the [CMS button-size contract](../ai-context/api-contracts.md#cms-button-size) for the common `ComponentSize` vocabulary, persistence, validation, and rollout.
