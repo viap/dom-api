@@ -430,3 +430,5 @@ After completing any task, check whether your changes affect how future agents s
 **How to add entries:** Place them in the most relevant existing section. Keep each entry to one or two bullet points. Do not create new top-level sections for a single rule.
 
 - Hero button consumers use `getHeroItemButtons`: a present `buttons` array (including empty) overrides legacy `button`. Missing `isVisible` means visible; keep hidden buttons in editor/write traversal and filter only public actions. New editor saves emit arrays. Release API support before the editor; no backfill is required. Rollback is lossy: older readers cannot reliably display new arrays and older editor saves may discard them; see workspace `ai-context/api-contracts.md`.
+
+- Follow the [CMS button-size contract](../ai-context/api-contracts.md#cms-button-size) for the common `ComponentSize` vocabulary, persistence, validation, and rollout.

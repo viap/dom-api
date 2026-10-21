@@ -105,6 +105,7 @@ type BlockButton = {
   url?: string;
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 };
 ```
 
@@ -117,6 +118,10 @@ Rules:
 - `program_enrollment` application buttons require `applicationProgramId`
 - `event_registration` application buttons require `applicationEventId`
 - application entity target fields are rejected for unrelated button types or unrelated application form types
+
+Button sizing uses the common `ComponentSize` enum; see the authoritative
+[CMS button-size contract](../../ai-context/api-contracts.md#cms-button-size)
+for validation, update semantics, visibility, and rollout.
 
 ### 3.2 Media Reference
 

@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { ComponentSize } from '@/common/enums/component-size.enum';
 import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
 import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { joiObjectId } from '@/common/schemas/joi.object-id.schema';
@@ -174,6 +175,9 @@ const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
 };
 
 const blockButtonBaseFields = {
+  size: Joi.string()
+    .valid(...Object.values(ComponentSize))
+    .optional(),
   isVisible: Joi.boolean().optional(),
   label: Joi.string().trim().min(1).max(150).required(),
   targetId: Joi.string().trim().max(120).optional(),

@@ -1,4 +1,5 @@
 import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
+import { ComponentSize } from '@/common/enums/component-size.enum';
 import type { RandomOrdering } from '@/common/utils/ranked-query';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
@@ -25,6 +26,7 @@ export interface BlockButton {
   url?: string;
   openInNewTab?: boolean;
   style?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link';
+  size?: ComponentSize;
   block?: PageBlock; // present only when type === 'block'
   modalTitle?: string; // optional visible modal heading; only when type is 'block' or 'application'
 }

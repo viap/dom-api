@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ComponentSize } from '@/common/enums/component-size.enum';
 import { DYNAMIC_ENTITY_COLLECTION_MAX_ITEMS } from '@/pages/constants/entity-collection.constants';
 import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
@@ -36,6 +37,7 @@ export const blockButtonSchema = new mongoose.Schema(
     url: { type: String, trim: true },
     openInNewTab: { type: Boolean, default: false },
     style: { type: String, enum: buttonStyleValues },
+    size: { type: String, enum: Object.values(ComponentSize) },
     // Embedded block for type === 'block'. Structure is owned/validated by Joi
     // embeddableBlockSchema (see joi.page-block.schema.ts); Mixed mirrors Page.seo.
     block: { type: mongoose.Schema.Types.Mixed },
