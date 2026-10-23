@@ -12,7 +12,7 @@ jobs:
     environment: prod
     steps:
       - name: Restart app on server
-        uses: fifsky/ssh-action@v0.0.6
+        uses: fifsky/ssh-action@58b3c484be9c20cf118fd3b939a6d2cb3c769512 # v0.0.6
         with:
           command: |
             bash "${{secrets.REMOTE_TARGET}}/scripts/deploy/manual_restart.sh"
