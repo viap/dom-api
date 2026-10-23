@@ -4,6 +4,7 @@ import {
   validateObjectId,
   validateRoles,
 } from '@/common/utils/mongo-sanitizer';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { normalizeLogin } from '@/common/utils/normalize-login';
 import { Role } from '@/roles/enums/roles.enum';
 import { ConflictException, Injectable } from '@nestjs/common';
@@ -109,22 +110,12 @@ export class UsersService {
       user = await this.userModel
         .findOne({
           'contacts.username': {
-            $regex: new RegExp(`^${normalizedLogin}$`, 'i'),
+            $regex: new RegExp(`^${escapeRegExp(normalizedLogin)}$`, 'i'),
           },
           'contacts.network': SocialNetworks.Telegram,
         })
         .select('+password')
         .exec();
-
-      // Auto-assign login from Telegram username if not yet set
-      // validateUniqueLogin throws ConflictException (409) if already taken
-      if (user && !user.login) {
-        await this.validateUniqueLogin(normalizedLogin);
-        await this.userModel.findByIdAndUpdate(user._id, {
-          login: normalizedLogin,
-        });
-        user.login = normalizedLogin;
-      }
     }
 
     if (!user || !user.password) {
@@ -132,8 +123,21 @@ export class UsersService {
     }
 
     const isPasswordValid = await this.comparePassword(password, user.password);
+    if (!isPasswordValid) {
+      return null;
+    }
 
-    return isPasswordValid ? user : null;
+    // Auto-assign login from Telegram username if not yet set, only after the
+    // password is verified. validateUniqueLogin throws ConflictException (409).
+    if (!user.login) {
+      await this.validateUniqueLogin(normalizedLogin);
+      await this.userModel.findByIdAndUpdate(user._id, {
+        login: normalizedLogin,
+      });
+      user.login = normalizedLogin;
+    }
+
+    return user;
   }
 
   async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {

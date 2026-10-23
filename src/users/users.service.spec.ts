@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 
 import { getModelToken } from '@nestjs/mongoose';
@@ -35,6 +36,8 @@ describe('UsersService', () => {
             new: jest.fn().mockResolvedValue(mockUser),
             constructor: jest.fn().mockResolvedValue(mockUser),
             find: jest.fn(),
+            findOne: jest.fn(),
+            findByIdAndUpdate: jest.fn(),
             create: jest.fn(),
             exec: jest.fn(),
           },
@@ -70,5 +73,64 @@ describe('UsersService', () => {
       descr: 'Breed #1',
     });
     expect(newUser).toEqual(mockUser);
+  });
+
+  describe('getByAuthUser', () => {
+    const passwordHash = bcrypt.hashSync('right-password', 4);
+
+    function mockFindOneSequence(...results: unknown[]) {
+      const findOne = model.findOne as jest.Mock;
+      results.forEach((result) => {
+        findOne.mockReturnValueOnce({
+          select: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue(result),
+          }),
+        });
+      });
+      return findOne;
+    }
+
+    it('matches the telegram username literally, not as a pattern', async () => {
+      const findOne = mockFindOneSequence(null, null);
+
+      await service.getByAuthUser({ login: '.*', password: 'x' });
+
+      const regex = findOne.mock.calls[1][0]['contacts.username'].$regex;
+      expect(regex.test('.*')).toBe(true);
+      expect(regex.test('victim')).toBe(false);
+    });
+
+    it('does not assign a login when the password is wrong', async () => {
+      mockFindOneSequence(null, {
+        _id: 'user-id',
+        password: passwordHash,
+      });
+
+      await expect(
+        service.getByAuthUser({ login: 'victim', password: 'wrong' }),
+      ).resolves.toBeNull();
+      expect(model.findByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('assigns the telegram username as login after a valid password', async () => {
+      const findOne = mockFindOneSequence(null, {
+        _id: 'user-id',
+        password: passwordHash,
+      });
+      // validateUniqueLogin -> getByLogin
+      findOne.mockReturnValueOnce({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const user = await service.getByAuthUser({
+        login: 'Victim',
+        password: 'right-password',
+      });
+
+      expect(user?.login).toBe('victim');
+      expect(model.findByIdAndUpdate).toHaveBeenCalledWith('user-id', {
+        login: 'victim',
+      });
+    });
   });
 });
