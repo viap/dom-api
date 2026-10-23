@@ -1485,4 +1485,21 @@ describe('EventsService', () => {
       ),
     );
   });
+
+  it('loads only the title for an application notification', async () => {
+    const exec = jest.fn().mockResolvedValue({ title: 'Event' });
+    const lean = jest.fn().mockReturnValue({ exec });
+    const select = jest.fn().mockReturnValue({ lean });
+    mockEventModel.findById.mockReturnValue({ select });
+
+    await expect(service.getNotificationTitle(mockEvent._id)).resolves.toBe(
+      'Event',
+    );
+    expect(select).toHaveBeenCalledWith({ title: 1 });
+  });
+
+  it('does not query for an invalid notification target id', async () => {
+    await expect(service.getNotificationTitle('invalid')).resolves.toBeNull();
+    expect(mockEventModel.findById).not.toHaveBeenCalled();
+  });
 });

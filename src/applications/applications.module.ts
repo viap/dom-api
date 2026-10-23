@@ -6,6 +6,7 @@ import { PartnersModule } from '@/partners/partners.module';
 import { PeopleModule } from '@/people/people.module';
 import { ProgramsModule } from '@/programs/programs.module';
 import { UsersModule } from '@/users/users.module';
+import { NotificationsModule } from '@/notifications/notifications.module';
 import { Application, applicationSchema } from './schemas/application.schema';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
@@ -21,6 +22,7 @@ import { ApplicationsService } from './applications.service';
     PartnersModule,
     PeopleModule,
     UsersModule,
+    NotificationsModule,
   ],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],

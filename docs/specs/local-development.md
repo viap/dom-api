@@ -19,6 +19,7 @@ NODE_ENV=dev
 PORT=3003
 WEBSOCKET_PORT=3004
 CORS_ORIGINS=http://localhost:3006
+PUBLIC_WEB_URL=https://psydom.org
 
 JWT_SECRET=your-strong-jwt-secret-key-min-32-chars-abcdef123456789
 BOT_CLIENT_NAME=domBot
@@ -35,10 +36,14 @@ MONGO_INITDB_ROOT_PASSWORD=example
 Notes:
 
 - `CORS_ORIGINS` supports a comma-separated allowlist.
+- `PUBLIC_WEB_URL` is required and must contain only a Telegram-compatible site HTTP(S) origin. It is used for both the linked site address and administrator application deep link; local and production use `https://psydom.org`.
+- With this standard local value, `Открыть заявку` points to the production admin and cannot resolve a local application ID. This limitation is intentional while one origin supplies both notification links.
+- For a temporary same-machine Telegram Desktop end-to-end check, use `PUBLIC_WEB_URL=http://127.0.0.1:3006` and temporarily add `http://127.0.0.1:3006` to `CORS_ORIGINS`. Both the site link and application link will point to loopback, and the browser may require a separate login from `localhost`.
 - Each allowlist value must be an exact origin in the format `scheme://host:port`.
-- Do not include paths (e.g. `/ru/login`) or trailing slashes.
+- `CORS_ORIGINS` values must not include paths (e.g. `/ru/login`) or trailing slashes. A trailing slash on `PUBLIC_WEB_URL` is accepted and normalized.
 - Multi-origin example: `CORS_ORIGINS=http://localhost:3006,https://dom.example.com`
 - Empty/missing `CORS_ORIGINS` falls back to `http://localhost:3006`.
+- Telegram does not render `localhost` as a notification link. Use `https://psydom.org` for the standard local smoke check; use numeric loopback only for the temporary same-machine Telegram Desktop flow above.
 - Keep real production/staging secrets out of local env files.
 
 ## Startup steps
