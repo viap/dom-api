@@ -56,7 +56,7 @@ describe('RequestsService', () => {
     };
 
     notificationsService = {
-      create: jest.fn(),
+      create: jest.fn().mockResolvedValue(undefined),
       getAll: jest.fn(),
       getAllByUserId: jest.fn(),
     };
@@ -493,5 +493,22 @@ describe('RequestsService', () => {
         { $set: { accepted: false } },
       );
     });
+  });
+
+  it('logs a failed new-request notification instead of rejecting', async () => {
+    const errorSpy = jest
+      .spyOn((service as any).logger, 'error')
+      .mockImplementation(() => undefined);
+    notificationsService.create.mockRejectedValue(new Error('db down'));
+    therapyRequestModel.create.mockResolvedValue({
+      populate: jest.fn().mockResolvedValue({ _id: 'r1' }),
+    });
+
+    await expect(
+      service.create({ name: 'John', descr: 'Needs support' } as any),
+    ).resolves.toEqual({ _id: 'r1' });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('db down'));
   });
 });

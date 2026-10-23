@@ -50,6 +50,8 @@ import { cwd } from 'process';
       dbName: process.env.MONGO_DBNAME,
       user: process.env.MONGO_INITDB_ROOT_USERNAME,
       pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+      // Fail fast instead of holding requests for 30s when Mongo is down.
+      serverSelectionTimeoutMS: 5000,
     }),
     UsersModule,
     AuthModule,

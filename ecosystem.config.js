@@ -9,9 +9,11 @@ module.exports = {
       watch: false,
       max_memory_restart: '1G',
       env: {},
-      // Restart settings
-      max_restarts: 5,
+      // Restart settings: back off exponentially instead of giving up after
+      // a short crash loop and leaving the API down.
+      max_restarts: 50,
       min_uptime: '10s',
+      exp_backoff_restart_delay: 1000,
       //logging
       error_file: './logs/domApi-error.log',
       out_file: './logs/domApi-out.log',
@@ -21,7 +23,6 @@ module.exports = {
       kill_timeout: 3000,
       wait_ready: true,
       listen_timeout: 3000,
-      restart_delay: 4000,
       time: true,
       // Health check
       health_check_grace_period: 3000,

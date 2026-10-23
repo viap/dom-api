@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
@@ -53,6 +53,8 @@ const submodels = [
 
 @Injectable()
 export class TherapyRequestsService {
+  private readonly logger = new Logger(TherapyRequestsService.name);
+
   constructor(
     @InjectModel(TherapyRequest.name)
     private therapyRequestModel: Model<TherapyRequestDocument>,
@@ -234,13 +236,21 @@ export class TherapyRequestsService {
     const hasPsychologist =
       therapyRequest.psychologist && therapyRequest.psychologist.user;
 
-    this.notificationService.create({
-      type: NotificationTypes.NEW_THERAPY_REQUEST,
-      roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
-      recipients: hasPsychologist
-        ? [therapyRequest.psychologist.user._id.toString()]
-        : undefined,
-    });
+    // Not awaited on purpose: the request is already saved. Failures are
+    // logged instead of becoming unhandled rejections.
+    this.notificationService
+      .create({
+        type: NotificationTypes.NEW_THERAPY_REQUEST,
+        roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
+        recipients: hasPsychologist
+          ? [therapyRequest.psychologist.user._id.toString()]
+          : undefined,
+      })
+      .catch((error) =>
+        this.logger.error(
+          `New therapy request notification failed: ${error?.message}`,
+        ),
+      );
 
     return therapyRequest;
   }
