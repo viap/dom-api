@@ -117,7 +117,7 @@ These are registered once in `AppModule` and apply to every route automatically.
 The project uses a consistent dual-schema approach:
 - **Joi schemas** for request validation via custom `JoiValidationPipe`
 - **Mongoose schemas** for database modeling
-- Custom decorators for authorization (`@IsMyData`, `@IsMyTherapySession`)
+- Ownership checks: `TherapyRequestsGuard` (by `psychologistId`/`therapyRequestId` route params), `@IsMyTherapySessions`, `@IsMyBooking`
 
 ### Public EntityCollection ordering
 
@@ -233,7 +233,6 @@ const { from, to } = sanitizeDateRange(fromParam, toParam);
 | `@Roles(...roles)` | `@/roles/decorators/role.docorator` | Require one of the listed roles |
 | `@GetUserContext()` | `@/common/user-context/user-context.decorator` | Inject `UserContext` into a param |
 | `@GetUser()` | `@/common/user-context/user-context.decorator` | Inject full `UserDocument` into a param |
-| `@IsMyData()` | `@/therapy-requests/decorators/is-my-data.decorator` | Owner-only access for therapy requests |
 | `@IsMyTherapySessions()` | `@/therapy-sessions/decorators/is-my-therapy-session.decorator` | Owner-only access for therapy sessions |
 | `@IsMyBooking()` | `@/booking-system/bookings/decorators/is-my-booking.decorator` | Owner-only access for bookings |
 | `validateObjectId(id)` | `@/common/utils/mongo-sanitizer` | Validate & return safe ObjectId string |

@@ -17,7 +17,6 @@ import { TherapyRequestQueryParams } from '@/common/types/therapy-request-params
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
-import { IsMyData } from './decorators/is-my-data.decorator';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
 import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-request.schema';
@@ -46,13 +45,11 @@ export class TherapyRequestsController {
   }
 
   @Get(':therapyRequestId')
-  @IsMyData()
   getOne(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.getById(therapyRequestId);
   }
 
   @Get('/psychologist/:psychologistId')
-  @IsMyData()
   getAllForPsychologist(
     @Request() request: EnhancedRequest,
     @Param('psychologistId') psychologistId: string,
@@ -91,19 +88,16 @@ export class TherapyRequestsController {
   }
 
   @Post(':therapyRequestId/accept')
-  @IsMyData()
   acceptRequest(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.acceptRequest(therapyRequestId);
   }
 
   @Post(':therapyRequestId/reject')
-  @IsMyData()
   rejectRequest(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.rejectRequest(therapyRequestId);
   }
 
   @Put(':therapyRequestId')
-  @IsMyData()
   update(
     @Request() request: EnhancedRequest,
     @Param('therapyRequestId') therapyRequestId: string,

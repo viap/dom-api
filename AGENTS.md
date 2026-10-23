@@ -152,7 +152,6 @@ All routes are protected by the global `AuthGuard` + `RolesGuard` in `AppModule`
 | `@Roles(Role.Admin)` | `@/roles/decorators/role.docorator` | Require specific roles (note: filename has typo — `docorator`) |
 | `@GetUserContext()` | `@/common/user-context/user-context.decorator` | Inject `UserContext` as a param |
 | `@GetUser()` | `@/common/user-context/user-context.decorator` | Inject full `UserDocument` as a param |
-| `@IsMyData()` | `@/therapy-requests/decorators/is-my-data.decorator` | Mark route as owner-only for therapy requests |
 | `@IsMyTherapySessions()` | `@/therapy-sessions/decorators/is-my-therapy-session.decorator` | Mark route as owner-only for therapy sessions |
 | `@IsMyBooking()` | `@/booking-system/bookings/decorators/is-my-booking.decorator` | Mark route as owner-only for bookings |
 
@@ -181,7 +180,7 @@ create(@Req() req: EnhancedRequest, @Body() dto: CreateDto) {
 ```
 
 **Ownership guard mechanics:**
-Ownership decorators (`@IsMyData`, `@IsMyTherapySessions`, `@IsMyBooking`) set a metadata flag. Their paired module-scoped guard reads it via `Reflector.getAllAndOverride()`. The guard checks role first (admins pass through), then verifies `userContext.userId` matches the document's owner field. Guards must be listed in the module's `providers` array and applied via `@UseGuards()` on the controller.
+Ownership decorators (`@IsMyTherapySessions`, `@IsMyBooking`) set a metadata flag; `TherapyRequestsGuard` needs no decorator and checks ownership from the `psychologistId`/`therapyRequestId` route params. Their paired module-scoped guard reads it via `Reflector.getAllAndOverride()`. The guard checks role first (admins pass through), then verifies `userContext.userId` matches the document's owner field. Guards must be listed in the module's `providers` array and applied via `@UseGuards()` on the controller.
 
 ---
 
