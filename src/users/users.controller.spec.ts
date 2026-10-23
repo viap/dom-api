@@ -336,22 +336,24 @@ describe('Users Controller', () => {
   });
 
   describe('editor restrictions', () => {
-    it.each([{ roles: [Role.Admin] }, { password: 'x' }, { login: 'x' }])(
-      'forbids editors from setting %o',
-      async (data) => {
-        await expect(
-          controller.update(editorActor, 'target-id', data as UpdateUserDto),
-        ).rejects.toThrow(ForbiddenException);
-        await expect(
-          controller.create(editorActor, {
-            name: 'New',
-            ...data,
-          } as CreateUserDto),
-        ).rejects.toThrow(ForbiddenException);
-        expect(service.update).not.toHaveBeenCalled();
-        expect(service.create).not.toHaveBeenCalled();
-      },
-    );
+    it.each([
+      { roles: [Role.Admin] },
+      { password: 'x' },
+      { login: 'x' },
+      { contacts: [{ network: 'telegram', id: '1', username: 'u' }] },
+    ])('forbids editors from setting %o', async (data) => {
+      await expect(
+        controller.update(editorActor, 'target-id', data as UpdateUserDto),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        controller.create(editorActor, {
+          name: 'New',
+          ...data,
+        } as CreateUserDto),
+      ).rejects.toThrow(ForbiddenException);
+      expect(service.update).not.toHaveBeenCalled();
+      expect(service.create).not.toHaveBeenCalled();
+    });
 
     it.each([Role.Admin, Role.Editor])(
       'forbids editors from editing %s accounts',

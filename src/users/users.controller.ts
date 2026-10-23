@@ -33,7 +33,8 @@ import {
   transformUsersToDto,
 } from './utils/user.transformer';
 
-const ADMIN_ONLY_USER_FIELDS = ['roles', 'login', 'password'];
+// contacts hold the Telegram login identity, so they are admin-only too.
+const ADMIN_ONLY_USER_FIELDS = ['roles', 'login', 'password', 'contacts'];
 const PRIVILEGED_ROLES = [Role.Admin, Role.Editor];
 
 @Controller('users')
