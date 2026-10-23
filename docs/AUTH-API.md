@@ -25,7 +25,7 @@ For web sign-in, use a server-mediated route in `dom-web` so API client secrets 
 - 24-hour token expiration
 - API client authentication layer
 - Login normalization (`trim` + `lowercase` for `user.login`)
-- Login lockout policy: `5` failed attempts within `15` minutes, lockout for `15` minutes (IP + normalized login)
+- Password login lockout: `5` failed attempts per client IP + normalized login within `15` minutes, plus a backstop of `30` failed attempts per login from any IP within an hour; both lock for `15` minutes
 - Role-based access control
 - Structured internal auth-failure logging with request correlation IDs
 - Request sanitization middleware
@@ -77,7 +77,8 @@ All authentication endpoints are prefixed with `/auth`
 
 **Runtime Rules**:
 - Rate limited to 10 requests per minute per Telegram id (bot client) or per client IP.
-- The failed-attempt lockout below applies only to rejected API client credentials; a valid bot client never fails for a given Telegram id.
+- No failed-attempt lockout: the only failure is a wrong API client, which says nothing about the Telegram account, so it is never counted against a Telegram id.
+- If several users share the Telegram id, the oldest account (by creation) is used and a warning is logged.
 
 ### 2. User/Password Authentication
 
@@ -118,6 +119,7 @@ All authentication endpoints are prefixed with `/auth`
 - Internal failure reasons are logged for operators (`invalid_api_client`, `invalid_user_credentials`).
 - Repeated failures are rate-limited by lockout policy (`5` failures / `15` minutes, lockout `15` minutes).
 - Lockout semantics are explicit: the 5th failed credential is recorded and activates lockout; the 6th and later attempts are blocked during lockout.
+- Backstop: `30` failures for the same login within an hour, from any IPs, lock that login for `15` minutes. It is not reset by a successful login.
 - The lockout IP is the visitor IP that dom-web forwards in `X-DOM-Client-IP`, trusted only together with valid web client credentials; otherwise the request IP is used.
 - Independently, the endpoint is rate limited to 10 requests per minute per client IP.
 - Locked login attempts return `429 Too Many Requests` with `Retry-After` response header and response body `{ "message": "Too many failed attempts", "retryAfterSeconds": <seconds> }`.
@@ -243,8 +245,8 @@ MONGO_INITDB_ROOT_USERNAME=admin
 MONGO_INITDB_ROOT_PASSWORD=password
 
 # Server
-PORT=3001
-WEBSOCKET_PORT=3002
+PORT=3003
+WEBSOCKET_PORT=3004
 ```
 
 ### Security Requirements
@@ -377,11 +379,11 @@ api.interceptors.response.use(
 
 ```bash
 # Telegram login
-curl -X POST http://localhost:3001/auth/login/telegram \
+curl -X POST http://localhost:3003/auth/login/telegram \
   -H "Content-Type: application/json" \
   -d '{
     "apiClient": {
-      "name": "web-client",
+      "name": "bot-client",
       "password": "your_password"
     },
     "telegram": {
@@ -392,7 +394,7 @@ curl -X POST http://localhost:3001/auth/login/telegram \
   }'
 
 # User login  
-curl -X POST http://localhost:3001/auth/login/user \
+curl -X POST http://localhost:3003/auth/login/user \
   -H "Content-Type: application/json" \
   -d '{
     "apiClient": {
@@ -406,7 +408,7 @@ curl -X POST http://localhost:3001/auth/login/user \
   }'
 
 # Token validation
-curl -X GET http://localhost:3001/auth/check-token \
+curl -X GET http://localhost:3003/auth/check-token \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
