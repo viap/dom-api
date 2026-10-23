@@ -14,6 +14,7 @@ describe('WsGateway', () => {
   };
   let mockNotificationsService: {
     getAllActive: jest.Mock;
+    getAllActiveForBot: jest.Mock;
     getAllByUserId: jest.Mock;
     addReceived: jest.Mock;
   };
@@ -28,6 +29,7 @@ describe('WsGateway', () => {
 
     mockNotificationsService = {
       getAllActive: jest.fn(),
+      getAllActiveForBot: jest.fn(),
       getAllByUserId: jest.fn(),
       addReceived: jest.fn(),
     };
@@ -67,14 +69,18 @@ describe('WsGateway', () => {
     );
 
     mockAuthService.isAvailableClient.mockReturnValue(true);
-    mockNotificationsService.getAllActive.mockResolvedValue(notifications);
+    mockNotificationsService.getAllActiveForBot.mockResolvedValue(
+      notifications,
+    );
 
     await connectionHandler(client);
 
     await expect(
-      gateway.getAllActiveEventsBatch(client as never),
+      gateway.getAllActiveEventsBatch(client as never, { userIds: ['u1'] }),
     ).resolves.toBe(notifications);
-    expect(mockNotificationsService.getAllActive).toHaveBeenCalledTimes(1);
+    expect(mockNotificationsService.getAllActiveForBot).toHaveBeenCalledWith([
+      'u1',
+    ]);
   });
 
   it('uses the same active notification source for the streamed event', async () => {

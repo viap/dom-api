@@ -126,8 +126,15 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   @SubscribeMessage('notifications/get-all-batch')
   async getAllActiveEventsBatch(
     @ConnectedSocket() client: Socket,
-  ): Promise<Array<NotificationDocument>> {
-    return this.getAllActiveNotifications(client);
+    @MessageBody() data?: { userIds?: Array<string> },
+  ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
+    if (!socketToApiClient[client.id]) {
+      return [];
+    }
+
+    // The bot sends the user ids it has sessions for and gets back, per
+    // notification, which of them are eligible by current roles.
+    return this.notificationsService.getAllActiveForBot(data?.userIds);
   }
 
   @SubscribeMessage('notifications/add-received')

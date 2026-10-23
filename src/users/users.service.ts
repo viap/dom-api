@@ -63,6 +63,16 @@ export class UsersService {
     return this.userModel.findById(validId).exec();
   }
 
+  async getRolesByIds(
+    ids: Array<string>,
+  ): Promise<Array<{ _id: unknown; roles: Array<Role> }>> {
+    return this.userModel
+      .find({ _id: { $in: ids } })
+      .select('roles')
+      .lean()
+      .exec();
+  }
+
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
     const sanitizedTelegramId = sanitizeObject(telegramId);
     if (
