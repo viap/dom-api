@@ -11,6 +11,7 @@ import {
   Res,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { normalizeLogin } from '@/common/utils/normalize-login';
@@ -18,6 +19,7 @@ import { GetUserContext } from '../common/user-context/user-context.decorator';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthLoginAttemptsService } from './auth-login-attempts.service';
 import { AuthService } from './auth.service';
+import { getClientIp } from './utils/client-ip';
 import { Public } from './decorators/public.decorator';
 import { AuthByTelegramDto } from './dto/auth-by-telegram.dto';
 import { AuthByUserDto } from './dto/auth-by-user.dto';
@@ -39,6 +41,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login/telegram')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new JoiValidationPipe(joiAuthByTelegramSchema))
@@ -102,6 +105,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login/user')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new JoiValidationPipe(joiAuthByUserSchema))
@@ -193,7 +197,7 @@ export class AuthController {
     normalizedLogin?: string,
     clientName?: string,
   ): AuthRequestMetadata {
-    const sourceIp = request.ip || request.socket?.remoteAddress || 'unknown';
+    const sourceIp = getClientIp(request);
 
     const userAgent = this.readHeaderValue(request.headers['user-agent']);
 

@@ -112,4 +112,16 @@ describe('AuthLoginAttemptsService', () => {
 
     jest.useRealTimers();
   });
+
+  it('evicts the oldest entry instead of growing without bound', () => {
+    const limited = new AuthLoginAttemptsService();
+    (limited as any).maxTrackedKeys = 2;
+
+    limited.registerFailure('ip', 'first', 1000);
+    limited.registerFailure('ip', 'second', 1000);
+    limited.registerFailure('ip', 'third', 1000);
+
+    const keys = [...(limited as any).attempts.keys()];
+    expect(keys).toEqual(['ip|second', 'ip|third']);
+  });
 });

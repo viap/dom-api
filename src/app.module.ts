@@ -11,6 +11,7 @@ import { ApplicationsModule } from './applications/applications.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
@@ -42,7 +43,7 @@ import { cwd } from 'process';
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
-        limit: 100,
+        limit: 300,
       },
     ]),
     MongooseModule.forRoot(process.env.MONGO_URL, {
@@ -74,6 +75,10 @@ import { cwd } from 'process';
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

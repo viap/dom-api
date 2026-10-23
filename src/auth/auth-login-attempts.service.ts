@@ -25,6 +25,7 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
   private readonly lockoutMs = 15 * 60 * 1000;
   private readonly maxFailedAttempts = 5;
   private readonly cleanupIntervalMs = 5 * 60 * 1000;
+  private readonly maxTrackedKeys = 10_000;
   private cleanupTimer?: NodeJS.Timeout;
 
   onModuleInit(): void {
@@ -106,6 +107,7 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!current || now - current.firstFailedAt > this.windowMs) {
+      this.evictOldestIfFull();
       this.attempts.set(key, {
         failedCount: 1,
         firstFailedAt: now,
@@ -144,6 +146,16 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
     }
     const key = this.makeKey(sourceIp, normalizedLogin);
     this.attempts.delete(key);
+  }
+
+  // Map keeps insertion order, so the first key is the oldest entry.
+  private evictOldestIfFull(): void {
+    if (this.attempts.size >= this.maxTrackedKeys) {
+      const oldestKey = this.attempts.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.attempts.delete(oldestKey);
+      }
+    }
   }
 
   private makeKey(sourceIp: string, normalizedLogin: string): string {

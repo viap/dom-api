@@ -1,9 +1,10 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
 import { ApiClientsService } from '@/api-clients/api-clients.service';
 import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
 import { normalizeLogin } from '@/common/utils/normalize-login';
+import { isSameSecret } from '@/common/utils/same-secret';
 import { UsersService } from '@/users/users.service';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthUserDto } from './dto/auth-user.dto';
@@ -42,7 +43,7 @@ export class AuthService {
       return false;
     }
 
-    return this.isSameSecret(apiClient.password, initClient.password || '');
+    return isSameSecret(apiClient.password, initClient.password || '');
   }
 
   async signInByTelegram(
@@ -174,15 +175,5 @@ export class AuthService {
       clientName: metadata?.clientName,
       ...overrides,
     };
-  }
-
-  private isSameSecret(left: string, right: string): boolean {
-    const leftDigest = createHash('sha256').update(left).digest();
-    const rightDigest = createHash('sha256').update(right).digest();
-
-    return timingSafeEqual(
-      new Uint8Array(leftDigest),
-      new Uint8Array(rightDigest),
-    );
   }
 }

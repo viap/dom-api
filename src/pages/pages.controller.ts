@@ -11,10 +11,9 @@ import {
   Query,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
 import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
@@ -196,7 +195,6 @@ export class PagesController {
 
   @Post('bulk')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
     return this.pagesService.findManyByIds(body.ids);

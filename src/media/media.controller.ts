@@ -15,10 +15,9 @@ import {
   Res,
   UploadedFile,
   UseInterceptors,
-  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { Public } from '@/auth/decorators/public.decorator';
@@ -69,7 +68,6 @@ export class MediaController {
 
   @Post('bulk')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
     return this.mediaService.findManyByIds(body.ids);
