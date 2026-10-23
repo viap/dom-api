@@ -15,11 +15,15 @@ describe('TherapySessionsGuard', () => {
 
   const requiredRoles = [Role.Admin, Role.Editor, Role.Psychologist];
 
-  function run(roles: Role[], params: Record<string, string>) {
+  function run(
+    roles: Role[],
+    params: Record<string, string>,
+    handler: () => void = function someHandler() {},
+  ) {
     const request = { userContext: { userId: 'user-id', roles }, params };
     return guard.canActivate({
       switchToHttp: () => ({ getRequest: () => request }),
-      getHandler: jest.fn(),
+      getHandler: () => handler,
       getClass: jest.fn(),
     } as unknown as ExecutionContext);
   }
@@ -109,6 +113,24 @@ describe('TherapySessionsGuard', () => {
       await expect(run([Role.Editor], { sessionId: 's1' })).resolves.toBe(
         false,
       );
+    });
+  });
+
+  describe('owner-only routes without an id', () => {
+    beforeEach(() => {
+      psychologistsService.getProfileByUserId.mockResolvedValue({
+        _id: 'p1',
+      } as any);
+    });
+
+    it('allows the listed POST /me handler', async () => {
+      await expect(
+        run([Role.Psychologist], {}, function createForMe() {}),
+      ).resolves.toBe(true);
+    });
+
+    it('denies any other handler without an id', async () => {
+      await expect(run([Role.Psychologist], {})).resolves.toBe(false);
     });
   });
 });

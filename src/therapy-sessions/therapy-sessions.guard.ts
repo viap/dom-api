@@ -8,6 +8,10 @@ import { Role } from '@/roles/enums/roles.enum';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';
 
+// Owner-only handlers that take no psychologistId/sessionId param
+// (POST /therapy-sessions/me). Any other id-less route is denied.
+const ID_LESS_OWNER_HANDLERS = new Set(['createForMe']);
+
 @Injectable()
 export class TherapySessionsGuard implements CanActivate {
   constructor(
@@ -61,9 +65,9 @@ export class TherapySessionsGuard implements CanActivate {
           return this.checkIfIsMyTherapySession(psychologist, params.sessionId);
         }
 
-        // NOTICE: owner-only routes without ids (POST /therapy-sessions/me)
-        // act on the caller's own profile via psychologistContext.
-        return !!request.psychologistContext;
+        // NOTICE: owner-only routes without an id are allowed only when listed
+        // here; they act on the caller's own profile via psychologistContext.
+        return ID_LESS_OWNER_HANDLERS.has(context.getHandler().name);
       } catch {}
 
       return false;
