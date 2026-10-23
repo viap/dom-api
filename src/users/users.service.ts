@@ -99,8 +99,12 @@ export class UsersService {
       .exec();
 
     if (users.length > 1) {
+      // ObjectIds only, so the duplicates can be found and merged.
       this.logger.warn(
-        JSON.stringify({ event: 'auth.telegram.ambiguous_account' }),
+        JSON.stringify({
+          event: 'auth.telegram.ambiguous_account',
+          userIds: users.map((user) => user._id.toString()),
+        }),
       );
     }
 
