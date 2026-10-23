@@ -31,8 +31,10 @@ import {
   transformUsersToDto,
 } from './utils/user.transformer';
 
-// contacts hold the Telegram login identity, so they are admin-only too.
-const ADMIN_ONLY_USER_FIELDS = ['roles', 'login', 'password', 'contacts'];
+// Editors may set only these fields; everything else (roles, login,
+// password, contacts holding the Telegram login identity, and any field added
+// later) is admin-only unless added here on purpose.
+const EDITOR_EDITABLE_USER_FIELDS = ['name', 'descr', 'timeZone'];
 const PRIVILEGED_ROLES = [Role.Admin, Role.Editor];
 
 @Controller('users')
@@ -99,7 +101,11 @@ export class UsersController {
       return;
     }
 
-    if (ADMIN_ONLY_USER_FIELDS.some((field) => field in data)) {
+    if (
+      Object.keys(data).some(
+        (field) => !EDITOR_EDITABLE_USER_FIELDS.includes(field),
+      )
+    ) {
       throw new ForbiddenException();
     }
 
