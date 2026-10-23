@@ -78,4 +78,37 @@ describe('TherapySessionsGuard', () => {
       run([Role.Psychologist], { psychologistId: 'p2' }),
     ).resolves.toBe(false);
   });
+
+  describe('as an editor', () => {
+    it('is denied another psychologist statistics', async () => {
+      psychologistsService.getProfileByUserId.mockResolvedValue({
+        _id: 'p1',
+      } as any);
+
+      await expect(run([Role.Editor], { psychologistId: 'p2' })).resolves.toBe(
+        false,
+      );
+    });
+
+    it('is denied another psychologist session', async () => {
+      psychologistsService.getProfileByUserId.mockResolvedValue({
+        _id: 'p1',
+      } as any);
+      therapySessionsService.getById.mockResolvedValue({
+        psychologist: { _id: 'p2' },
+      } as any);
+
+      await expect(run([Role.Editor], { sessionId: 's1' })).resolves.toBe(
+        false,
+      );
+    });
+
+    it('is denied without a psychologist profile', async () => {
+      psychologistsService.getProfileByUserId.mockResolvedValue(null);
+
+      await expect(run([Role.Editor], { sessionId: 's1' })).resolves.toBe(
+        false,
+      );
+    });
+  });
 });

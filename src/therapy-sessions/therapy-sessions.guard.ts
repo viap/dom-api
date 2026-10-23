@@ -2,10 +2,8 @@ import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { currentUserAlias } from '@/common/const/current-user-alias';
-import { includesOther } from '@/common/utils/includes-other';
 import { PsychologistsService } from '@/psychologists/psychologists.service';
 import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
-import { ROLES_KEY } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';
@@ -24,12 +22,6 @@ export class TherapySessionsGuard implements CanActivate {
         context.getHandler(),
       ]) || false;
 
-    const requiredRoles =
-      this.reflector.getAllAndOverride<Array<Role>>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) || [];
-
     if (ShouldBeMyTherapySessions) {
       try {
         if (!request.userContext) {
@@ -46,12 +38,9 @@ export class TherapySessionsGuard implements CanActivate {
           };
         }
 
-        // NOTICE: check if user have any required role except psychologist
-        if (
-          includesOther<Role>(requiredRoles, request.userContext.roles, [
-            Role.Psychologist,
-          ])
-        ) {
+        // NOTICE: only admins see every psychologist's sessions; editors and
+        // psychologists see their own (decision D6).
+        if (request.userContext.roles?.includes(Role.Admin)) {
           return true;
         }
 
