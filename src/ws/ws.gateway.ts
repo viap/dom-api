@@ -6,27 +6,25 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-  WsResponse,
 } from '@nestjs/websockets';
-import { Observable, from } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { Server, Socket } from 'socket.io';
-import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
 import { AuthService } from '@/auth/auth.service';
 import extractApiClientFromHeaders from '@/common/utils/extract-api-client-from-headers';
-import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationDocument } from '@/notifications/schemas/notification.schema';
-import { UsersService } from '@/users/users.service';
 
-const socketToUser: { [key: string]: string } = {};
-const socketToApiClient: { [key: string]: ApiClientDto } = {};
+// The gateway serves only dom-bot: notification batches carry applicant
+// contacts and receipts act on behalf of users. dom-web has no socket client.
+// ponytail: in-memory socket set, correct only with a single pm2 fork.
+const botSockets = new Set<string>();
 const webSocketPort = process.env.WEBSOCKET_PORT
   ? parseInt(process.env.WEBSOCKET_PORT)
   : 3004;
 @WebSocketGateway(webSocketPort, {
   transports: ['websocket'],
-  maxHttpBufferSize: 1e5,
+  // The bot's get-all-batch payload lists its session user ids (~27 bytes
+  // each), so this leaves room for tens of thousands of sessions.
+  maxHttpBufferSize: 1e6,
   cors: {
     origin: '*',
     credentials: true,
@@ -40,82 +38,32 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   constructor(
     private authService: AuthService,
     private notificationsService: NotificationsService,
-    private usersService: UsersService,
   ) {}
 
   onModuleInit() {
-    this.server.on('connection', async (client: Socket) => {
-      // NOTICE: authorization by token
-      const token = extractTokenFromHeaders(client.handshake.headers);
-      // NOTICE: authorization by ApiClient
+    this.server.on('connection', (client: Socket) => {
       const initClient = extractApiClientFromHeaders(client.handshake.headers);
 
-      if (token) {
-        const payload = await this.authService.verifyToken(token);
-        // Same rule as HTTP: a token of a deleted user is not accepted.
-        const user = payload?.userId
-          ? await this.usersService.getById(payload.userId)
-          : null;
-
-        if (user) {
-          socketToUser[client.id] = payload.userId;
-          client.emit('inited', {
-            clientId: client.id,
-            userId: payload.userId,
-          });
-          return;
-        }
-      } else if (initClient) {
-        if (this.authService.isAvailableClient(initClient)) {
-          socketToApiClient[client.id] = initClient;
-          client.emit('inited', {
-            clientId: client.id,
-            apiClient: initClient.name,
-          });
-          return;
-        }
-
-        client.emit('unauthorized', {
-          message: 'Unauthorized API client',
+      if (
+        initClient &&
+        initClient.name === process.env.BOT_CLIENT_NAME &&
+        this.authService.isAvailableClient(initClient)
+      ) {
+        botSockets.add(client.id);
+        client.emit('inited', {
+          clientId: client.id,
+          apiClient: initClient.name,
         });
+        return;
       }
 
-      // Unauthenticated sockets are not kept open.
+      client.emit('unauthorized', { message: 'Unauthorized client' });
       client.disconnect(true);
     });
   }
 
   handleDisconnect(client: Socket) {
-    delete socketToUser[client.id];
-    delete socketToApiClient[client.id];
-  }
-
-  @SubscribeMessage('notifications/get-my')
-  async getEventsForMe(
-    @ConnectedSocket() client: Socket,
-  ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
-    const userId = socketToUser[client.id];
-
-    let notifications: Array<NotificationDocument> = [];
-
-    if (userId) {
-      notifications = await this.notificationsService.getAllByUserId(userId);
-    }
-
-    return from(notifications).pipe(
-      map((event) => ({ event: 'notification', data: event })),
-    );
-  }
-
-  @SubscribeMessage('notifications/get-all')
-  async getAllActiveEvents(
-    @ConnectedSocket() client: Socket,
-  ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
-    const notifications = await this.getAllActiveNotifications(client);
-
-    return from(notifications).pipe(
-      map((event) => ({ event: 'notification', data: event })),
-    );
+    botSockets.delete(client.id);
   }
 
   @SubscribeMessage('notifications/get-all-batch')
@@ -123,7 +71,7 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data?: { userIds?: Array<string> },
   ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
-    if (!this.isBotClient(client)) {
+    if (!botSockets.has(client.id)) {
       return [];
     }
 
@@ -134,43 +82,29 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
 
   @SubscribeMessage('notifications/add-received')
   async addReceived(
-    @MessageBody() data: { notificationId: string; token?: string },
+    @MessageBody()
+    data: { notificationId: string; userId?: string; token?: string },
     @ConnectedSocket() client: Socket,
   ): Promise<boolean> {
-    const { notificationId, token } = data || ({} as typeof data);
+    if (!botSockets.has(client.id)) {
+      return false;
+    }
 
-    let userId: string | undefined = socketToUser[client.id];
-    if (!userId && token && this.isBotClient(client)) {
-      // NOTICE: only the authenticated bot may name a recipient. Its stored
-      // session token may be expired, so only the userId is read from it;
-      // eligibility is checked against current data in addReceived.
+    const { notificationId, token } = data || ({} as typeof data);
+    let userId = typeof data?.userId === 'string' ? data.userId : undefined;
+
+    // TODO(remove after dom-bot sends userId, 2026-11): older bots send the
+    // recipient's stored session token; only its userId is read.
+    if (!userId && token) {
       const payload = await this.authService.decode(token);
       if (payload !== null && typeof payload === 'object' && payload.userId) {
         userId = String(payload.userId);
       }
     }
 
-    if (userId) {
-      return this.notificationsService.addReceived(notificationId, userId);
-    }
-
-    return false;
-  }
-
-  private async getAllActiveNotifications(
-    client: Socket,
-  ): Promise<Array<NotificationDocument>> {
-    if (this.isBotClient(client)) {
-      return this.notificationsService.getAllActive();
-    }
-
-    return [];
-  }
-
-  // Notification batches contain applicant contacts and receipts act on
-  // behalf of users, so they are for the bot only, not any API client.
-  private isBotClient(client: Socket): boolean {
-    const apiClient = socketToApiClient[client.id];
-    return !!apiClient && apiClient.name === process.env.BOT_CLIENT_NAME;
+    // The audience is rechecked against current data in addReceived.
+    return userId
+      ? this.notificationsService.addReceived(notificationId, userId)
+      : false;
   }
 }

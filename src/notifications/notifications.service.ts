@@ -40,6 +40,9 @@ function parseDateValue(value?: string | Date): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+// Upper bound for the bot's session user ids in one batch request.
+const MAX_BOT_CANDIDATES = 5000;
+
 type AudienceUser = { _id?: unknown; roles?: Array<Role> };
 type AudienceNotification = Pick<
   Notification,
@@ -135,13 +138,19 @@ export class NotificationsService {
     candidateUserIds?: unknown,
   ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
     const notifications = await this.getAllActive();
+    // TODO(remove after dom-bot sends userIds, 2026-11): older bots send no
+    // ids and filter recipients themselves.
     if (!Array.isArray(candidateUserIds)) {
       return notifications;
     }
 
-    const ids = candidateUserIds
-      .map((id) => validateObjectId(id))
-      .filter((id): id is string => !!id);
+    const ids = [
+      ...new Set(
+        candidateUserIds
+          .map((id) => validateObjectId(id))
+          .filter((id): id is string => !!id),
+      ),
+    ].slice(0, MAX_BOT_CANDIDATES);
     const users = ids.length ? await this.userService.getRolesByIds(ids) : [];
 
     return notifications.map((notification) => ({

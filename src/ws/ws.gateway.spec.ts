@@ -1,66 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Observable } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotificationDocument } from '../notifications/schemas/notification.schema';
-import { UsersService } from '../users/users.service';
 import { WsGateway } from './ws.gateway';
 
 describe('WsGateway', () => {
   let gateway: WsGateway;
-  let mockAuthService: {
-    verifyToken: jest.Mock;
-    isAvailableClient: jest.Mock;
-    decode: jest.Mock;
-  };
+  let mockAuthService: { isAvailableClient: jest.Mock; decode: jest.Mock };
   let mockNotificationsService: {
-    getAllActive: jest.Mock;
     getAllActiveForBot: jest.Mock;
-    getAllByUserId: jest.Mock;
     addReceived: jest.Mock;
   };
-  let mockUsersService: { getById: jest.Mock };
-  let connectionHandler: (client: unknown) => Promise<void>;
+  let connectionHandler: (client: unknown) => void;
   const originalBotClientName = process.env.BOT_CLIENT_NAME;
 
-  afterEach(() => {
-    process.env.BOT_CLIENT_NAME = originalBotClientName;
-  });
+  const botHeader = `ApiClient ${JSON.stringify({
+    name: 'domBot',
+    password: 'secret',
+  })}`;
 
   beforeEach(async () => {
-    process.env.BOT_CLIENT_NAME = 'bot';
-    mockUsersService = {
-      getById: jest.fn().mockResolvedValue({ _id: 'user' }),
-    };
-
+    process.env.BOT_CLIENT_NAME = 'domBot';
     mockAuthService = {
-      verifyToken: jest.fn(),
-      isAvailableClient: jest.fn(),
+      isAvailableClient: jest.fn().mockReturnValue(true),
       decode: jest.fn(),
     };
-
     mockNotificationsService = {
-      getAllActive: jest.fn(),
       getAllActiveForBot: jest.fn(),
-      getAllByUserId: jest.fn(),
-      addReceived: jest.fn(),
+      addReceived: jest.fn().mockResolvedValue(true),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WsGateway,
-        {
-          provide: AuthService,
-          useValue: mockAuthService,
-        },
-        {
-          provide: NotificationsService,
-          useValue: mockNotificationsService,
-        },
-        {
-          provide: UsersService,
-          useValue: mockUsersService,
-        },
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -73,23 +46,18 @@ describe('WsGateway', () => {
     gateway.onModuleInit();
   });
 
-  it('should be defined', () => {
-    expect(gateway).toBeDefined();
+  afterEach(() => {
+    process.env.BOT_CLIENT_NAME = originalBotClientName;
   });
 
-  it('returns active notifications through the ACK batch event for API clients', async () => {
+  it('serves notification batches to the bot', async () => {
     const notifications = [{ _id: 'notification-1' }];
-    const client = createClient(
-      'batch-authorized',
-      `ApiClient ${JSON.stringify({ name: 'bot', password: 'secret' })}`,
-    );
-
-    mockAuthService.isAvailableClient.mockReturnValue(true);
+    const client = createClient('bot-batch', botHeader);
     mockNotificationsService.getAllActiveForBot.mockResolvedValue(
       notifications,
     );
 
-    await connectionHandler(client);
+    connectionHandler(client);
 
     await expect(
       gateway.getAllActiveEventsBatch(client as never, { userIds: ['u1'] }),
@@ -99,166 +67,75 @@ describe('WsGateway', () => {
     ]);
   });
 
-  it('uses the same active notification source for the streamed event', async () => {
-    const notifications = [
-      { _id: 'notification-1' },
-      { _id: 'notification-2' },
-    ];
-    const client = createClient(
-      'stream-authorized',
-      `ApiClient ${JSON.stringify({ name: 'bot', password: 'secret' })}`,
-    );
+  it.each([
+    ['anonymous', undefined],
+    ['user token', 'Bearer some-jwt'],
+    [
+      'other API client',
+      `ApiClient ${JSON.stringify({ name: 'domWeb', password: 'secret' })}`,
+    ],
+  ])('disconnects a %s socket and serves it nothing', async (_, header) => {
+    const client = createClient(`socket-${_}`, header);
 
-    mockAuthService.isAvailableClient.mockReturnValue(true);
-    mockNotificationsService.getAllActive.mockResolvedValue(notifications);
+    connectionHandler(client);
 
-    await connectionHandler(client);
-
-    const result = await gateway.getAllActiveEvents(client as never);
-
-    await expect(collectObservable(result)).resolves.toEqual([
-      { event: 'notification', data: notifications[0] },
-      { event: 'notification', data: notifications[1] },
-    ]);
-    expect(mockNotificationsService.getAllActive).toHaveBeenCalledTimes(1);
-  });
-
-  describe('connection lifecycle', () => {
-    it('disconnects sockets without valid credentials', async () => {
-      const anonymous = createClient('anonymous-socket');
-      const badToken = createClient('bad-token-socket', 'Bearer forged');
-      mockAuthService.verifyToken.mockResolvedValue(undefined);
-
-      await connectionHandler(anonymous);
-      await connectionHandler(badToken);
-
-      expect(anonymous.disconnect).toHaveBeenCalledWith(true);
-      expect(badToken.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it('disconnects tokens of deleted users', async () => {
-      const client = createClient('deleted-user-socket', 'Bearer valid');
-      mockAuthService.verifyToken.mockResolvedValue({ userId: 'gone' });
-      mockUsersService.getById.mockResolvedValue(null);
-
-      await connectionHandler(client);
-
-      expect(client.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it('gives other API clients no notifications', async () => {
-      const client = createClient(
-        'web-client-socket',
-        `ApiClient ${JSON.stringify({ name: 'web', password: 'secret' })}`,
-      );
-      mockAuthService.isAvailableClient.mockReturnValue(true);
-      await connectionHandler(client);
-
-      await expect(
-        gateway.getAllActiveEventsBatch(client as never, { userIds: [] }),
-      ).resolves.toEqual([]);
-      const streamed = await gateway.getAllActiveEvents(client as never);
-      await expect(collectObservable(streamed)).resolves.toEqual([]);
-      expect(
-        mockNotificationsService.getAllActiveForBot,
-      ).not.toHaveBeenCalled();
-      expect(mockNotificationsService.getAllActive).not.toHaveBeenCalled();
-    });
-
-    it('forgets a user socket after disconnect', async () => {
-      const client = createClient('user-socket', 'Bearer valid');
-      mockAuthService.verifyToken.mockResolvedValue({ userId: 'user-1' });
-      mockNotificationsService.addReceived.mockResolvedValue(true);
-
-      await connectionHandler(client);
-      gateway.handleDisconnect(client as never);
-
-      await expect(
-        gateway.addReceived({ notificationId: 'n1' }, client as never),
-      ).resolves.toBe(false);
-      expect(mockNotificationsService.addReceived).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('notifications/add-received', () => {
-    const originalBotClientName = process.env.BOT_CLIENT_NAME;
-
-    beforeEach(() => {
-      process.env.BOT_CLIENT_NAME = 'domBot';
-      mockAuthService.isAvailableClient.mockReturnValue(true);
-      mockAuthService.decode.mockResolvedValue({ userId: 'victim-id' });
-      mockNotificationsService.addReceived.mockResolvedValue(true);
-    });
-
-    afterEach(() => {
-      process.env.BOT_CLIENT_NAME = originalBotClientName;
-    });
-
-    it('lets the bot claim a receipt for the user in its session token', async () => {
-      const client = createClient(
-        'bot-socket',
-        `ApiClient ${JSON.stringify({ name: 'domBot', password: 'secret' })}`,
-      );
-      await connectionHandler(client);
-
-      await expect(
-        gateway.addReceived(
-          { notificationId: 'n1', token: 'session-token' },
-          client as never,
-        ),
-      ).resolves.toBe(true);
-      expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
-        'n1',
-        'victim-id',
-      );
-    });
-
-    it('ignores tokens sent by other API clients', async () => {
-      const client = createClient(
-        'web-socket',
-        `ApiClient ${JSON.stringify({ name: 'domWeb', password: 'secret' })}`,
-      );
-      await connectionHandler(client);
-
-      await expect(
-        gateway.addReceived(
-          { notificationId: 'n1', token: 'forged' },
-          client as never,
-        ),
-      ).resolves.toBe(false);
-      expect(mockNotificationsService.addReceived).not.toHaveBeenCalled();
-    });
-
-    it('uses only the authenticated user of a user socket', async () => {
-      const client = createClient('own-user-socket', 'Bearer valid');
-      mockAuthService.verifyToken.mockResolvedValue({ userId: 'own-user' });
-      await connectionHandler(client);
-
-      await gateway.addReceived(
-        { notificationId: 'n1', token: 'someone-else' },
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+    await expect(
+      gateway.getAllActiveEventsBatch(client as never, { userIds: [] }),
+    ).resolves.toEqual([]);
+    await expect(
+      gateway.addReceived(
+        { notificationId: 'n1', userId: 'u1' },
         client as never,
-      );
-
-      expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
-        'n1',
-        'own-user',
-      );
-      expect(mockAuthService.decode).not.toHaveBeenCalled();
-    });
+      ),
+    ).resolves.toBe(false);
+    expect(mockNotificationsService.addReceived).not.toHaveBeenCalled();
   });
 
-  it('preserves empty unauthorized behavior for batch and streamed events', async () => {
-    const client = createClient('unauthorized');
-
-    await connectionHandler(client);
+  it('forgets the bot socket after disconnect', async () => {
+    const client = createClient('bot-gone', botHeader);
+    connectionHandler(client);
+    gateway.handleDisconnect(client as never);
 
     await expect(
-      gateway.getAllActiveEventsBatch(client as never),
-    ).resolves.toEqual([]);
+      gateway.addReceived(
+        { notificationId: 'n1', userId: 'u1' },
+        client as never,
+      ),
+    ).resolves.toBe(false);
+  });
 
-    const result = await gateway.getAllActiveEvents(client as never);
-    await expect(collectObservable(result)).resolves.toEqual([]);
-    expect(mockNotificationsService.getAllActive).not.toHaveBeenCalled();
+  it('takes the recipient userId from the bot', async () => {
+    const client = createClient('bot-receipt', botHeader);
+    connectionHandler(client);
+
+    await expect(
+      gateway.addReceived(
+        { notificationId: 'n1', userId: 'u1' },
+        client as never,
+      ),
+    ).resolves.toBe(true);
+    expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
+      'n1',
+      'u1',
+    );
+    expect(mockAuthService.decode).not.toHaveBeenCalled();
+  });
+
+  it('still reads the userId from a token sent by older bots', async () => {
+    const client = createClient('bot-legacy', botHeader);
+    mockAuthService.decode.mockResolvedValue({ userId: 'u2' });
+    connectionHandler(client);
+
+    await gateway.addReceived(
+      { notificationId: 'n1', token: 'session-token' },
+      client as never,
+    );
+
+    expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
+      'n1',
+      'u2',
+    );
   });
 });
 
@@ -271,20 +148,4 @@ function createClient(id: string, authorization?: string) {
     emit: jest.fn(),
     disconnect: jest.fn(),
   };
-}
-
-function collectObservable(
-  observable: Observable<{
-    event: string;
-    data: NotificationDocument;
-  }>,
-): Promise<Array<{ event: string; data: NotificationDocument }>> {
-  return new Promise((resolve, reject) => {
-    const values: Array<{ event: string; data: NotificationDocument }> = [];
-    observable.subscribe({
-      next: (value) => values.push(value),
-      error: reject,
-      complete: () => resolve(values),
-    });
-  });
 }
