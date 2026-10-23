@@ -150,6 +150,39 @@ describe('PsychologistService', () => {
     expect(psychologist.save).toHaveBeenCalled();
   });
 
+  it('addNewClient never copies a Telegram id into the new user', async () => {
+    const psychologist = {
+      clients: [],
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    jest.spyOn(service, 'getById').mockResolvedValue(psychologist as any);
+    mockUsersService.getByTelegramUserName.mockResolvedValue(null);
+    mockUsersService.create.mockResolvedValue({ _id: 'new-user-id' });
+
+    await service.addNewClient('psychologist-id', {
+      name: 'Client',
+      contacts: [
+        {
+          network: SocialNetworks.Telegram,
+          id: '123456789',
+          username: 'someone',
+          hidden: false,
+        },
+      ],
+    });
+
+    expect(mockUsersService.create).toHaveBeenCalledWith({
+      name: 'Client',
+      contacts: [
+        {
+          network: SocialNetworks.Telegram,
+          username: 'someone',
+          hidden: false,
+        },
+      ],
+    });
+  });
+
   it('addNewClient should create a user when contacts is an empty array', async () => {
     const psychologist = {
       clients: [],

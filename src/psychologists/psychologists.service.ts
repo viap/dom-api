@@ -185,7 +185,11 @@ export class PsychologistsService {
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const contacts = newClient.contacts ?? [];
+      // The Telegram id is the bot login identity; a client created from a
+      // form or a therapy request must not get one (it could be anyone's).
+      const contacts = (newClient.contacts ?? []).map(
+        ({ network, username, hidden }) => ({ network, username, hidden }),
+      );
       const telegramUserName = contacts.find(
         (contact) => contact.network === SocialNetworks.Telegram,
       )?.username;
