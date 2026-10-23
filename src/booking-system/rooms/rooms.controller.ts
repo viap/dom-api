@@ -23,6 +23,7 @@ import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomQueryParams } from '../shared/types/query-params.interface';
 
 @Controller('booking-system/rooms')
+@Roles(Role.Admin)
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 

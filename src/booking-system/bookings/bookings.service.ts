@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -54,6 +55,14 @@ const submodels = [
 const ADVANCE_BOOKING_LIMIT_DAYS = 90; // Maximum days in advance for booking
 const MIN_ADVANCE_NOTICE_HOURS = 2; // Minimum hours advance notice required
 const MAX_BOOKING_DURATION_HOURS = 24; // Maximum booking duration in hours
+
+// Defaults to 100 like before; 0, negative and oversized limits are clamped.
+function parseBookingLimit(value: unknown): number {
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 100
+    ? parsed
+    : 100;
+}
 
 @Injectable()
 export class BookingsService {
@@ -268,7 +277,7 @@ export class BookingsService {
       .find(query)
       .populate(submodels)
       .sort(sort)
-      .limit(safeParams.limit ? parseInt(safeParams.limit as string) : 100)
+      .limit(parseBookingLimit(safeParams.limit))
       .lean()
       .exec();
   }
@@ -887,6 +896,10 @@ export class BookingsService {
       throw new BadRequestException('Admin user not found');
     }
 
+    if (!Array.isArray(bookingIds) || bookingIds.length > 100) {
+      throw new BadRequestException('bookingIds must be an array of up to 100');
+    }
+
     const validBookingIds = bookingIds
       .map((id) => validateObjectId(id))
       .filter((id) => id !== null);
@@ -895,27 +908,20 @@ export class BookingsService {
       throw new BadRequestException('No valid booking IDs provided');
     }
 
-    // Update all bookings in bulk
-    await this.bookingModel.updateMany(
-      {
-        _id: { $in: validBookingIds },
-        status: BookingStatus.PENDING,
-      },
-      {
-        $set: {
-          status: BookingStatus.CONFIRMED,
-          approvedBy: validAdminId,
-          approvedAt: new Date(),
-        },
-      },
-    );
-
-    // Return updated bookings
-    const approvedBookings = await this.bookingModel
-      .find({ _id: { $in: validBookingIds } })
-      .populate(submodels)
-      .lean()
-      .exec();
+    // Approve one by one so every booking passes the same availability check
+    // as a single approval; bookings that are not approvable are skipped.
+    const approvedBookings: BookingDocument[] = [];
+    for (const bookingId of validBookingIds) {
+      try {
+        approvedBookings.push(
+          await this.approveBooking(bookingId, validAdminId),
+        );
+      } catch (error) {
+        if (!(error instanceof HttpException)) {
+          throw error;
+        }
+      }
+    }
 
     return approvedBookings;
   }

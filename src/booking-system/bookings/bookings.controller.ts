@@ -30,6 +30,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { IsMyBookingGuard } from './guards/is-my-booking.guard';
 
 @Controller('booking-system/bookings')
+@Roles(Role.Admin)
 @UseGuards(IsMyBookingGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
