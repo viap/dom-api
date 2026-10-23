@@ -34,7 +34,7 @@ export class PsychologistsController {
   constructor(private readonly psychologistService: PsychologistsService) {}
 
   @Get()
-  @Roles(Role.User)
+  @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   async getAll(): Promise<Array<PsychologistDocument>> {
     return this.psychologistService.getAll();
   }
@@ -43,7 +43,9 @@ export class PsychologistsController {
   @Roles(Role.Psychologist)
   getMe(@Request() request: EnhancedRequest): Promise<PsychologistDocument> {
     if (request.userContext) {
-      return this.psychologistService.getByUserId(request.userContext.userId);
+      return this.psychologistService.getProfileByUserId(
+        request.userContext.userId,
+      );
     }
   }
 
@@ -59,9 +61,9 @@ export class PsychologistsController {
   }
 
   @Get(':id')
-  @Roles(Role.User)
+  @Roles(Role.Admin, Role.Editor, Role.Psychologist)
   async getOne(@Param('id') id: string): Promise<PsychologistDocument> {
-    return this.psychologistService.getById(id);
+    return this.psychologistService.getDirectoryEntry(id);
   }
 
   @Post()

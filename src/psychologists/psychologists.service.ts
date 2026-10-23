@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { addItems } from '@/common/utils/add-items';
+import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { removeItems } from '@/common/utils/remove-item';
 import { Role } from '@/roles/enums/roles.enum';
 import { TherapyRequestDocument } from '@/therapy-requests/schemas/therapy-request.schema';
@@ -16,6 +17,8 @@ import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
+
+const directoryUserFields = 'name roles';
 
 const submodels = [
   'user',
@@ -42,12 +45,41 @@ export class PsychologistsService {
     private userService: UsersService,
   ) {}
 
+  // Directory responses never include clients: they carry client contacts and
+  // therapy request texts. Clients are served only via /psychologists/me/clients.
   async getAll(): Promise<Array<PsychologistDocument>> {
-    return (await this.psychologistModel.find().populate(submodels)).filter(
-      (psychologist) => {
-        return psychologist.user.roles.includes(Role.Psychologist);
-      },
+    const psychologists = await this.psychologistModel
+      .find()
+      .select('-clients')
+      .populate({ path: 'user', select: directoryUserFields })
+      .exec();
+
+    return psychologists.filter((psychologist) =>
+      psychologist.user?.roles?.includes(Role.Psychologist),
     );
+  }
+
+  async getDirectoryEntry(id: string): Promise<PsychologistDocument | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    return this.psychologistModel
+      .findById(validId)
+      .select('-clients')
+      .populate({ path: 'user', select: directoryUserFields })
+      .exec();
+  }
+
+  async getProfileByUserId(
+    userId: string,
+  ): Promise<PsychologistDocument | null> {
+    return this.psychologistModel
+      .findOne({ user: userId })
+      .select('-clients')
+      .populate('user')
+      .exec();
   }
 
   async getById(

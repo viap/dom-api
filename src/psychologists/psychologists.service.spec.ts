@@ -53,6 +53,44 @@ describe('PsychologistService', () => {
     expect(service).toBeDefined();
   });
 
+  it('getAll excludes clients and keeps only active psychologists', async () => {
+    const model = (service as any).psychologistModel;
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        { _id: 'p1', user: { name: 'A', roles: ['psychologist'] } },
+        { _id: 'p2', user: { name: 'B', roles: ['user'] } },
+        { _id: 'p3', user: null },
+      ]),
+    };
+    model.find.mockReturnValue(query);
+
+    const result = await service.getAll();
+
+    expect(query.select).toHaveBeenCalledWith('-clients');
+    expect(query.populate).toHaveBeenCalledWith({
+      path: 'user',
+      select: 'name roles',
+    });
+    expect(result.map((item) => item._id)).toEqual(['p1']);
+  });
+
+  it('getDirectoryEntry excludes clients and rejects invalid ids', async () => {
+    const model = (service as any).psychologistModel;
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue({ _id: 'p1' }),
+    };
+    model.findById.mockReturnValue(query);
+
+    await expect(service.getDirectoryEntry('not-an-id')).resolves.toBeNull();
+    await service.getDirectoryEntry('507f1f77bcf86cd799439011');
+
+    expect(query.select).toHaveBeenCalledWith('-clients');
+  });
+
   it('addNewClient should create a user when contacts are missing', async () => {
     const psychologist = {
       clients: [],
