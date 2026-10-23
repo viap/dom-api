@@ -147,4 +147,16 @@ describe('RequestsController', () => {
       expect(service.acceptRequest).toHaveBeenCalledWith('r1', undefined);
     });
   });
+
+  it('refuses a non-manager without a psychologist profile', () => {
+    expect(() =>
+      controller.acceptRequest(
+        {
+          userContext: { userId: 'u', roles: [Role.Psychologist] },
+        } as EnhancedRequest,
+        'r1',
+      ),
+    ).toThrow(ForbiddenException);
+    expect(service.acceptRequest).not.toHaveBeenCalled();
+  });
 });

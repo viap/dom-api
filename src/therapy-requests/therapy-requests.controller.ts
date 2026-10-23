@@ -144,10 +144,17 @@ export class TherapyRequestsController {
 
   // A psychologist's writes are conditional on still owning the request, so
   // they cannot race a concurrent transfer; admins and editors act on anyone's.
+  // undefined means "any request" and is returned only to admins and editors;
+  // anyone else without a psychologist profile is refused here as well as in
+  // the guard.
   private ownPsychologistId(request: EnhancedRequest): string | undefined {
-    return this.canManageAll(request)
-      ? undefined
-      : request.psychologistContext?.id;
+    if (this.canManageAll(request)) {
+      return undefined;
+    }
+    if (!request.psychologistContext?.id) {
+      throw new ForbiddenException();
+    }
+    return request.psychologistContext.id;
   }
 
   private canManageAll(request: EnhancedRequest): boolean {
