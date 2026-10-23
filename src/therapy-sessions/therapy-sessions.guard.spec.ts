@@ -18,7 +18,9 @@ describe('TherapySessionsGuard', () => {
   function run(
     roles: Role[],
     params: Record<string, string>,
-    handler: () => void = function someHandler() {},
+    handler: () => unknown = function someHandler() {
+      return undefined;
+    },
   ) {
     const request = { userContext: { userId: 'user-id', roles }, params };
     return guard.canActivate({
@@ -125,7 +127,9 @@ describe('TherapySessionsGuard', () => {
 
     it('allows the listed POST /me handler', async () => {
       await expect(
-        run([Role.Psychologist], {}, function createForMe() {}),
+        run([Role.Psychologist], {}, function createForMe() {
+          return undefined;
+        }),
       ).resolves.toBe(true);
     });
 
