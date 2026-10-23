@@ -11,12 +11,15 @@ import {
 import { getClientIp, isTrustedApiClient } from '@/auth/utils/client-ip';
 import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
 
-// Same key @Throttle() writes for the "default" throttler (THROTTLER_LIMIT).
+// Same key @Throttle() writes for the "default" throttler (THROTTLER_LIMIT,
+// not exported by the library). app-throttler.guard.spec.ts applies the real
+// @Throttle decorator, so a library change breaks that test, not production.
 const DEFAULT_ROUTE_LIMIT_KEY = 'THROTTLER:LIMIT' + 'default';
 
 // Global rate limiting. Requests are counted per verified user, per Telegram
-// id for bot logins, otherwise per client IP. Anonymous reads stay limited only
-// where a route declares @Throttle, so public pages and SSR are unaffected.
+// id for bot logins, otherwise per client IP. Anonymous reads keep their
+// previous per-route limits: only routes with @Throttle count them. dom-web
+// SSR calls to those routes share one bucket for the dom-web server IP.
 // ponytail: in-memory storage is per process; use a shared store if the API
 // ever runs more than one instance.
 @Injectable()
