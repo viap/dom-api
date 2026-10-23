@@ -1,10 +1,12 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ApiClientsModule } from '../src/api-clients/api-clients.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import { AuthGuard } from '../src/auth/auth.guard';
+import { AppThrottlerGuard } from '../src/common/guards/app-throttler.guard';
 import { AuthModule } from '../src/auth/auth.module';
 import { BookingSystemModule } from '../src/booking-system/booking-system.module';
 import { SanitizationMiddleware } from '../src/common/middleware/sanitization.middleware';
@@ -23,6 +25,7 @@ import { cwd } from 'process';
       envFilePath: cwd() + '/config/.env',
       isGlobal: true,
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     // No MongoDB connection - will be mocked in test setup
     UsersModule,
     AuthModule,
@@ -38,6 +41,11 @@ import { cwd } from 'process';
   controllers: [AppController],
   providers: [
     AppService,
+    // Same guard order as AppModule.
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
