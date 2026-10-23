@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -41,10 +42,10 @@ export class LocationsService {
 
     const query: Record<string, unknown> = {};
     if (safeParams.title && typeof safeParams.title === 'string') {
-      query.title = { $regex: new RegExp(safeParams.title, 'i') };
+      query.title = { $regex: new RegExp(escapeRegExp(safeParams.title), 'i') };
     }
     if (safeParams.city && typeof safeParams.city === 'string') {
-      query.city = { $regex: new RegExp(safeParams.city, 'i') };
+      query.city = { $regex: new RegExp(escapeRegExp(safeParams.city), 'i') };
     }
 
     return this.locationModel

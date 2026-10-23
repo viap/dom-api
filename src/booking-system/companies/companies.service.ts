@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { InjectModel } from '@nestjs/mongoose';
 import { Error, Model } from 'mongoose';
 import {
@@ -23,7 +24,9 @@ export class CompaniesService {
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyDocument> {
     try {
       const existingCompany = await this.companyModel.findOne({
-        name: { $regex: new RegExp(`^${createCompanyDto.name}$`, 'i') },
+        name: {
+          $regex: new RegExp(`^${escapeRegExp(createCompanyDto.name)}$`, 'i'),
+        },
       });
 
       if (existingCompany) {
@@ -53,7 +56,7 @@ export class CompaniesService {
     }
 
     if (safeParams.name && typeof safeParams.name === 'string') {
-      query.name = { $regex: new RegExp(safeParams.name, 'i') };
+      query.name = { $regex: new RegExp(escapeRegExp(safeParams.name), 'i') };
     }
 
     return this.companyModel.find(query).sort({ name: 1 }).lean().exec();
@@ -84,7 +87,9 @@ export class CompaniesService {
 
     if (updateCompanyDto.name) {
       const existingCompany = await this.companyModel.findOne({
-        name: { $regex: new RegExp(`^${updateCompanyDto.name}$`, 'i') },
+        name: {
+          $regex: new RegExp(`^${escapeRegExp(updateCompanyDto.name)}$`, 'i'),
+        },
         _id: { $ne: validId },
       });
 
@@ -123,7 +128,7 @@ export class CompaniesService {
 
   async findByName(name: string): Promise<CompanyDocument | null> {
     return this.companyModel
-      .findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } })
+      .findOne({ name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, 'i') } })
       .lean()
       .exec() as Promise<CompanyDocument | null>;
   }

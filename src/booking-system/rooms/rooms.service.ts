@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -34,7 +35,9 @@ export class RoomsService {
 
       const existingRoom = await this.roomModel.findOne({
         company: createRoomDto.company,
-        name: { $regex: new RegExp(`^${createRoomDto.name}$`, 'i') },
+        name: {
+          $regex: new RegExp(`^${escapeRegExp(createRoomDto.name)}$`, 'i'),
+        },
       });
 
       if (existingRoom) {
@@ -74,7 +77,7 @@ export class RoomsService {
     }
 
     if (safeParams.name && typeof safeParams.name === 'string') {
-      query.name = { $regex: new RegExp(safeParams.name, 'i') };
+      query.name = { $regex: new RegExp(escapeRegExp(safeParams.name), 'i') };
     }
 
     if (safeParams.minCapacity && typeof safeParams.minCapacity === 'string') {
@@ -161,7 +164,9 @@ export class RoomsService {
     if (updateRoomDto.name) {
       const existingRoom = await this.roomModel.findOne({
         company: updateRoomDto.company || (await this.findOne(id)).company,
-        name: { $regex: new RegExp(`^${updateRoomDto.name}$`, 'i') },
+        name: {
+          $regex: new RegExp(`^${escapeRegExp(updateRoomDto.name)}$`, 'i'),
+        },
         _id: { $ne: validId },
       });
 
