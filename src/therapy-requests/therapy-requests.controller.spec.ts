@@ -68,16 +68,21 @@ describe('RequestsController', () => {
 
   describe('update()', () => {
     const request = (roles: Role[]) =>
-      ({ userContext: { userId: 'user-id', roles } } as EnhancedRequest);
+      ({
+        userContext: { userId: 'user-id', roles },
+        psychologistContext: { id: 'p1' },
+      } as EnhancedRequest);
 
     it('lets a psychologist transfer their request', async () => {
       await controller.update(request([Role.Psychologist]), 'r1', {
         psychologist: 'p2',
       } as any);
 
-      expect(service.update).toHaveBeenCalledWith('r1', {
-        psychologist: 'p2',
-      });
+      expect(service.update).toHaveBeenCalledWith(
+        'r1',
+        { psychologist: 'p2' },
+        'p1',
+      );
     });
 
     it.each([{ name: 'x' }, { psychologist: 'p2', user: 'u1' }])(

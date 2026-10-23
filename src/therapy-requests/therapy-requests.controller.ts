@@ -97,13 +97,19 @@ export class TherapyRequestsController {
     // to a colleague wins; admins and editors accept on anyone's behalf.
     return this.therapyRequestService.acceptRequest(
       therapyRequestId,
-      this.canManageAll(request) ? undefined : request.psychologistContext?.id,
+      this.ownPsychologistId(request),
     );
   }
 
   @Post(':therapyRequestId/reject')
-  rejectRequest(@Param('therapyRequestId') therapyRequestId: string) {
-    return this.therapyRequestService.rejectRequest(therapyRequestId);
+  rejectRequest(
+    @Request() request: EnhancedRequest,
+    @Param('therapyRequestId') therapyRequestId: string,
+  ) {
+    return this.therapyRequestService.rejectRequest(
+      therapyRequestId,
+      this.ownPsychologistId(request),
+    );
   }
 
   @Put(':therapyRequestId')
@@ -123,13 +129,25 @@ export class TherapyRequestsController {
       }
     }
 
-    return this.therapyRequestService.update(therapyRequestId, updateData);
+    return this.therapyRequestService.update(
+      therapyRequestId,
+      updateData,
+      this.ownPsychologistId(request),
+    );
   }
 
   @Delete(':therapyRequestId')
   @Roles(Role.Admin, Role.Editor)
   remove(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.remove(therapyRequestId);
+  }
+
+  // A psychologist's writes are conditional on still owning the request, so
+  // they cannot race a concurrent transfer; admins and editors act on anyone's.
+  private ownPsychologistId(request: EnhancedRequest): string | undefined {
+    return this.canManageAll(request)
+      ? undefined
+      : request.psychologistContext?.id;
   }
 
   private canManageAll(request: EnhancedRequest): boolean {

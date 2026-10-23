@@ -255,11 +255,19 @@ export class TherapyRequestsService {
     return therapyRequest;
   }
 
+  // ownPsychologistId: the write only applies while the request is still
+  // assigned to that psychologist (transfer by the owner).
   async update(
     id: string,
     updateData: UpdateTherapyRequestDto,
-  ): Promise<TherapyRequestDocument> {
-    const existingRequest = await this.getById(id);
+    ownPsychologistId?: string,
+  ): Promise<TherapyRequestDocument | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    const existingRequest = await this.getById(validId);
     const shouldReclassify =
       !!existingRequest &&
       ['name', 'descr', 'user', 'contacts'].some((field) =>
@@ -285,13 +293,22 @@ export class TherapyRequestsService {
         )
       : {};
 
-    await this.therapyRequestModel.findByIdAndUpdate(
-      id,
-      { ...updateData, ...analyticsPatch },
-      {
-        new: true,
-      },
-    );
+    const updated = await this.therapyRequestModel
+      .findOneAndUpdate(
+        {
+          _id: validId,
+          ...(ownPsychologistId
+            ? { psychologist: valueToObjectId(ownPsychologistId) }
+            : {}),
+        },
+        { ...updateData, ...analyticsPatch },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      return null;
+    }
 
     if (updateData.psychologist) {
       const psychologist = await this.psychologistService.getById(
@@ -307,7 +324,7 @@ export class TherapyRequestsService {
       }
     }
 
-    return this.getById(id);
+    return this.getById(validId);
   }
 
   async updateAnalytics(
@@ -448,17 +465,31 @@ export class TherapyRequestsService {
     return !!result;
   }
 
-  async rejectRequest(therapyRequestId: string): Promise<boolean> {
-    const therapyRequest = await this.getById(therapyRequestId);
-
-    if (therapyRequest && !therapyRequest.accepted) {
-      therapyRequest.psychologist = undefined;
-      await therapyRequest.save();
-
-      return !therapyRequest.psychologist;
+  // ownPsychologistId: a psychologist may only reject a request that is still
+  // assigned to them, so a concurrent transfer wins.
+  async rejectRequest(
+    therapyRequestId: string,
+    ownPsychologistId?: string,
+  ): Promise<boolean> {
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      return false;
     }
 
-    return false;
+    const rejected = await this.therapyRequestModel
+      .findOneAndUpdate(
+        {
+          _id: validId,
+          accepted: { $ne: true },
+          ...(ownPsychologistId
+            ? { psychologist: valueToObjectId(ownPsychologistId) }
+            : {}),
+        },
+        { $unset: { psychologist: 1 } },
+      )
+      .exec();
+
+    return !!rejected;
   }
 
   async remove(id: string): Promise<boolean> {

@@ -523,4 +523,47 @@ describe('RequestsService', () => {
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('db down'));
   });
+
+  describe('owner-conditional writes', () => {
+    const requestId = '507f1f77bcf86cd799439099';
+    const ownId = '507f1f77bcf86cd799439088';
+
+    it('reject only applies while the request is still assigned to the caller', async () => {
+      const model = therapyRequestModel as unknown as Record<string, jest.Mock>;
+      model.findOneAndUpdate = jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await expect(service.rejectRequest(requestId, ownId)).resolves.toBe(
+        false,
+      );
+
+      const filter = model.findOneAndUpdate.mock.calls[0][0];
+      expect(String(filter.psychologist)).toBe(ownId);
+      expect(model.findOneAndUpdate.mock.calls[0][1]).toEqual({
+        $unset: { psychologist: 1 },
+      });
+    });
+
+    it('transfer by a psychologist is conditional on owning the request', async () => {
+      const model = therapyRequestModel as unknown as Record<string, jest.Mock>;
+      model.findById.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ _id: requestId }),
+        }),
+      });
+      model.findOneAndUpdate = jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await expect(
+        service.update(requestId, { psychologist: 'p2' } as any, ownId),
+      ).resolves.toBeNull();
+
+      expect(String(model.findOneAndUpdate.mock.calls[0][0].psychologist)).toBe(
+        ownId,
+      );
+      expect(notificationsService.create).not.toHaveBeenCalled();
+    });
+  });
 });
