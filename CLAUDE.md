@@ -148,11 +148,10 @@ The rate limiter (`AppThrottlerGuard`), login attempt counters (`AuthLoginAttemp
 - Application port from `PORT` environment variable
 
 ### Real-time Features
-WebSocket gateway handles:
-- User authentication via JWT tokens in headers
-- Real-time notifications
-- Socket-to-user mapping for targeted messaging
-- API client tracking per socket connection
+The WebSocket gateway (`src/ws/`) serves only dom-bot:
+- The handshake must carry the bot API client; other sockets are disconnected
+- `notifications/get-all-batch`: active notifications with `eligibleUserIds` for the user ids the bot sends
+- `notifications/add-received`: the bot confirms delivery for a `userId`; the audience is rechecked
 
 ### Testing Setup
 - Jest for unit testing
