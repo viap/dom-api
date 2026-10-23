@@ -61,7 +61,9 @@ export class TherapySessionsGuard implements CanActivate {
           return this.checkIfIsMyTherapySession(psychologist, params.sessionId);
         }
 
-        return true;
+        // NOTICE: owner-only routes without ids (POST /therapy-sessions/me)
+        // act on the caller's own profile via psychologistContext.
+        return !!request.psychologistContext;
       } catch {}
 
       return false;
