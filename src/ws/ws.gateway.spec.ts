@@ -101,6 +101,101 @@ describe('WsGateway', () => {
     expect(mockNotificationsService.getAllActive).toHaveBeenCalledTimes(1);
   });
 
+  describe('connection lifecycle', () => {
+    it('disconnects sockets without valid credentials', async () => {
+      const anonymous = createClient('anonymous-socket');
+      const badToken = createClient('bad-token-socket', 'Bearer forged');
+      mockAuthService.verifyToken.mockResolvedValue(undefined);
+
+      await connectionHandler(anonymous);
+      await connectionHandler(badToken);
+
+      expect(anonymous.disconnect).toHaveBeenCalledWith(true);
+      expect(badToken.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('forgets a user socket after disconnect', async () => {
+      const client = createClient('user-socket', 'Bearer valid');
+      mockAuthService.verifyToken.mockResolvedValue({ userId: 'user-1' });
+      mockNotificationsService.addReceived.mockResolvedValue(true);
+
+      await connectionHandler(client);
+      gateway.handleDisconnect(client as never);
+
+      await expect(
+        gateway.addReceived({ notificationId: 'n1' }, client as never),
+      ).resolves.toBe(false);
+      expect(mockNotificationsService.addReceived).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notifications/add-received', () => {
+    const originalBotClientName = process.env.BOT_CLIENT_NAME;
+
+    beforeEach(() => {
+      process.env.BOT_CLIENT_NAME = 'domBot';
+      mockAuthService.isAvailableClient.mockReturnValue(true);
+      mockAuthService.decode.mockResolvedValue({ userId: 'victim-id' });
+      mockNotificationsService.addReceived.mockResolvedValue(true);
+    });
+
+    afterEach(() => {
+      process.env.BOT_CLIENT_NAME = originalBotClientName;
+    });
+
+    it('lets the bot claim a receipt for the user in its session token', async () => {
+      const client = createClient(
+        'bot-socket',
+        `ApiClient ${JSON.stringify({ name: 'domBot', password: 'secret' })}`,
+      );
+      await connectionHandler(client);
+
+      await expect(
+        gateway.addReceived(
+          { notificationId: 'n1', token: 'session-token' },
+          client as never,
+        ),
+      ).resolves.toBe(true);
+      expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
+        'n1',
+        'victim-id',
+      );
+    });
+
+    it('ignores tokens sent by other API clients', async () => {
+      const client = createClient(
+        'web-socket',
+        `ApiClient ${JSON.stringify({ name: 'domWeb', password: 'secret' })}`,
+      );
+      await connectionHandler(client);
+
+      await expect(
+        gateway.addReceived(
+          { notificationId: 'n1', token: 'forged' },
+          client as never,
+        ),
+      ).resolves.toBe(false);
+      expect(mockNotificationsService.addReceived).not.toHaveBeenCalled();
+    });
+
+    it('uses only the authenticated user of a user socket', async () => {
+      const client = createClient('own-user-socket', 'Bearer valid');
+      mockAuthService.verifyToken.mockResolvedValue({ userId: 'own-user' });
+      await connectionHandler(client);
+
+      await gateway.addReceived(
+        { notificationId: 'n1', token: 'someone-else' },
+        client as never,
+      );
+
+      expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
+        'n1',
+        'own-user',
+      );
+      expect(mockAuthService.decode).not.toHaveBeenCalled();
+    });
+  });
+
   it('preserves empty unauthorized behavior for batch and streamed events', async () => {
     const client = createClient('unauthorized');
 
@@ -123,6 +218,7 @@ function createClient(id: string, authorization?: string) {
       headers: authorization ? { authorization } : {},
     },
     emit: jest.fn(),
+    disconnect: jest.fn(),
   };
 }
 

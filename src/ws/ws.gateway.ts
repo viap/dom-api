@@ -2,6 +2,7 @@ import { OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -24,13 +25,14 @@ const webSocketPort = process.env.WEBSOCKET_PORT
   : 3004;
 @WebSocketGateway(webSocketPort, {
   transports: ['websocket'],
+  maxHttpBufferSize: 1e5,
   cors: {
     origin: '*',
     credentials: true,
     methods: ['GET', 'POST'],
   },
 })
-export class WsGateway implements OnModuleInit {
+export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -55,6 +57,7 @@ export class WsGateway implements OnModuleInit {
             clientId: client.id,
             userId: payload.userId,
           });
+          return;
         }
       } else if (initClient) {
         if (this.authService.isAvailableClient(initClient)) {
@@ -63,13 +66,22 @@ export class WsGateway implements OnModuleInit {
             clientId: client.id,
             apiClient: initClient.name,
           });
-        } else {
-          client.emit('unauthorized', {
-            message: 'Unauthorized API client',
-          });
+          return;
         }
+
+        client.emit('unauthorized', {
+          message: 'Unauthorized API client',
+        });
       }
+
+      // Unauthenticated sockets are not kept open.
+      client.disconnect(true);
     });
+  }
+
+  handleDisconnect(client: Socket) {
+    delete socketToUser[client.id];
+    delete socketToApiClient[client.id];
   }
 
   @SubscribeMessage('auth-by-token')
@@ -123,11 +135,14 @@ export class WsGateway implements OnModuleInit {
     @MessageBody() data: { notificationId: string; token?: string },
     @ConnectedSocket() client: Socket,
   ): Promise<boolean> {
-    const { notificationId, token } = data;
+    const { notificationId, token } = data || ({} as typeof data);
 
     let userId: string | undefined = socketToUser[client.id];
-    if (!userId && token) {
-      // NOTICE: don't check the token validity, only look for the userId
+    const apiClient = socketToApiClient[client.id];
+    if (!userId && token && apiClient?.name === process.env.BOT_CLIENT_NAME) {
+      // NOTICE: only the authenticated bot may name a recipient. Its stored
+      // session token may be expired, so only the userId is read from it;
+      // eligibility is checked against current data in addReceived.
       const payload = await this.authService.decode(token);
       if (payload !== null && typeof payload === 'object' && payload.userId) {
         userId = String(payload.userId);
