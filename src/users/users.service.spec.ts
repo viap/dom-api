@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
@@ -131,6 +132,41 @@ describe('UsersService', () => {
       expect(model.findByIdAndUpdate).toHaveBeenCalledWith('user-id', {
         login: 'victim',
       });
+    });
+  });
+
+  describe('getByTelegramId', () => {
+    function mockFind(result: unknown[]) {
+      const limit = jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(result),
+      });
+      (model.find as jest.Mock).mockReturnValueOnce({ limit });
+      return limit;
+    }
+
+    it('matches id and network on the same contact', async () => {
+      mockFind([{ _id: 'u1' }]);
+
+      await expect(service.getByTelegramId('42')).resolves.toEqual({
+        _id: 'u1',
+      });
+      expect(model.find).toHaveBeenCalledWith({
+        contacts: { $elemMatch: { id: '42', network: 'telegram' } },
+      });
+    });
+
+    it('refuses an id linked to several accounts', async () => {
+      mockFind([{ _id: 'u1' }, { _id: 'u2' }]);
+
+      await expect(service.getByTelegramId('42')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('returns null when nobody has the id', async () => {
+      mockFind([]);
+
+      await expect(service.getByTelegramId('42')).resolves.toBeNull();
     });
   });
 });

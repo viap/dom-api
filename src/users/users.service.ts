@@ -7,7 +7,7 @@ import {
 import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { normalizeLogin } from '@/common/utils/normalize-login';
 import { Role } from '@/roles/enums/roles.enum';
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
@@ -26,6 +26,7 @@ type MongoDuplicateLoginError = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   private readonly saltRounds = 12;
 
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
@@ -71,12 +72,31 @@ export class UsersService {
     ) {
       return null;
     }
-    return await this.userModel
-      .findOne({
-        'contacts.id': sanitizedTelegramId,
-        'contacts.network': SocialNetworks.Telegram,
+    // Both conditions must hold for the same contact. Telegram login trusts
+    // this lookup, so an id shared by several accounts is refused rather than
+    // resolved to an arbitrary one (and never creates yet another account).
+    const users = await this.userModel
+      .find({
+        contacts: {
+          $elemMatch: {
+            id: sanitizedTelegramId,
+            network: SocialNetworks.Telegram,
+          },
+        },
       })
+      .limit(2)
       .exec();
+
+    if (users.length > 1) {
+      this.logger.warn(
+        JSON.stringify({ event: 'auth.telegram.ambiguous_account' }),
+      );
+      throw new ConflictException(
+        'Telegram account is linked to several users',
+      );
+    }
+
+    return users[0] ?? null;
   }
 
   async getByLogin(login: string): Promise<UserDocument> {
