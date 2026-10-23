@@ -94,8 +94,8 @@ describe('AuthLoginAttemptsService', () => {
     jest.advanceTimersByTime(5 * 60 * 1000);
 
     const attempts = (service as any).attempts as Map<string, unknown>;
-    expect(attempts.has('127.0.0.1|expired-user')).toBe(false);
-    expect(attempts.has('127.0.0.1|active-user')).toBe(true);
+    expect(attempts.has('user:127.0.0.1|expired-user')).toBe(false);
+    expect(attempts.has('user:127.0.0.1|active-user')).toBe(true);
 
     service.onModuleDestroy();
     jest.useRealTimers();
@@ -122,7 +122,7 @@ describe('AuthLoginAttemptsService', () => {
     limited.registerFailure('ip', 'third', 1000);
 
     const keys = [...(limited as any).attempts.keys()];
-    expect(keys).toEqual(['ip|second', 'ip|third']);
+    expect(keys).toEqual(['user:ip|second', 'user:ip|third']);
   });
 
   describe('per-login backstop', () => {
@@ -164,5 +164,22 @@ describe('AuthLoginAttemptsService', () => {
         false,
       );
     });
+  });
+
+  it('keeps an active lock when a flood of new keys fills the map', () => {
+    const limited = new AuthLoginAttemptsService();
+    (limited as any).maxTrackedKeys = 3;
+    const now = Date.now();
+
+    for (let i = 0; i < 5; i++) {
+      limited.registerFailure('attacker-target', 'admin', now);
+    }
+    expect(limited.isLocked('attacker-target', 'admin', now)).toBe(true);
+
+    for (let i = 0; i < 10; i++) {
+      limited.registerFailure('flood', `random-${i}`, now);
+    }
+
+    expect(limited.isLocked('attacker-target', 'admin', now)).toBe(true);
   });
 });

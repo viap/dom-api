@@ -93,7 +93,7 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       ),
       this.readState(
         this.loginAttempts,
-        normalizedLogin,
+        this.makeLoginKey(normalizedLogin),
         this.loginPolicy,
         now,
       ),
@@ -117,12 +117,12 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
     );
     const wasLoginLocked = this.isLockedIn(
       this.loginAttempts,
-      normalizedLogin,
+      this.makeLoginKey(normalizedLogin),
       now,
     );
     const loginResult = this.recordFailure(
       this.loginAttempts,
-      normalizedLogin,
+      this.makeLoginKey(normalizedLogin),
       this.loginPolicy,
       now,
     );
@@ -254,18 +254,33 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       : second;
   }
 
-  // Map keeps insertion order, so the first key is the oldest entry.
+  // Map keeps insertion order, so iteration starts with the oldest entry.
+  // Active locks are kept, otherwise a flood of new keys could lift them.
   private evictOldestIfFull(map: Map<string, LoginAttemptState>): void {
-    if (map.size >= this.maxTrackedKeys) {
-      const oldestKey = map.keys().next().value;
-      if (oldestKey !== undefined) {
-        map.delete(oldestKey);
+    if (map.size < this.maxTrackedKeys) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const [key, state] of map) {
+      if (!state.lockedUntil || state.lockedUntil <= now) {
+        map.delete(key);
+        return;
       }
+    }
+
+    const oldestKey = map.keys().next().value;
+    if (oldestKey !== undefined) {
+      map.delete(oldestKey);
     }
   }
 
   private makeKey(sourceIp: string, normalizedLogin: string): string {
-    return `${sourceIp}|${normalizedLogin}`;
+    return `user:${sourceIp}|${normalizedLogin}`;
+  }
+
+  private makeLoginKey(normalizedLogin: string): string {
+    return `user:${normalizedLogin}`;
   }
 
   private shouldTrack(sourceIp: string, normalizedLogin: string): boolean {
