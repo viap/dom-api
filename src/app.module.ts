@@ -1,6 +1,6 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TimezoneInterceptor } from './common/interceptors/timezone.interceptor';
 import { assertRequiredAuthEnv } from './common/utils/required-auth-env';
@@ -9,8 +9,7 @@ import { ApiClientsModule } from './api-clients/api-clients.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthGuard } from './auth/auth.guard';
-import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { APP_GUARD_PROVIDERS } from './common/guards/app-guards';
 import { AuthModule } from './auth/auth.module';
 import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
@@ -26,7 +25,6 @@ import { ProgramsModule } from './programs/programs.module';
 import { WsModule } from './ws/ws.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PsychologistsModule } from './psychologists/psychologists.module';
-import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
 import { TherapyRequestsModule } from './therapy-requests/therapy-requests.module';
 import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
@@ -76,18 +74,7 @@ import { cwd } from 'process';
   controllers: [AppController],
   providers: [
     AppService,
-    {
-      provide: APP_GUARD,
-      useClass: AppThrottlerGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
+    ...APP_GUARD_PROVIDERS,
     {
       provide: APP_INTERCEPTOR,
       useClass: TimezoneInterceptor,
