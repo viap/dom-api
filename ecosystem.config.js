@@ -3,15 +3,18 @@ module.exports = {
     {
       name: 'domApi',
       script: 'dist/main.js',
+      // Must stay a single fork: the rate limiter, login attempt counters and
+      // WebSocket socket maps live in process memory.
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
       env: {},
-      // Restart settings: back off exponentially instead of giving up after
-      // a short crash loop and leaving the API down.
-      max_restarts: 50,
+      // Restart settings: back off exponentially (up to 15s between tries)
+      // instead of giving up after a short crash loop; 1000 unstable restarts
+      // cover hours of a dependency outage before pm2 stops trying.
+      max_restarts: 1000,
       min_uptime: '10s',
       exp_backoff_restart_delay: 1000,
       //logging

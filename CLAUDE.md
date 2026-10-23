@@ -106,6 +106,7 @@ These are registered once in `AppModule` and apply to every route automatically.
 
 | Type | Class | Effect |
 |---|---|---|
+| `APP_GUARD` | `AppThrottlerGuard` | Global rate limit (300/min per user, Telegram id or IP); anonymous reads only where `@Throttle` is set |
 | `APP_GUARD` | `AuthGuard` | Validates JWT, loads the user and sets `req.user` / `req.userContext` with current database roles |
 | `APP_GUARD` | `RolesGuard` | Enforces `@Roles()` decorator |
 | `APP_INTERCEPTOR` | `TimezoneInterceptor` | Normalises timezone across requests |
@@ -135,6 +136,10 @@ The project uses a consistent dual-schema approach:
 5. Import cross-module dependencies by adding their modules to `imports` — never import service files directly.
 6. Add the new module to the `imports` array of `AppModule`.
 7. Update both `CLAUDE.md` and `AGENTS.md` if the new module establishes a pattern others should follow.
+
+### Single-process constraint
+
+The rate limiter (`AppThrottlerGuard`), login attempt counters (`AuthLoginAttemptsService`) and WebSocket socket maps (`WsGateway`) keep state in process memory. They are correct only with one pm2 instance in fork mode (`ecosystem.config.js`). Scaling out requires moving that state to a shared store first.
 
 ### Configuration
 - Environment variables loaded from `config/.env`
