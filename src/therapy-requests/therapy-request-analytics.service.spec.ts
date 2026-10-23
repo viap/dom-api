@@ -2106,12 +2106,15 @@ describe('TherapyRequestAnalyticsService', () => {
     expect(psychologistRows).toHaveLength(21);
   });
 
-  it('refuses exports above the row limit instead of truncating', async () => {
+  it('refuses exports when the lifecycle rows exceed the limit', async () => {
     const find = jest.fn();
     const service = new TherapyRequestAnalyticsService(
       {
         find,
-        countDocuments: jest.fn().mockReturnValue(countChain(10_001)),
+        countDocuments: jest
+          .fn()
+          .mockReturnValueOnce(countChain(10))
+          .mockReturnValueOnce(countChain(10_001)),
       } as any,
       {} as any,
       { find: jest.fn() } as any,
