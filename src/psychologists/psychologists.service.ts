@@ -18,7 +18,7 @@ import {
   PsychologistDocument,
 } from './schemas/psychologist.schema';
 
-const directoryUserFields = 'name roles';
+const directoryUserFields = 'name';
 
 const submodels = [
   'user',
@@ -51,12 +51,15 @@ export class PsychologistsService {
     const psychologists = await this.psychologistModel
       .find()
       .select('-clients')
-      .populate({ path: 'user', select: directoryUserFields })
+      .populate({
+        path: 'user',
+        select: directoryUserFields,
+        // users without the psychologist role are not populated (null)
+        match: { roles: Role.Psychologist },
+      })
       .exec();
 
-    return psychologists.filter((psychologist) =>
-      psychologist.user?.roles?.includes(Role.Psychologist),
-    );
+    return psychologists.filter((psychologist) => !!psychologist.user);
   }
 
   async getDirectoryEntry(id: string): Promise<PsychologistDocument | null> {

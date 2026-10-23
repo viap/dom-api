@@ -59,8 +59,7 @@ describe('PsychologistService', () => {
       select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
       exec: jest.fn().mockResolvedValue([
-        { _id: 'p1', user: { name: 'A', roles: ['psychologist'] } },
-        { _id: 'p2', user: { name: 'B', roles: ['user'] } },
+        { _id: 'p1', user: { name: 'A' } },
         { _id: 'p3', user: null },
       ]),
     };
@@ -71,7 +70,8 @@ describe('PsychologistService', () => {
     expect(query.select).toHaveBeenCalledWith('-clients');
     expect(query.populate).toHaveBeenCalledWith({
       path: 'user',
-      select: 'name roles',
+      select: 'name',
+      match: { roles: 'psychologist' },
     });
     expect(result.map((item) => item._id)).toEqual(['p1']);
   });
