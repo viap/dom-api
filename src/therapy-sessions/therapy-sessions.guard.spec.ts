@@ -1,5 +1,9 @@
+import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PsychologistsService } from '../psychologists/psychologists.service';
+import { ROLES_KEY } from '../roles/decorators/role.docorator';
+import { Role } from '../roles/enums/roles.enum';
+import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsGuard } from './therapy-sessions.guard';
 import { TherapySessionsService } from './therapy-sessions.service';
 
@@ -9,13 +13,30 @@ describe('TherapySessionsGuard', () => {
   let psychologistsService: jest.Mocked<PsychologistsService>;
   let therapySessionsService: jest.Mocked<TherapySessionsService>;
 
+  const requiredRoles = [Role.Admin, Role.Editor, Role.Psychologist];
+
+  function run(roles: Role[], params: Record<string, string>) {
+    const request = { userContext: { userId: 'user-id', roles }, params };
+    return guard.canActivate({
+      switchToHttp: () => ({ getRequest: () => request }),
+      getHandler: jest.fn(),
+      getClass: jest.fn(),
+    } as unknown as ExecutionContext);
+  }
+
   beforeEach(() => {
     reflector = {
-      getAllAndOverride: jest.fn(),
+      getAllAndOverride: jest.fn((key: string) =>
+        key === IS_MY_THERAPY_SESSIONS_KEY
+          ? true
+          : key === ROLES_KEY
+          ? requiredRoles
+          : undefined,
+      ),
     } as any;
 
     psychologistsService = {
-      getByUserId: jest.fn(),
+      getProfileByUserId: jest.fn(),
     } as any;
 
     therapySessionsService = {
@@ -29,7 +50,32 @@ describe('TherapySessionsGuard', () => {
     );
   });
 
-  it('should be defined', () => {
-    expect(guard).toBeDefined();
+  it('allows admins without a psychologist profile', async () => {
+    psychologistsService.getProfileByUserId.mockResolvedValue(null);
+
+    await expect(run([Role.Admin], { sessionId: 's1' })).resolves.toBe(true);
+  });
+
+  it('denies a psychologist access to another psychologist session', async () => {
+    psychologistsService.getProfileByUserId.mockResolvedValue({
+      _id: 'p1',
+    } as any);
+    therapySessionsService.getById.mockResolvedValue({
+      psychologist: { _id: 'p2' },
+    } as any);
+
+    await expect(run([Role.Psychologist], { sessionId: 's1' })).resolves.toBe(
+      false,
+    );
+  });
+
+  it('denies a psychologist another psychologist list', async () => {
+    psychologistsService.getProfileByUserId.mockResolvedValue({
+      _id: 'p1',
+    } as any);
+
+    await expect(
+      run([Role.Psychologist], { psychologistId: 'p2' }),
+    ).resolves.toBe(false);
   });
 });

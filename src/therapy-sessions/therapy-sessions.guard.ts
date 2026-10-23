@@ -36,18 +36,15 @@ export class TherapySessionsGuard implements CanActivate {
           return false;
         }
 
-        const psychologist = await this.psychologistsService.getByUserId(
+        const psychologist = await this.psychologistsService.getProfileByUserId(
           request.userContext.userId,
         );
 
-        if (!psychologist) {
-          return false;
+        if (psychologist) {
+          request.psychologistContext = {
+            id: psychologist._id.toString(),
+          };
         }
-
-        const params = request.params || {};
-        request.psychologistContext = {
-          id: psychologist._id.toString(),
-        };
 
         // NOTICE: check if user have any required role except psychologist
         if (
@@ -57,6 +54,12 @@ export class TherapySessionsGuard implements CanActivate {
         ) {
           return true;
         }
+
+        if (!psychologist) {
+          return false;
+        }
+
+        const params = request.params || {};
 
         if (params.psychologistId) {
           return (
