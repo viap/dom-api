@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
   Post,
   Req,
   Res,
@@ -19,7 +20,7 @@ import { GetUserContext } from '../common/user-context/user-context.decorator';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthLoginAttemptsService } from './auth-login-attempts.service';
 import { AuthService } from './auth.service';
-import { getClientIp } from './utils/client-ip';
+import { getClientIp, hasUntrustedClientIpHeader } from './utils/client-ip';
 import { Public } from './decorators/public.decorator';
 import { AuthByTelegramDto } from './dto/auth-by-telegram.dto';
 import { AuthByUserDto } from './dto/auth-by-user.dto';
@@ -35,6 +36,8 @@ const UUID_REGEX =
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private authService: AuthService,
     private authLoginAttemptsService: AuthLoginAttemptsService,
@@ -198,6 +201,11 @@ export class AuthController {
     clientName?: string,
   ): AuthRequestMetadata {
     const sourceIp = getClientIp(request);
+    if (hasUntrustedClientIpHeader(request)) {
+      this.logger.warn(
+        JSON.stringify({ event: 'auth.client_ip_header.untrusted', sourceIp }),
+      );
+    }
 
     const userAgent = this.readHeaderValue(request.headers['user-agent']);
 

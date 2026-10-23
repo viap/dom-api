@@ -44,3 +44,12 @@ export function getClientIp(req: RequestLike): string {
 
   return req.ip || req.socket?.remoteAddress || 'unknown';
 }
+
+// True when a visitor IP header arrived without valid web client credentials:
+// either a spoofing attempt or WEB_CLIENT_* / API_CLIENT_* mismatch in config.
+export function hasUntrustedClientIpHeader(req: RequestLike): boolean {
+  return (
+    req.headers?.[CLIENT_IP_HEADER] !== undefined &&
+    !isTrustedApiClient(req.body?.apiClient, 'WEB')
+  );
+}

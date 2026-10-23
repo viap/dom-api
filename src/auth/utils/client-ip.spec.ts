@@ -1,4 +1,8 @@
-import { CLIENT_IP_HEADER, getClientIp } from './client-ip';
+import {
+  CLIENT_IP_HEADER,
+  getClientIp,
+  hasUntrustedClientIpHeader,
+} from './client-ip';
 
 describe('getClientIp', () => {
   const originalEnv = { ...process.env };
@@ -38,5 +42,22 @@ describe('getClientIp', () => {
         request({ name: 'domWeb', password: 'web-secret' }, 'admin-lock'),
       ),
     ).toBe('10.0.0.1');
+  });
+
+  it('flags the header only when credentials are not trusted', () => {
+    expect(
+      hasUntrustedClientIpHeader(
+        request({ name: 'domWeb', password: 'web-secret' }),
+      ),
+    ).toBe(false);
+    expect(
+      hasUntrustedClientIpHeader(request({ name: 'domWeb', password: 'x' })),
+    ).toBe(true);
+    expect(
+      hasUntrustedClientIpHeader({
+        headers: {},
+        body: { apiClient: undefined },
+      }),
+    ).toBe(false);
   });
 });
