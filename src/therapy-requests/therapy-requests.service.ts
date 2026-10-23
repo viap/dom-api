@@ -377,7 +377,10 @@ export class TherapyRequestsService {
     return this.getById(id);
   }
 
-  async acceptRequest(therapyRequestId: string): Promise<boolean> {
+  async acceptRequest(
+    therapyRequestId: string,
+    psychologistId?: string,
+  ): Promise<boolean> {
     const validId = validateObjectId(therapyRequestId);
     if (!validId) {
       return false;
@@ -386,7 +389,13 @@ export class TherapyRequestsService {
     // Claim first so concurrent accepts cannot add the client twice.
     const claimed = await this.therapyRequestModel
       .findOneAndUpdate(
-        { _id: validId, accepted: { $ne: true }, psychologist: { $ne: null } },
+        {
+          _id: validId,
+          accepted: { $ne: true },
+          psychologist: psychologistId
+            ? valueToObjectId(psychologistId)
+            : { $ne: null },
+        },
         { $set: { accepted: true } },
       )
       .exec();

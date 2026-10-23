@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PsychologistsService } from '../psychologists/psychologists.service';
@@ -11,7 +11,7 @@ import { Role } from '../roles/enums/roles.enum';
 
 describe('RequestsController', () => {
   let controller: TherapyRequestsController;
-  let service: { update: jest.Mock };
+  let service: { update: jest.Mock; acceptRequest: jest.Mock };
 
   beforeEach(async () => {
     const mockTherapyRequestsService = {
@@ -20,6 +20,7 @@ describe('RequestsController', () => {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      acceptRequest: jest.fn(),
     };
 
     const mockPsychologistsService = {
@@ -89,6 +90,12 @@ describe('RequestsController', () => {
       },
     );
 
+    it('rejects an empty transfer from a psychologist with 400', () => {
+      expect(() =>
+        controller.update(request([Role.Psychologist]), 'r1', {} as any),
+      ).toThrow(BadRequestException);
+    });
+
     it('lets an editor change any field', async () => {
       await controller.update(request([Role.Editor]), 'r1', {
         name: 'x',
@@ -109,4 +116,30 @@ describe('RequestsController', () => {
       ).toEqual([Role.Admin, Role.Editor]);
     },
   );
+
+  describe('acceptRequest()', () => {
+    it('binds a psychologist claim to their own profile', () => {
+      controller.acceptRequest(
+        {
+          userContext: { userId: 'u', roles: [Role.Psychologist] },
+          psychologistContext: { id: 'p1' },
+        } as EnhancedRequest,
+        'r1',
+      );
+
+      expect(service.acceptRequest).toHaveBeenCalledWith('r1', 'p1');
+    });
+
+    it('lets admins accept regardless of their own profile', () => {
+      controller.acceptRequest(
+        {
+          userContext: { userId: 'u', roles: [Role.Admin] },
+          psychologistContext: { id: 'p-admin' },
+        } as EnhancedRequest,
+        'r1',
+      );
+
+      expect(service.acceptRequest).toHaveBeenCalledWith('r1', undefined);
+    });
+  });
 });

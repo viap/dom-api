@@ -471,6 +471,18 @@ describe('RequestsService', () => {
       expect(psychologists.addNewClient).not.toHaveBeenCalled();
     });
 
+    it('includes the psychologist in the claim when given', async () => {
+      model.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await service.acceptRequest(requestId, '507f1f77bcf86cd799439088');
+
+      expect(String(model.findOneAndUpdate.mock.calls[0][0].psychologist)).toBe(
+        '507f1f77bcf86cd799439088',
+      );
+    });
+
     it('adds the client once the request is claimed', async () => {
       model.findOneAndUpdate.mockReturnValue({
         exec: jest.fn().mockResolvedValue({ _id: requestId }),

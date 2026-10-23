@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -88,8 +89,16 @@ export class TherapyRequestsController {
   }
 
   @Post(':therapyRequestId/accept')
-  acceptRequest(@Param('therapyRequestId') therapyRequestId: string) {
-    return this.therapyRequestService.acceptRequest(therapyRequestId);
+  acceptRequest(
+    @Request() request: EnhancedRequest,
+    @Param('therapyRequestId') therapyRequestId: string,
+  ) {
+    // A psychologist's claim must still name them, so a concurrent transfer
+    // to a colleague wins; admins and editors accept on anyone's behalf.
+    return this.therapyRequestService.acceptRequest(
+      therapyRequestId,
+      this.canManageAll(request) ? undefined : request.psychologistContext?.id,
+    );
   }
 
   @Post(':therapyRequestId/reject')
@@ -105,15 +114,13 @@ export class TherapyRequestsController {
     updateData: UpdateTherapyRequestDto,
   ) {
     // A psychologist may only transfer their own request to a colleague.
-    const roles = request.userContext?.roles || [];
-    const canEditAnything =
-      roles.includes(Role.Admin) || roles.includes(Role.Editor);
-    const fields = Object.keys(updateData);
-    if (
-      !canEditAnything &&
-      (fields.length !== 1 || fields[0] !== 'psychologist')
-    ) {
-      throw new ForbiddenException();
+    if (!this.canManageAll(request)) {
+      if (Object.keys(updateData).some((field) => field !== 'psychologist')) {
+        throw new ForbiddenException();
+      }
+      if (!updateData.psychologist) {
+        throw new BadRequestException('psychologist is required');
+      }
     }
 
     return this.therapyRequestService.update(therapyRequestId, updateData);
@@ -123,5 +130,10 @@ export class TherapyRequestsController {
   @Roles(Role.Admin, Role.Editor)
   remove(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.remove(therapyRequestId);
+  }
+
+  private canManageAll(request: EnhancedRequest): boolean {
+    const roles = request.userContext?.roles || [];
+    return roles.includes(Role.Admin) || roles.includes(Role.Editor);
   }
 }
