@@ -1,4 +1,4 @@
-import { OnModuleInit } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -17,6 +17,7 @@ import { NotificationDocument } from '@/notifications/schemas/notification.schem
 // contacts and receipts act on behalf of users. dom-web has no socket client.
 // ponytail: in-memory socket set, correct only with a single pm2 fork.
 const botSockets = new Set<string>();
+let warnedAboutLegacyReceipt = false;
 const webSocketPort = process.env.WEBSOCKET_PORT
   ? parseInt(process.env.WEBSOCKET_PORT)
   : 3004;
@@ -34,6 +35,8 @@ const webSocketPort = process.env.WEBSOCKET_PORT
 export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(WsGateway.name);
 
   constructor(
     private authService: AuthService,
@@ -93,9 +96,14 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
     const { notificationId, token } = data || ({} as typeof data);
     let userId = typeof data?.userId === 'string' ? data.userId : undefined;
 
-    // TODO(remove after dom-bot sends userId, 2026-11): older bots send the
-    // recipient's stored session token; only its userId is read.
+    // TODO(remove once 'ws.legacy_receipt_token' no longer appears in logs
+    // after the dom-bot deploy): older bots send the recipient's stored
+    // session token; only its userId is read.
     if (!userId && token) {
+      if (!warnedAboutLegacyReceipt) {
+        warnedAboutLegacyReceipt = true;
+        this.logger.warn(JSON.stringify({ event: 'ws.legacy_receipt_token' }));
+      }
       const payload = await this.authService.decode(token);
       if (payload !== null && typeof payload === 'object' && payload.userId) {
         userId = String(payload.userId);
