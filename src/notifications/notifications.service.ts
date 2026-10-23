@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
+import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { valueToObjectId } from '@/common/utils/value-to-object-id';
 import { UsersService } from '@/users/users.service';
 import { NOTIFICATION_DAYS_LIFETIME } from './consts';
@@ -175,17 +176,25 @@ export class NotificationsService {
   }
 
   async addReceived(notificationId: string, userId: string): Promise<boolean> {
+    const validNotificationId = validateObjectId(notificationId);
+    if (!validNotificationId) return false;
+
     const user = await this.userService.getById(userId);
     if (!user) return false;
 
-    // NOTICE: add user to received list in notification
+    // NOTICE: add user to received list in notification. The user must still
+    // be an eligible recipient by current roles, mirroring the bot's selection.
     const updatedNotification = await this.notificationModel
       .findOneAndUpdate(
         {
-          _id: notificationId,
+          _id: validNotificationId,
           received: {
             $not: { $elemMatch: { $eq: user._id } },
           },
+          $and: [
+            { $or: [{ roles: { $size: 0 } }, { roles: { $in: user.roles } }] },
+            { $or: [{ recipients: { $size: 0 } }, { recipients: user._id }] },
+          ],
         },
         {
           $addToSet: { received: user._id },
@@ -197,7 +206,7 @@ export class NotificationsService {
       return false;
     }
 
-    await this.updateNotificationStatus(notificationId);
+    await this.updateNotificationStatus(validNotificationId);
 
     return true;
   }
@@ -232,7 +241,7 @@ export class NotificationsService {
 
     if (isEveryoneWasNotified || isTimeOver) {
       notification.status = NotificationStatuses.INACTIVE;
-      notification.save();
+      await notification.save();
     }
   }
 

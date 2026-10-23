@@ -147,30 +147,46 @@ describe('NotificationsService', () => {
   });
 
   describe('addReceived', () => {
+    const NOTIFICATION_ID = '507f1f77bcf86cd799439011';
+
+    it('rejects invalid notification ids without touching the database', async () => {
+      await expect(service.addReceived('not-an-id', 'user-id')).resolves.toBe(
+        false,
+      );
+      expect(mockUsersService.getById).not.toHaveBeenCalled();
+    });
+
     it('returns true only when the call claims a new received user', async () => {
       const exec = jest.fn().mockResolvedValue({ _id: 'notification-id' });
       const updateStatusSpy = jest
         .spyOn(service, 'updateNotificationStatus')
         .mockResolvedValue(undefined);
-      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockUsersService.getById.mockResolvedValue({
+        _id: 'user-id',
+        roles: ['admin'],
+      });
       mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
 
       await expect(
-        service.addReceived('notification-id', 'user-id'),
+        service.addReceived(NOTIFICATION_ID, 'user-id'),
       ).resolves.toBe(true);
 
       expect(mockNotificationModel.findOneAndUpdate).toHaveBeenCalledWith(
         {
-          _id: 'notification-id',
+          _id: NOTIFICATION_ID,
           received: {
             $not: { $elemMatch: { $eq: 'user-id' } },
           },
+          $and: [
+            { $or: [{ roles: { $size: 0 } }, { roles: { $in: ['admin'] } }] },
+            { $or: [{ recipients: { $size: 0 } }, { recipients: 'user-id' }] },
+          ],
         },
         {
           $addToSet: { received: 'user-id' },
         },
       );
-      expect(updateStatusSpy).toHaveBeenCalledWith('notification-id');
+      expect(updateStatusSpy).toHaveBeenCalledWith(NOTIFICATION_ID);
       expect(mockNotificationModel.findOne).not.toHaveBeenCalled();
     });
 
@@ -179,11 +195,11 @@ describe('NotificationsService', () => {
       const updateStatusSpy = jest
         .spyOn(service, 'updateNotificationStatus')
         .mockResolvedValue(undefined);
-      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockUsersService.getById.mockResolvedValue({ _id: 'user-id', roles: [] });
       mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
 
       await expect(
-        service.addReceived('notification-id', 'user-id'),
+        service.addReceived(NOTIFICATION_ID, 'user-id'),
       ).resolves.toBe(false);
 
       expect(updateStatusSpy).not.toHaveBeenCalled();
@@ -197,7 +213,7 @@ describe('NotificationsService', () => {
       mockUsersService.getById.mockResolvedValue(null);
 
       await expect(
-        service.addReceived('notification-id', 'missing-user-id'),
+        service.addReceived(NOTIFICATION_ID, 'missing-user-id'),
       ).resolves.toBe(false);
 
       expect(mockNotificationModel.findOneAndUpdate).not.toHaveBeenCalled();
