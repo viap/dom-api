@@ -117,6 +117,50 @@ describe('AuthService', () => {
     });
   });
 
+  describe('signInByTelegram', () => {
+    const originalBotClientName = process.env.BOT_CLIENT_NAME;
+    const telegram = { id: '12345', username: '' };
+
+    beforeEach(() => {
+      process.env.BOT_CLIENT_NAME = 'domBot';
+      mockApiClientsService.findOne.mockImplementation((name: string) => ({
+        name,
+        password: 'expected-password',
+      }));
+      mockJwtService.signAsync.mockResolvedValue('signed-token');
+    });
+
+    afterEach(() => {
+      process.env.BOT_CLIENT_NAME = originalBotClientName;
+    });
+
+    it('rejects a valid non-bot client without touching users', async () => {
+      await expect(
+        service.signInByTelegram(
+          { name: 'domWeb', password: 'expected-password' },
+          telegram,
+        ),
+      ).rejects.toMatchObject({
+        reason: AuthFailureReason.InvalidApiClient,
+      });
+      expect(mockUsersService.getByTelegramId).not.toHaveBeenCalled();
+    });
+
+    it('issues a token for the bot client', async () => {
+      mockUsersService.getByTelegramId.mockResolvedValue({
+        _id: { toString: () => 'user-id' },
+        roles: ['user'],
+      });
+
+      await expect(
+        service.signInByTelegram(
+          { name: 'domBot', password: 'expected-password' },
+          telegram,
+        ),
+      ).resolves.toEqual({ auth_token: 'signed-token' });
+    });
+  });
+
   it('returns auth token when credentials are valid', async () => {
     mockApiClientsService.findOne.mockReturnValue({
       name: 'domWeb',

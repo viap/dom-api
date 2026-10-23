@@ -55,7 +55,12 @@ export class AuthService {
       clientName: initClient?.name || metadata?.clientName,
     });
 
-    if (!this.isAvailableClient(initClient)) {
+    // Telegram identity is trusted only from the bot, which receives it from
+    // Telegram itself. Other clients would let callers pick any Telegram id.
+    if (
+      !this.isAvailableClient(initClient) ||
+      initClient.name !== process.env.BOT_CLIENT_NAME
+    ) {
       this.logAuthFailure({
         reason: AuthFailureReason.InvalidApiClient,
         metadata: authMetadata,
