@@ -1,69 +1,63 @@
 import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { currentUserAlias } from '@/common/const/current-user-alias';
-import { includesOther } from '@/common/utils/includes-other';
 import { PsychologistsService } from '@/psychologists/psychologists.service';
-import { ROLES_KEY } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
-import { IS_MY_DATA } from './decorators/is-my-data.decorator';
+import { TherapyRequestsService } from './therapy-requests.service';
 
+// Admins and editors manage all requests; a psychologist reaches only the
+// requests currently assigned to them.
 @Injectable()
 export class TherapyRequestsGuard implements CanActivate {
   constructor(
-    private reflector: Reflector,
     private psychologistsService: PsychologistsService,
+    private therapyRequestsService: TherapyRequestsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<EnhancedRequest>();
-    const ShouldBeAvailableIfMyData =
-      this.reflector.getAllAndOverride<boolean>(IS_MY_DATA, [
-        context.getHandler(),
-      ]) || false;
-
-    const requiredRoles =
-      this.reflector.getAllAndOverride<Array<Role>>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) || [];
 
     try {
       if (!request.userContext) {
         return false;
       }
 
-      const psychologist = await this.psychologistsService.getByUserId(
+      const psychologist = await this.psychologistsService.getProfileByUserId(
         request.userContext.userId,
       );
 
-      if (!psychologist) {
+      if (psychologist) {
+        request.psychologistContext = {
+          id: psychologist._id.toString(),
+        };
+      }
+
+      const roles = request.userContext.roles || [];
+      if (roles.includes(Role.Admin) || roles.includes(Role.Editor)) {
+        return true;
+      }
+
+      if (!request.psychologistContext) {
         return false;
       }
 
+      const ownId = request.psychologistContext.id;
       const params = request.params || {};
-      request.psychologistContext = {
-        id: psychologist._id.toString(),
-      };
 
-      //NOTICE: user's own data is available even if there is no suitable role
-      if (params.psychologistId && ShouldBeAvailableIfMyData) {
+      if (params.psychologistId) {
         return (
-          request.psychologistContext.id === params.psychologistId ||
+          params.psychologistId === ownId ||
           params.psychologistId === currentUserAlias
         );
       }
 
-      // NOTICE: check if user have any required role except psychologist role
-      if (
-        includesOther<Role>(requiredRoles, request.userContext.roles, [
-          Role.Psychologist,
-        ])
-      ) {
-        return true;
+      if (params.therapyRequestId) {
+        const assignedPsychologistId =
+          await this.therapyRequestsService.getAssignedPsychologistId(
+            params.therapyRequestId,
+          );
+        return assignedPsychologistId === ownId;
       }
-
-      return true;
     } catch {}
 
     return false;

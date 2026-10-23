@@ -166,6 +166,21 @@ export class TherapyRequestsService {
     }
   }
 
+  async getAssignedPsychologistId(id: string): Promise<string | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    const therapyRequest = await this.therapyRequestModel
+      .findById(validId)
+      .select('psychologist')
+      .lean()
+      .exec();
+    return therapyRequest?.psychologist
+      ? therapyRequest.psychologist.toString()
+      : null;
+  }
+
   async getById(id: string): Promise<TherapyRequestDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -353,51 +368,65 @@ export class TherapyRequestsService {
   }
 
   async acceptRequest(therapyRequestId: string): Promise<boolean> {
-    const therapyRequest = await this.getById(therapyRequestId);
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      return false;
+    }
+
+    // Claim first so concurrent accepts cannot add the client twice.
+    const claimed = await this.therapyRequestModel
+      .findOneAndUpdate(
+        { _id: validId, accepted: { $ne: true }, psychologist: { $ne: null } },
+        { $set: { accepted: true } },
+      )
+      .exec();
+    if (!claimed) {
+      return false;
+    }
+
     let result: boolean | undefined = false;
+    try {
+      const therapyRequest = await this.getById(validId);
+      if (therapyRequest && therapyRequest.psychologist) {
+        const telegramUserFromRequest: Contact | undefined =
+          therapyRequest.contacts.find(
+            (contact) => contact.network === SocialNetworks.Telegram,
+          );
 
-    if (
-      therapyRequest &&
-      therapyRequest.psychologist &&
-      !therapyRequest.accepted
-    ) {
-      const telegramUserFromRequest: Contact | undefined =
-        therapyRequest.contacts.find(
-          (contact) => contact.network === SocialNetworks.Telegram,
-        );
+        const telegramUserFromUser: Contact | undefined =
+          therapyRequest.user?.contacts.find(
+            (contact) => contact.network === SocialNetworks.Telegram,
+          );
 
-      const telegramUserFromUser: Contact | undefined =
-        therapyRequest.user?.contacts.find(
-          (contact) => contact.network === SocialNetworks.Telegram,
-        );
-
-      if (
-        therapyRequest.user &&
-        telegramUserFromUser?.username === telegramUserFromRequest?.username
-      ) {
-        result = await this.psychologistService.addClientFromUser(
-          therapyRequest.psychologist._id.toString(),
-          therapyRequest.user._id.toString(),
-          therapyRequest,
-        );
-      } else {
-        result = await this.psychologistService.addNewClient(
-          therapyRequest.psychologist._id.toString(),
-          {
-            name: therapyRequest.name,
-            contacts: therapyRequest.contacts,
-          },
-          therapyRequest,
-        );
+        if (
+          therapyRequest.user &&
+          telegramUserFromUser?.username === telegramUserFromRequest?.username
+        ) {
+          result = await this.psychologistService.addClientFromUser(
+            therapyRequest.psychologist._id.toString(),
+            therapyRequest.user._id.toString(),
+            therapyRequest,
+          );
+        } else {
+          result = await this.psychologistService.addNewClient(
+            therapyRequest.psychologist._id.toString(),
+            {
+              name: therapyRequest.name,
+              contacts: therapyRequest.contacts,
+            },
+            therapyRequest,
+          );
+        }
       }
-
-      if (result) {
-        therapyRequest.accepted = true;
-        await therapyRequest.save();
+    } finally {
+      if (!result) {
+        await this.therapyRequestModel
+          .updateOne({ _id: validId }, { $set: { accepted: false } })
+          .exec();
       }
     }
 
-    return result;
+    return !!result;
   }
 
   async rejectRequest(therapyRequestId: string): Promise<boolean> {

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Post,
@@ -31,6 +32,7 @@ export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
 
   @Get()
+  @Roles(Role.Admin, Role.Editor)
   getAll(@Query() params?: TherapyRequestQueryParams) {
     let accepted: boolean | undefined;
     try {
@@ -80,7 +82,7 @@ export class TherapyRequestsController {
   }
 
   @Post()
-  @Roles(Role.User)
+  @Roles(Role.Admin, Role.Editor)
   create(
     @Body(new JoiValidationPipe(joiCreateTherapyRequestSchema))
     createData: CreateTherapyRequestDto,
@@ -103,14 +105,28 @@ export class TherapyRequestsController {
   @Put(':therapyRequestId')
   @IsMyData()
   update(
+    @Request() request: EnhancedRequest,
     @Param('therapyRequestId') therapyRequestId: string,
     @Body(new JoiValidationPipe(joiUpdateTherapyRequestSchema))
     updateData: UpdateTherapyRequestDto,
   ) {
+    // A psychologist may only transfer their own request to a colleague.
+    const roles = request.userContext?.roles || [];
+    const canEditAnything =
+      roles.includes(Role.Admin) || roles.includes(Role.Editor);
+    const fields = Object.keys(updateData);
+    if (
+      !canEditAnything &&
+      (fields.length !== 1 || fields[0] !== 'psychologist')
+    ) {
+      throw new ForbiddenException();
+    }
+
     return this.therapyRequestService.update(therapyRequestId, updateData);
   }
 
   @Delete(':therapyRequestId')
+  @Roles(Role.Admin, Role.Editor)
   remove(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.remove(therapyRequestId);
   }

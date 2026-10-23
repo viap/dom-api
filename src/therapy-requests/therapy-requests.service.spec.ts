@@ -434,4 +434,64 @@ describe('RequestsService', () => {
       }),
     );
   });
+
+  describe('acceptRequest', () => {
+    const requestId = '507f1f77bcf86cd799439099';
+    let model: Record<string, jest.Mock>;
+    let psychologists: Record<string, jest.Mock>;
+
+    beforeEach(() => {
+      model = therapyRequestModel as unknown as Record<string, jest.Mock>;
+      model.findOneAndUpdate = jest.fn();
+      model.updateOne = jest
+        .fn()
+        .mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
+      psychologists = psychologistsService as unknown as Record<
+        string,
+        jest.Mock
+      >;
+      psychologists.addNewClient = jest.fn();
+      model.findById.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            name: 'Client',
+            contacts: [],
+            psychologist: { _id: 'p1' },
+          }),
+        }),
+      });
+    });
+
+    it('does nothing when the request is already claimed', async () => {
+      model.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(service.acceptRequest(requestId)).resolves.toBe(false);
+      expect(psychologists.addNewClient).not.toHaveBeenCalled();
+    });
+
+    it('adds the client once the request is claimed', async () => {
+      model.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: requestId }),
+      });
+      psychologists.addNewClient.mockResolvedValue(true);
+
+      await expect(service.acceptRequest(requestId)).resolves.toBe(true);
+      expect(model.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('releases the claim when adding the client fails', async () => {
+      model.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: requestId }),
+      });
+      psychologists.addNewClient.mockRejectedValue(new Error('db down'));
+
+      await expect(service.acceptRequest(requestId)).rejects.toThrow('db down');
+      expect(model.updateOne).toHaveBeenCalledWith(
+        { _id: requestId },
+        { $set: { accepted: false } },
+      );
+    });
+  });
 });
