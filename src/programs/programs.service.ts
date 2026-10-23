@@ -228,6 +228,21 @@ export class ProgramsService {
     return count > 0;
   }
 
+  async getNotificationTitle(id: string): Promise<string | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    const program = await this.programModel
+      .findById(validId)
+      .select({ title: 1 })
+      .lean()
+      .exec();
+
+    return typeof program?.title === 'string' ? program.title : null;
+  }
+
   private async resolvePublicListQuery(
     queryParams: ProgramQueryParams,
   ): Promise<{

@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { DomainCode } from '@/domains/enums/domain-code.enum';
 import { DomainsService } from '@/domains/domains.service';
 import { EventsService } from '@/events/events.service';
@@ -8,7 +9,11 @@ import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
+import { Role } from '@/roles/enums/roles.enum';
 import { ApplicationFormType } from './enums/application-form-type.enum';
+import * as ApplicationNotification from './application-notification';
 import { Application } from './schemas/application.schema';
 import { ApplicationsService } from './applications.service';
 
@@ -46,13 +51,37 @@ describe('ApplicationsService', () => {
     getActiveById: jest.fn(),
     getActiveByCode: jest.fn(),
   };
-  const mockProgramsService = { exists: jest.fn() };
-  const mockEventsService = { exists: jest.fn() };
+  const mockProgramsService = {
+    exists: jest.fn(),
+    getNotificationTitle: jest.fn(),
+  };
+  const mockEventsService = {
+    exists: jest.fn(),
+    getNotificationTitle: jest.fn(),
+  };
   const mockPartnersService = { exists: jest.fn() };
   const mockPeopleService = { exists: jest.fn() };
   const mockUsersService = { getById: jest.fn() };
+  const mockNotificationsService = { create: jest.fn() };
+  const mockConfigService = { get: jest.fn() };
+
+  const createServiceWithConfig = (configService: { get: jest.Mock }) =>
+    new ApplicationsService(
+      mockApplicationModel as any,
+      mockDomainsService as any,
+      mockProgramsService as any,
+      mockEventsService as any,
+      mockPartnersService as any,
+      mockPeopleService as any,
+      mockUsersService as any,
+      mockNotificationsService as any,
+      configService as any,
+    );
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    mockConfigService.get.mockReturnValue('https://www.example.test');
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApplicationsService,
@@ -66,11 +95,12 @@ describe('ApplicationsService', () => {
         { provide: PartnersService, useValue: mockPartnersService },
         { provide: PeopleService, useValue: mockPeopleService },
         { provide: UsersService, useValue: mockUsersService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
     service = module.get<ApplicationsService>(ApplicationsService);
-    jest.clearAllMocks();
     mockDomainsService.getActiveById.mockResolvedValue({
       _id: mockApplication.domainId,
     });
@@ -78,14 +108,265 @@ describe('ApplicationsService', () => {
       _id: mockApplication.domainId,
     });
     mockProgramsService.exists.mockResolvedValue(true);
+    mockProgramsService.getNotificationTitle.mockResolvedValue('Program');
     mockEventsService.exists.mockResolvedValue(true);
+    mockEventsService.getNotificationTitle.mockResolvedValue('Event');
     mockPartnersService.exists.mockResolvedValue(true);
     mockPeopleService.exists.mockResolvedValue(true);
     mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+    mockNotificationsService.create.mockResolvedValue({ _id: 'notification' });
+    mockSave.mockResolvedValue(mockApplication);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('fails service construction when PUBLIC_WEB_URL is invalid', () => {
+    const configService = {
+      get: jest.fn().mockReturnValue('http://localhost:3006'),
+    };
+
+    expect(() => createServiceWithConfig(configService)).toThrow(
+      'PUBLIC_WEB_URL',
+    );
+  });
+
+  it.each(Object.values(ApplicationFormType))(
+    'creates one administrator message after saving %s',
+    async (formType) => {
+      const payload =
+        formType === ApplicationFormType.ProgramEnrollment
+          ? { programId: '507f1f77bcf86cd799439033' }
+          : formType === ApplicationFormType.EventRegistration
+          ? { eventId: '507f1f77bcf86cd799439033' }
+          : { message: 'private message' };
+      const saved = {
+        ...mockApplication,
+        formType,
+        payload,
+        applicant: {
+          ...mockApplication.applicant,
+          name: 'Jane',
+        },
+      };
+      mockSave.mockResolvedValueOnce(saved);
+
+      const result = await service.create({
+        domainId: mockApplication.domainId,
+        formType,
+        applicant: saved.applicant as any,
+        payload,
+      });
+
+      expect(result).toBe(saved);
+      expect(mockNotificationsService.create).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: NotificationTypes.MESSAGE,
+          roles: [Role.Admin],
+          message: expect.stringMatching(
+            /^Новая заявка с сайта: www\.example\.test\n\n.*Имя: Jane/su,
+          ),
+          messageEntities: [
+            expect.objectContaining({
+              type: 'text_link',
+              url: 'https://www.example.test/',
+            }),
+            expect.objectContaining({
+              type: 'text_link',
+              url: `https://www.example.test/ru/admin/applications?applicationId=${mockApplication._id}`,
+            }),
+          ],
+        }),
+      );
+      expect(
+        mockNotificationsService.create.mock.calls[0][0],
+      ).not.toHaveProperty('recipients');
+      expect(
+        mockNotificationsService.create.mock.calls[0][0],
+      ).not.toHaveProperty('title');
+      const notificationMessage =
+        mockNotificationsService.create.mock.calls[0][0].message;
+      expect(notificationMessage).not.toContain('telegram');
+      expect(notificationMessage).not.toContain('john');
+      expect(notificationMessage).not.toContain('private message');
+    },
+  );
+
+  it('uses the payload event id rather than source context', async () => {
+    mockSave.mockResolvedValueOnce(mockApplication);
+
+    await service.create({
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.EventRegistration,
+      applicant: mockApplication.applicant as any,
+      source: {
+        entityType: 'program',
+        entityId: '507f1f77bcf86cd799439099',
+      },
+      payload: { eventId: '507f1f77bcf86cd799439033' },
+    });
+
+    expect(mockEventsService.getNotificationTitle).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439033',
+    );
+    expect(mockProgramsService.getNotificationTitle).not.toHaveBeenCalled();
+  });
+
+  it('does not attempt a notification when saving fails', async () => {
+    mockSave.mockRejectedValueOnce(new Error('save failed'));
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.General,
+        applicant: mockApplication.applicant as any,
+      }),
+    ).rejects.toThrow('save failed');
+
+    expect(mockNotificationsService.create).not.toHaveBeenCalled();
+  });
+
+  it('returns the saved application when notification formatting throws', async () => {
+    const logger = { error: jest.fn(), warn: jest.fn() };
+    (service as unknown as { logger: typeof logger }).logger = logger;
+    const savedWithInvalidRuntimeName = {
+      ...mockApplication,
+      applicant: { ...mockApplication.applicant, name: undefined },
+    };
+    mockSave.mockResolvedValueOnce(savedWithInvalidRuntimeName);
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.EventRegistration,
+        applicant: mockApplication.applicant as any,
+        payload: mockApplication.payload,
+      }),
+    ).resolves.toBe(savedWithInvalidRuntimeName);
+    expect(mockNotificationsService.create).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      `Application notification failed applicationId=${mockApplication._id} stage=format reason=TypeError`,
+    );
+  });
+
+  it('logs URL construction failures as format-stage errors', async () => {
+    const logger = { error: jest.fn(), warn: jest.fn() };
+    (service as unknown as { logger: typeof logger }).logger = logger;
+    const buildUrl = jest
+      .spyOn(ApplicationNotification, 'buildApplicationAdminUrl')
+      .mockImplementationOnce(() => {
+        throw new TypeError('url failed');
+      });
+
+    try {
+      await expect(
+        service.create({
+          domainId: mockApplication.domainId,
+          formType: ApplicationFormType.EventRegistration,
+          applicant: mockApplication.applicant as any,
+          payload: mockApplication.payload,
+        }),
+      ).resolves.toBe(mockApplication);
+    } finally {
+      buildUrl.mockRestore();
+    }
+
+    expect(logger.error).toHaveBeenCalledWith(
+      `Application notification failed applicationId=${mockApplication._id} stage=format reason=TypeError`,
+    );
+  });
+
+  it.each([
+    [
+      'notification exception',
+      () =>
+        mockNotificationsService.create.mockRejectedValueOnce(
+          new Error('notification failed'),
+        ),
+    ],
+    [
+      'notification validation failure',
+      () => mockNotificationsService.create.mockResolvedValueOnce(false),
+    ],
+  ])('returns the saved application after %s', async (_name, arrange) => {
+    arrange();
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.EventRegistration,
+        applicant: mockApplication.applicant as any,
+        payload: mockApplication.payload,
+      }),
+    ).resolves.toBe(mockApplication);
+  });
+
+  it.each([
+    ['plain', (message: string) => message],
+    ['JSON-encoded', (message: string) => JSON.stringify(message)],
+  ])(
+    'does not log %s notification contents from a create failure',
+    async (_encoding, encodeMessage) => {
+      const logger = { error: jest.fn(), warn: jest.fn() };
+      (service as unknown as { logger: typeof logger }).logger = logger;
+      mockNotificationsService.create.mockImplementationOnce(
+        (notification: { message: string }) =>
+          Promise.reject(
+            new Error(`telegram ${encodeMessage(notification.message)}`),
+          ),
+      );
+
+      await expect(
+        service.create({
+          domainId: mockApplication.domainId,
+          formType: ApplicationFormType.EventRegistration,
+          applicant: mockApplication.applicant as any,
+          payload: mockApplication.payload,
+        }),
+      ).resolves.toBe(mockApplication);
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      const logMessage = logger.error.mock.calls[0][0] as string;
+      expect(logMessage).toBe(
+        `Application notification failed applicationId=${mockApplication._id} stage=create reason=Error`,
+      );
+      expect(logMessage).not.toContain('Новая заявка с сайта');
+      expect(logMessage).not.toContain('Имя: John');
+      expect(logMessage).not.toContain('john');
+    },
+  );
+
+  it('continues without an event title when lookup fails', async () => {
+    const logger = { error: jest.fn(), warn: jest.fn() };
+    (service as unknown as { logger: typeof logger }).logger = logger;
+    mockEventsService.getNotificationTitle.mockRejectedValueOnce(
+      new Error(`lookup\nfailed ${'x'.repeat(400)}`),
+    );
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.EventRegistration,
+        applicant: mockApplication.applicant as any,
+        payload: mockApplication.payload,
+      }),
+    ).resolves.toBe(mockApplication);
+
+    expect(mockNotificationsService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.not.stringContaining('Мероприятие:'),
+      }),
+    );
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const logMessage = logger.warn.mock.calls[0][0] as string;
+    expect(logMessage).toContain(
+      `applicationId=${mockApplication._id} stage=target-title reason=Error`,
+    );
+    expect(logMessage).toContain('detail="lookup failed ');
+    expect(logMessage).toContain('…"');
+    expect(logMessage).not.toContain('\n');
   });
 
   it('should reject invalid referenced event ids in payload', async () => {
@@ -99,6 +380,7 @@ describe('ApplicationsService', () => {
         payload: { eventId: '507f1f77bcf86cd799439033' },
       }),
     ).rejects.toThrow(BadRequestException);
+    expect(mockNotificationsService.create).not.toHaveBeenCalled();
   });
 
   it('should reject invalid referenced person ids in specialist payload', async () => {

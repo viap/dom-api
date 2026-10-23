@@ -395,6 +395,21 @@ export class EventsService {
     return count > 0;
   }
 
+  async getNotificationTitle(id: string): Promise<string | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    const event = await this.eventModel
+      .findById(validId)
+      .select({ title: 1 })
+      .lean()
+      .exec();
+
+    return typeof event?.title === 'string' ? event.title : null;
+  }
+
   async existingIds(ids: string[]): Promise<Set<string>> {
     return resolveExistingIds(this.eventModel, ids);
   }

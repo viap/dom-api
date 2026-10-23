@@ -223,4 +223,21 @@ describe('ProgramsService', () => {
       NotFoundException,
     );
   });
+
+  it('loads only the title for an application notification', async () => {
+    const exec = jest.fn().mockResolvedValue({ title: 'Program' });
+    const lean = jest.fn().mockReturnValue({ exec });
+    const select = jest.fn().mockReturnValue({ lean });
+    mockProgramModel.findById.mockReturnValue({ select });
+
+    await expect(service.getNotificationTitle(mockProgram._id)).resolves.toBe(
+      'Program',
+    );
+    expect(select).toHaveBeenCalledWith({ title: 1 });
+  });
+
+  it('does not query for an invalid notification target id', async () => {
+    await expect(service.getNotificationTitle('invalid')).resolves.toBeNull();
+    expect(mockProgramModel.findById).not.toHaveBeenCalled();
+  });
 });

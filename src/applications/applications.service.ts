@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -20,11 +22,20 @@ import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
 import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
+import { Role } from '@/roles/enums/roles.enum';
+import { parsePublicWebUrl } from '@/common/utils/web-origin';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { UpdateApplicationDto } from './dto/update-application.dto';
 import { ApplicationFormType } from './enums/application-form-type.enum';
 import { ApplicationQueryParams } from './types/query-params.interface';
 import { Application, ApplicationDocument } from './schemas/application.schema';
+import {
+  buildApplicationAdminUrl,
+  formatApplicationNotification,
+  normalizeNotificationDisplayValue,
+} from './application-notification';
 
 const FORM_TYPE_DOMAIN_CODE_MAP: Record<ApplicationFormType, DomainCode> = {
   [ApplicationFormType.Partnership]: DomainCode.PsychCenter,
@@ -37,6 +48,9 @@ const FORM_TYPE_DOMAIN_CODE_MAP: Record<ApplicationFormType, DomainCode> = {
 
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
+  private readonly publicWebOrigin: string;
+
   constructor(
     @InjectModel(Application.name)
     private applicationModel: Model<ApplicationDocument>,
@@ -46,7 +60,13 @@ export class ApplicationsService {
     private partnersService: PartnersService,
     private peopleService: PeopleService,
     private usersService: UsersService,
-  ) {}
+    private notificationsService: NotificationsService,
+    configService: ConfigService,
+  ) {
+    this.publicWebOrigin = parsePublicWebUrl(
+      configService.get<string>('PUBLIC_WEB_URL'),
+    );
+  }
 
   async create(
     createApplicationDto: CreateApplicationDto,
@@ -61,7 +81,101 @@ export class ApplicationsService {
       ...createApplicationDto,
       domainId,
     });
-    return application.save();
+    const savedApplication = await application.save();
+    await this.createAdminNotification(savedApplication);
+    return savedApplication;
+  }
+
+  private async createAdminNotification(
+    application: ApplicationDocument,
+  ): Promise<void> {
+    const applicationId = application._id.toString();
+    let stage = 'target-title';
+
+    try {
+      let targetTitle: string | null = null;
+      try {
+        targetTitle = await this.getNotificationTargetTitle(application);
+      } catch (error) {
+        this.logNotificationFailure(applicationId, stage, error, 'warn');
+      }
+
+      stage = 'format';
+      const applicationUrl = buildApplicationAdminUrl(
+        this.publicWebOrigin,
+        applicationId,
+      );
+
+      const { message, messageEntities } = formatApplicationNotification({
+        formType: application.formType,
+        applicantName: application.applicant.name,
+        targetTitle,
+        publicWebOrigin: this.publicWebOrigin,
+        applicationUrl,
+      });
+
+      stage = 'create';
+      const notification = await this.notificationsService.create({
+        type: NotificationTypes.MESSAGE,
+        message,
+        messageEntities,
+        roles: [Role.Admin],
+      });
+
+      if (!notification) {
+        this.logNotificationFailure(
+          applicationId,
+          stage,
+          new Error('Notification validation rejected the payload'),
+          'warn',
+        );
+      }
+    } catch (error) {
+      this.logNotificationFailure(applicationId, stage, error, 'error');
+    }
+  }
+
+  private async getNotificationTargetTitle(
+    application: ApplicationDocument,
+  ): Promise<string | null> {
+    if (application.formType === ApplicationFormType.ProgramEnrollment) {
+      const programId = application.payload?.programId;
+      return typeof programId === 'string'
+        ? this.programsService.getNotificationTitle(programId)
+        : null;
+    }
+
+    if (application.formType === ApplicationFormType.EventRegistration) {
+      const eventId = application.payload?.eventId;
+      return typeof eventId === 'string'
+        ? this.eventsService.getNotificationTitle(eventId)
+        : null;
+    }
+
+    return null;
+  }
+
+  private logNotificationFailure(
+    applicationId: string,
+    stage: string,
+    error: unknown,
+    level: 'error' | 'warn',
+  ): void {
+    const reason = error instanceof Error ? error.name : typeof error;
+    const detail =
+      stage === 'target-title' && error instanceof Error
+        ? normalizeNotificationDisplayValue(error.message)
+        : '';
+    const message = [
+      'Application notification failed',
+      `applicationId=${applicationId}`,
+      `stage=${stage}`,
+      `reason=${reason}`,
+      detail ? `detail=${JSON.stringify(detail)}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    this.logger[level](message);
   }
 
   async findAll(
