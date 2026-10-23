@@ -1,18 +1,15 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ApiClientsModule } from '../src/api-clients/api-clients.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
-import { AuthGuard } from '../src/auth/auth.guard';
-import { AppThrottlerGuard } from '../src/common/guards/app-throttler.guard';
+import { APP_GUARD_PROVIDERS } from '../src/common/guards/app-guards';
 import { AuthModule } from '../src/auth/auth.module';
 import { BookingSystemModule } from '../src/booking-system/booking-system.module';
 import { SanitizationMiddleware } from '../src/common/middleware/sanitization.middleware';
 import { NotificationsModule } from '../src/notifications/notifications.module';
 import { PsychologistsModule } from '../src/psychologists/psychologists.module';
-import { RolesGuard } from '../src/roles/roles.guard';
 import { RolesModule } from '../src/roles/roles.module';
 import { TherapyRequestsModule } from '../src/therapy-requests/therapy-requests.module';
 import { TherapySessionsModule } from '../src/therapy-sessions/therapy-sessions.module';
@@ -39,22 +36,7 @@ import { cwd } from 'process';
     BookingSystemModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    // Same guard order as AppModule.
-    {
-      provide: APP_GUARD,
-      useClass: AppThrottlerGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
-  ],
+  providers: [AppService, ...APP_GUARD_PROVIDERS],
 })
 export class TestAppModule {
   configure(consumer: MiddlewareConsumer) {

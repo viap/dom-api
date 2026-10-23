@@ -24,6 +24,7 @@ const PLAIN = id(3);
 const P1_USER = id(4);
 const P2_USER = id(5);
 const DELETED = id(6);
+const ACCOUNTANT = id(7);
 const P1 = id(11);
 const P2 = id(12);
 const REQUEST_OF_P2 = id(21);
@@ -34,6 +35,7 @@ const users: Record<string, { _id: string; roles: string[] }> = {
   [PLAIN]: { _id: PLAIN, roles: ['user'] },
   [P1_USER]: { _id: P1_USER, roles: ['user', 'psychologist'] },
   [P2_USER]: { _id: P2_USER, roles: ['user', 'psychologist'] },
+  [ACCOUNTANT]: { _id: ACCOUNTANT, roles: ['user', 'accountant'] },
 };
 const psychologistsByUser: Record<string, { _id: string }> = {
   [P1_USER]: { _id: P1 },
@@ -153,14 +155,37 @@ describe('Access rules (e2e)', () => {
     ['GET', `/therapy-requests/${REQUEST_OF_P2}`, P1_USER, 403, null],
     ['GET', `/therapy-requests/${REQUEST_OF_P2}`, P2_USER, 200, null],
     ['GET', `/therapy-requests/${REQUEST_OF_P2}`, ADMIN, 200, null],
+    ['POST', '/users', EDITOR, 403, { name: 'New', ...contactsUpdate }],
+    ['GET', '/booking-system/bookings', EDITOR, 403, null],
+    [
+      'PUT',
+      `/therapy-requests/${REQUEST_OF_P2}`,
+      P1_USER,
+      403,
+      { psychologist: P1 },
+    ],
+    ['GET', '/therapy-sessions/statistic/from/0/to/1', ACCOUNTANT, 200, null],
+    ['GET', '/therapy-sessions/statistic/from/0/to/1', EDITOR, 403, null],
   ] as Array<[string, string, string, number, object | null]>)(
     '%s %s as %s -> %i',
     async (method, path, userId, status, body) => {
       const call = request(app.getHttpServer())
-        [method.toLowerCase() as 'get' | 'put'](path)
+        [method.toLowerCase() as 'get' | 'put' | 'post'](path)
         .set('Authorization', `Bearer ${tokenFor(userId)}`);
 
       await (body ? call.send(body) : call).expect(status);
     },
   );
+
+  it('rate limits logins per client IP through the global throttler', async () => {
+    const server = app.getHttpServer();
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const response = await request(server).post('/auth/login/user').send({});
+      statuses.push(response.status);
+    }
+
+    expect(statuses.slice(0, 10).every((status) => status !== 429)).toBe(true);
+    expect(statuses[10]).toBe(429);
+  });
 });
