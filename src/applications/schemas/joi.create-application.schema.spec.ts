@@ -55,3 +55,45 @@ describe('createApplicationSchema domainId behavior', () => {
     expect(error).toBeDefined();
   });
 });
+
+describe('createApplicationSchema size limits', () => {
+  const base = {
+    formType: 'general',
+    applicant: {
+      name: 'Jane Doe',
+      contacts: [{ network: 'phone', username: '+995555000000' }],
+    },
+    payload: { message: 'Hello' },
+  };
+
+  it('rejects more than 5 contacts', () => {
+    const contact = { network: 'phone', username: '+995555000000' };
+    const { error } = createApplicationSchema.validate({
+      ...base,
+      applicant: { name: 'Jane', contacts: Array(6).fill(contact) },
+    });
+    expect(error).toBeDefined();
+  });
+
+  it('rejects oversized contact values', () => {
+    const { error } = createApplicationSchema.validate({
+      ...base,
+      applicant: {
+        name: 'Jane',
+        contacts: [{ network: 'other', username: 'x'.repeat(201) }],
+      },
+    });
+    expect(error).toBeDefined();
+  });
+
+  it('rejects more than 10 utm keys', () => {
+    const utm = Object.fromEntries(
+      Array.from({ length: 11 }, (_, i) => [`k${i}`, 'v']),
+    );
+    const { error } = createApplicationSchema.validate({
+      ...base,
+      source: { utm },
+    });
+    expect(error).toBeDefined();
+  });
+});
