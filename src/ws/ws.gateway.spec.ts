@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationDocument } from '../notifications/schemas/notification.schema';
+import { UsersService } from '../users/users.service';
 import { WsGateway } from './ws.gateway';
 
 describe('WsGateway', () => {
@@ -18,9 +19,20 @@ describe('WsGateway', () => {
     getAllByUserId: jest.Mock;
     addReceived: jest.Mock;
   };
+  let mockUsersService: { getById: jest.Mock };
   let connectionHandler: (client: unknown) => Promise<void>;
+  const originalBotClientName = process.env.BOT_CLIENT_NAME;
+
+  afterEach(() => {
+    process.env.BOT_CLIENT_NAME = originalBotClientName;
+  });
 
   beforeEach(async () => {
+    process.env.BOT_CLIENT_NAME = 'bot';
+    mockUsersService = {
+      getById: jest.fn().mockResolvedValue({ _id: 'user' }),
+    };
+
     mockAuthService = {
       verifyToken: jest.fn(),
       isAvailableClient: jest.fn(),
@@ -44,6 +56,10 @@ describe('WsGateway', () => {
         {
           provide: NotificationsService,
           useValue: mockNotificationsService,
+        },
+        {
+          provide: UsersService,
+          useValue: mockUsersService,
         },
       ],
     }).compile();
@@ -118,6 +134,35 @@ describe('WsGateway', () => {
 
       expect(anonymous.disconnect).toHaveBeenCalledWith(true);
       expect(badToken.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('disconnects tokens of deleted users', async () => {
+      const client = createClient('deleted-user-socket', 'Bearer valid');
+      mockAuthService.verifyToken.mockResolvedValue({ userId: 'gone' });
+      mockUsersService.getById.mockResolvedValue(null);
+
+      await connectionHandler(client);
+
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('gives other API clients no notifications', async () => {
+      const client = createClient(
+        'web-client-socket',
+        `ApiClient ${JSON.stringify({ name: 'web', password: 'secret' })}`,
+      );
+      mockAuthService.isAvailableClient.mockReturnValue(true);
+      await connectionHandler(client);
+
+      await expect(
+        gateway.getAllActiveEventsBatch(client as never, { userIds: [] }),
+      ).resolves.toEqual([]);
+      const streamed = await gateway.getAllActiveEvents(client as never);
+      await expect(collectObservable(streamed)).resolves.toEqual([]);
+      expect(
+        mockNotificationsService.getAllActiveForBot,
+      ).not.toHaveBeenCalled();
+      expect(mockNotificationsService.getAllActive).not.toHaveBeenCalled();
     });
 
     it('forgets a user socket after disconnect', async () => {

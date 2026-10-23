@@ -17,6 +17,7 @@ import extractApiClientFromHeaders from '@/common/utils/extract-api-client-from-
 import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationDocument } from '@/notifications/schemas/notification.schema';
+import { UsersService } from '@/users/users.service';
 
 const socketToUser: { [key: string]: string } = {};
 const socketToApiClient: { [key: string]: ApiClientDto } = {};
@@ -39,6 +40,7 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   constructor(
     private authService: AuthService,
     private notificationsService: NotificationsService,
+    private usersService: UsersService,
   ) {}
 
   onModuleInit() {
@@ -50,8 +52,12 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
 
       if (token) {
         const payload = await this.authService.verifyToken(token);
+        // Same rule as HTTP: a token of a deleted user is not accepted.
+        const user = payload?.userId
+          ? await this.usersService.getById(payload.userId)
+          : null;
 
-        if (payload?.userId) {
+        if (user) {
           socketToUser[client.id] = payload.userId;
           client.emit('inited', {
             clientId: client.id,
@@ -82,17 +88,6 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   handleDisconnect(client: Socket) {
     delete socketToUser[client.id];
     delete socketToApiClient[client.id];
-  }
-
-  @SubscribeMessage('auth-by-token')
-  async authUser(
-    @MessageBody('token') token: string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const payload = await this.authService.verifyToken(token);
-    if (payload?.userId) {
-      socketToUser[client.id] = payload.userId;
-    }
   }
 
   @SubscribeMessage('notifications/get-my')
@@ -128,7 +123,7 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data?: { userIds?: Array<string> },
   ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
-    if (!socketToApiClient[client.id]) {
+    if (!this.isBotClient(client)) {
       return [];
     }
 
@@ -145,8 +140,7 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
     const { notificationId, token } = data || ({} as typeof data);
 
     let userId: string | undefined = socketToUser[client.id];
-    const apiClient = socketToApiClient[client.id];
-    if (!userId && token && apiClient?.name === process.env.BOT_CLIENT_NAME) {
+    if (!userId && token && this.isBotClient(client)) {
       // NOTICE: only the authenticated bot may name a recipient. Its stored
       // session token may be expired, so only the userId is read from it;
       // eligibility is checked against current data in addReceived.
@@ -166,12 +160,17 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   private async getAllActiveNotifications(
     client: Socket,
   ): Promise<Array<NotificationDocument>> {
-    const apiClient = socketToApiClient[client.id];
-
-    if (apiClient) {
+    if (this.isBotClient(client)) {
       return this.notificationsService.getAllActive();
     }
 
     return [];
+  }
+
+  // Notification batches contain applicant contacts and receipts act on
+  // behalf of users, so they are for the bot only, not any API client.
+  private isBotClient(client: Socket): boolean {
+    const apiClient = socketToApiClient[client.id];
+    return !!apiClient && apiClient.name === process.env.BOT_CLIENT_NAME;
   }
 }
