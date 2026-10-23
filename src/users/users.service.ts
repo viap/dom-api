@@ -82,9 +82,9 @@ export class UsersService {
     ) {
       return null;
     }
-    // Both conditions must hold for the same contact. Telegram login trusts
-    // this lookup, so an id shared by several accounts is refused rather than
-    // resolved to an arbitrary one (and never creates yet another account).
+    // Both conditions must hold for the same contact. If several accounts
+    // share the id, the oldest wins: that is the account Telegram login
+    // created first, and newer duplicates cannot take it over or lock it.
     const users = await this.userModel
       .find({
         contacts: {
@@ -94,15 +94,13 @@ export class UsersService {
           },
         },
       })
+      .sort({ _id: 1 })
       .limit(2)
       .exec();
 
     if (users.length > 1) {
       this.logger.warn(
         JSON.stringify({ event: 'auth.telegram.ambiguous_account' }),
-      );
-      throw new ConflictException(
-        'Telegram account is linked to several users',
       );
     }
 

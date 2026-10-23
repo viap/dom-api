@@ -1,4 +1,3 @@
-import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
@@ -137,11 +136,13 @@ describe('UsersService', () => {
 
   describe('getByTelegramId', () => {
     function mockFind(result: unknown[]) {
-      const limit = jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue(result),
+      const sort = jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(result),
+        }),
       });
-      (model.find as jest.Mock).mockReturnValueOnce({ limit });
-      return limit;
+      (model.find as jest.Mock).mockReturnValueOnce({ sort });
+      return sort;
     }
 
     it('matches id and network on the same contact', async () => {
@@ -155,12 +156,13 @@ describe('UsersService', () => {
       });
     });
 
-    it('refuses an id linked to several accounts', async () => {
-      mockFind([{ _id: 'u1' }, { _id: 'u2' }]);
+    it('picks the oldest account when several share the id', async () => {
+      const sort = mockFind([{ _id: 'u1' }, { _id: 'u2' }]);
 
-      await expect(service.getByTelegramId('42')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(service.getByTelegramId('42')).resolves.toEqual({
+        _id: 'u1',
+      });
+      expect(sort).toHaveBeenCalledWith({ _id: 1 });
     });
 
     it('returns null when nobody has the id', async () => {
