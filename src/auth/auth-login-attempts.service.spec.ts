@@ -124,4 +124,45 @@ describe('AuthLoginAttemptsService', () => {
     const keys = [...(limited as any).attempts.keys()];
     expect(keys).toEqual(['ip|second', 'ip|third']);
   });
+
+  describe('per-login backstop', () => {
+    it('locks a login after 30 failures from different IPs within an hour', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        expect(
+          service.registerFailure(`10.0.0.${i}`, 'admin', now).locked,
+        ).toBe(false);
+      }
+
+      expect(service.registerFailure('10.0.1.1', 'admin', now).locked).toBe(
+        true,
+      );
+      expect(service.isLocked('192.168.0.1', 'admin', now + 1000)).toBe(true);
+      expect(service.isLocked('192.168.0.1', 'other', now + 1000)).toBe(false);
+    });
+
+    it('keeps counting after a successful login from another IP', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        service.registerFailure(`10.0.0.${i}`, 'admin', now);
+      }
+      service.reset('192.168.0.1', 'admin');
+
+      expect(service.registerFailure('10.0.1.1', 'admin', now).locked).toBe(
+        true,
+      );
+    });
+
+    it('forgets failures older than an hour', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        service.registerFailure(`10.0.0.${i}`, 'admin', now);
+      }
+
+      const later = now + 61 * 60 * 1000;
+      expect(service.registerFailure('10.0.1.1', 'admin', later).locked).toBe(
+        false,
+      );
+    });
+  });
 });
