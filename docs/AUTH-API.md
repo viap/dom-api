@@ -42,11 +42,13 @@ All authentication endpoints are prefixed with `/auth`
 
 **Description**: Authenticates users via Telegram user data. Creates new users automatically if they don't exist.
 
+**Only the bot API client (`BOT_CLIENT_NAME`) may call this endpoint.** The Telegram id is trusted because the bot receives it from Telegram; there is no Telegram Login Widget signature check, so any other client gets `401` (`invalid_api_client`).
+
 **Request Body**:
 ```json
 {
   "apiClient": {
-    "name": "web-client",
+    "name": "bot-client",
     "password": "your_api_client_password"
   },
   "telegram": {
@@ -68,15 +70,14 @@ All authentication endpoints are prefixed with `/auth`
 **Validation Rules**:
 - `apiClient.name`: Required string
 - `apiClient.password`: Required string
-- `telegram.id`: Required string (Telegram user ID)
-- `telegram.first_name`: Optional string
-- `telegram.last_name`: Optional string
-- `telegram.username`: Optional string
+- `telegram.id`: Required string (Telegram user ID), max 32 characters
+- `telegram.first_name`: Optional string, may be empty, max 64 characters
+- `telegram.last_name`: Optional string, may be empty, max 64 characters
+- `telegram.username`: Optional string, may be empty, max 64 characters
 
 **Runtime Rules**:
-- Telegram login lockout uses the same policy as user login (`5` failed attempts in `15` minutes, then `15` minute lockout).
-- Lockout key for Telegram is source IP + normalized `telegram.id`.
-- Locked attempts return `429 Too Many Requests` with `Retry-After` and `retryAfterSeconds`.
+- Rate limited to 10 requests per minute per Telegram id (bot client) or per client IP.
+- The failed-attempt lockout below applies only to rejected API client credentials; a valid bot client never fails for a given Telegram id.
 
 ### 2. User/Password Authentication
 
@@ -117,6 +118,8 @@ All authentication endpoints are prefixed with `/auth`
 - Internal failure reasons are logged for operators (`invalid_api_client`, `invalid_user_credentials`).
 - Repeated failures are rate-limited by lockout policy (`5` failures / `15` minutes, lockout `15` minutes).
 - Lockout semantics are explicit: the 5th failed credential is recorded and activates lockout; the 6th and later attempts are blocked during lockout.
+- The lockout IP is the visitor IP that dom-web forwards in `X-DOM-Client-IP`, trusted only together with valid web client credentials; otherwise the request IP is used.
+- Independently, the endpoint is rate limited to 10 requests per minute per client IP.
 - Locked login attempts return `429 Too Many Requests` with `Retry-After` response header and response body `{ "message": "Too many failed attempts", "retryAfterSeconds": <seconds> }`.
 
 ### 3. Token Validation
@@ -414,7 +417,7 @@ curl -X GET http://localhost:3001/auth/check-token \
 2. **Token Refresh**: Implement token refresh mechanism for long-lived sessions
 3. **HTTPS**: Always use HTTPS in production
 4. **Environment Variables**: Never expose API client credentials in frontend code
-5. **Rate Limiting**: Implement rate limiting for authentication endpoints
+5. **Rate Limiting**: Login routes are limited to 10 requests per minute per client (see the global throttler in `src/common/guards/app-throttler.guard.ts`)
 
 ### Security Headers
 The API includes sanitization middleware that processes all requests to prevent injection attacks.
