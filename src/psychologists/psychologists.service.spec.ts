@@ -81,14 +81,27 @@ describe('PsychologistService', () => {
     const query = {
       select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue({ _id: 'p1' }),
+      exec: jest
+        .fn()
+        .mockResolvedValueOnce({ _id: 'p1', user: { name: 'A' } })
+        .mockResolvedValueOnce({ _id: 'p2', user: null }),
     };
     model.findById.mockReturnValue(query);
 
     await expect(service.getDirectoryEntry('not-an-id')).resolves.toBeNull();
-    await service.getDirectoryEntry('507f1f77bcf86cd799439011');
+    await expect(
+      service.getDirectoryEntry('507f1f77bcf86cd799439011'),
+    ).resolves.toEqual({ _id: 'p1', user: { name: 'A' } });
+    await expect(
+      service.getDirectoryEntry('507f1f77bcf86cd799439012'),
+    ).resolves.toBeNull();
 
     expect(query.select).toHaveBeenCalledWith('-clients');
+    expect(query.populate).toHaveBeenCalledWith({
+      path: 'user',
+      select: 'name',
+      match: { roles: 'psychologist' },
+    });
   });
 
   it('addNewClient should create a user when contacts are missing', async () => {

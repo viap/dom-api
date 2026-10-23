@@ -68,11 +68,18 @@ export class PsychologistsService {
       return null;
     }
 
-    return this.psychologistModel
+    const psychologist = await this.psychologistModel
       .findById(validId)
       .select('-clients')
-      .populate({ path: 'user', select: directoryUserFields })
+      .populate({
+        path: 'user',
+        select: directoryUserFields,
+        match: { roles: Role.Psychologist },
+      })
       .exec();
+
+    // Same rule as the list: profiles of users without the role are hidden.
+    return psychologist?.user ? psychologist : null;
   }
 
   async getProfileByUserId(
