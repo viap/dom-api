@@ -51,7 +51,6 @@ export class AuthController {
   async getAuthTokenForTelegram(
     @Body() data: AuthByTelegramDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
     @Headers('x-request-id') requestIdHeader?: string,
   ) {
     const normalizedTelegramId = this.normalizeTelegramId(data.telegram?.id);
@@ -62,49 +61,15 @@ export class AuthController {
       data.apiClient?.name,
     );
 
-    const lockedState = this.authLoginAttemptsService.getLockedState(
-      metadata.sourceIp,
-      normalizedTelegramId,
+    // No failed-attempt lockout here: the only failure is a wrong API client,
+    // which says nothing about the Telegram account, and counting it per
+    // Telegram id would let anyone lock a user out of the bot. Attempts are
+    // limited per IP by the route throttle.
+    return this.authService.signInByTelegram(
+      data.apiClient,
+      data.telegram,
+      metadata,
     );
-
-    if (normalizedTelegramId && lockedState.locked) {
-      this.authService.logAuthFailure({
-        reason: AuthFailureReason.InvalidUserCredentials,
-        metadata,
-        locked: true,
-      });
-      this.throwTooManyAttempts(response, lockedState.retryAfterSeconds);
-    }
-
-    try {
-      const token = await this.authService.signInByTelegram(
-        data.apiClient,
-        data.telegram,
-        metadata,
-      );
-      if (normalizedTelegramId) {
-        this.authLoginAttemptsService.reset(
-          metadata.sourceIp,
-          normalizedTelegramId,
-        );
-      }
-      return token;
-    } catch (error) {
-      if (error instanceof AuthFailureError && normalizedTelegramId) {
-        const attempt = this.authLoginAttemptsService.registerFailure(
-          metadata.sourceIp,
-          normalizedTelegramId,
-        );
-        if (attempt.locked) {
-          this.authService.logAuthFailure({
-            reason: AuthFailureReason.InvalidUserCredentials,
-            metadata,
-            locked: true,
-          });
-        }
-      }
-      throw error;
-    }
   }
 
   @Public()

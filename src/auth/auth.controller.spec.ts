@@ -89,42 +89,28 @@ describe('AuthController', () => {
     );
   });
 
-  it('returns 429 and Retry-After when telegram login is locked', async () => {
-    mockAuthLoginAttemptsService.getLockedState.mockReturnValue({
-      locked: true,
-      lockedUntil: Date.now() + 45_000,
-      retryAfterSeconds: 45,
-    });
+  it('never locks or counts failures per Telegram id', async () => {
+    mockAuthService.signInByTelegram.mockRejectedValue(
+      new AuthFailureError(AuthFailureReason.InvalidApiClient),
+    );
 
-    const request = {
-      headers: {
-        'user-agent': 'jest',
-      },
-      ip: '127.0.0.1',
-      socket: { remoteAddress: '127.0.0.1' },
-    } as any;
-    const response = { setHeader: jest.fn() } as any;
-
-    await controller
-      .getAuthTokenForTelegram(
+    await expect(
+      controller.getAuthTokenForTelegram(
         {
-          apiClient: { name: 'domWeb', password: 'secret' },
+          apiClient: { name: 'domWeb', password: 'wrong' },
           telegram: { id: '123456', username: 'tester' },
         } as any,
-        request,
-        response,
+        {
+          headers: { 'user-agent': 'jest' },
+          ip: '127.0.0.1',
+          socket: { remoteAddress: '127.0.0.1' },
+        } as any,
         'f8db8a42-04ca-4f59-95a5-779c20f8798e',
-      )
-      .catch((error) => {
-        expect(error.getStatus()).toBe(429);
-        expect(error.getResponse()).toEqual({
-          message: 'Too many failed attempts',
-          retryAfterSeconds: 45,
-        });
-      });
+      ),
+    ).rejects.toBeInstanceOf(AuthFailureError);
 
-    expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '45');
-    expect(mockAuthService.signInByTelegram).not.toHaveBeenCalled();
+    expect(mockAuthLoginAttemptsService.getLockedState).not.toHaveBeenCalled();
+    expect(mockAuthLoginAttemptsService.registerFailure).not.toHaveBeenCalled();
   });
 
   it('keeps invalid credentials as generic 401 when not locked', async () => {
