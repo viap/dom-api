@@ -115,11 +115,15 @@ export class ApplicationsService {
       });
 
       stage = 'create';
+      // Explicit recipients let the notification deactivate once every admin
+      // got it, instead of staying active for its whole lifetime.
+      const admins = await this.usersService.getAllByRole(Role.Admin);
       const notification = await this.notificationsService.create({
         type: NotificationTypes.MESSAGE,
         message,
         messageEntities,
         roles: [Role.Admin],
+        recipients: admins.map((admin) => admin._id.toString()),
       });
 
       if (!notification) {

@@ -61,7 +61,10 @@ describe('ApplicationsService', () => {
   };
   const mockPartnersService = { exists: jest.fn() };
   const mockPeopleService = { exists: jest.fn() };
-  const mockUsersService = { getById: jest.fn() };
+  const mockUsersService = {
+    getById: jest.fn(),
+    getAllByRole: jest.fn().mockResolvedValue([{ _id: 'admin-1' }]),
+  };
   const mockNotificationsService = { create: jest.fn() };
   const mockConfigService = { get: jest.fn() };
 
@@ -165,6 +168,7 @@ describe('ApplicationsService', () => {
         expect.objectContaining({
           type: NotificationTypes.MESSAGE,
           roles: [Role.Admin],
+          recipients: ['admin-1'],
           message: expect.stringMatching(
             /^Новая заявка с сайта: www\.example\.test\n\n.*Имя: Jane/su,
           ),
@@ -180,9 +184,6 @@ describe('ApplicationsService', () => {
           ],
         }),
       );
-      expect(
-        mockNotificationsService.create.mock.calls[0][0],
-      ).not.toHaveProperty('recipients');
       expect(
         mockNotificationsService.create.mock.calls[0][0],
       ).not.toHaveProperty('title');
