@@ -32,9 +32,29 @@ import { Person, PersonDocument } from './schemas/person.schema';
 import { PersonQueryParams } from './types/query-params.interface';
 import { PeopleEntityCollectionFilters } from './types/entity-collection-filters.interface';
 
-// Public person responses never expose contacts (including hidden ones) or the
-// linked user account; admin endpoints keep the full document.
-const PUBLIC_PERSON_EXCLUDED_FIELDS = '-contacts -userId';
+// Public person responses list the fields public pages render. Contacts, the
+// linked user account, social links and any field added later stay private
+// unless added here on purpose; admin endpoints return the full document.
+const PUBLIC_PERSON_FIELDS = [
+  'slug',
+  'fullName',
+  'title',
+  'intro',
+  'roles',
+  'bio',
+  'education',
+  'educationItems',
+  'experience',
+  'experienceItems',
+  'services',
+  'specializations',
+  'availability',
+  'workFormat',
+  'languages',
+  'workLocationId',
+  'photoId',
+  'isPublished',
+].join(' ');
 
 @Injectable()
 export class PeopleService {
@@ -85,7 +105,7 @@ export class PeopleService {
 
     return this.personModel
       .find(query)
-      .select(PUBLIC_PERSON_EXCLUDED_FIELDS)
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .sort({ fullName: 1 })
       .skip(offset)
@@ -130,7 +150,7 @@ export class PeopleService {
 
     const person = await this.personModel
       .findOne({ _id: validId, isPublished: true })
-      .select(PUBLIC_PERSON_EXCLUDED_FIELDS)
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();
@@ -153,7 +173,7 @@ export class PeopleService {
 
     const people = await this.personModel
       .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
-      .select(PUBLIC_PERSON_EXCLUDED_FIELDS)
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();
@@ -321,7 +341,7 @@ export class PeopleService {
   async findOneBySlug(slug: string): Promise<PersonDocument> {
     const person = await this.personModel
       .findOne({ slug, isPublished: true })
-      .select(PUBLIC_PERSON_EXCLUDED_FIELDS)
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();

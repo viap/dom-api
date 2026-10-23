@@ -508,13 +508,17 @@ describe('PeopleService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  const publicFields = expect.not.stringMatching(
+    /\b(contacts|userId|socialLinks|schemaVersion)\b/,
+  );
+
   it('public reads exclude contacts and the linked user', async () => {
     const chain = createLeanExecChain({ _id: '507f1f77bcf86cd799439032' });
     mockPersonModel.findOne.mockReturnValue(chain);
 
     await service.findOneBySlug('john-doe');
 
-    expect(chain.select).toHaveBeenCalledWith('-contacts -userId');
+    expect(chain.select).toHaveBeenCalledWith(publicFields);
   });
 
   it('public list search treats fullName literally', async () => {
@@ -524,7 +528,7 @@ describe('PeopleService', () => {
     const query = mockPersonModel.find.mock.calls.at(-1)[0];
     expect(query.fullName.$regex.test('(a+)+$')).toBe(true);
     expect(query.fullName.$regex.test('aaaa')).toBe(false);
-    expect(mockQueryChain.select).toHaveBeenCalledWith('-contacts -userId');
+    expect(mockQueryChain.select).toHaveBeenCalledWith(publicFields);
   });
 
   it('should return published person by slug', async () => {
