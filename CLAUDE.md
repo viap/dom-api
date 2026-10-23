@@ -106,9 +106,8 @@ These are registered once in `AppModule` and apply to every route automatically.
 
 | Type | Class | Effect |
 |---|---|---|
-| `APP_GUARD` | `AuthGuard` | Validates JWT; rejects unauthenticated requests |
+| `APP_GUARD` | `AuthGuard` | Validates JWT, loads the user and sets `req.user` / `req.userContext` with current database roles |
 | `APP_GUARD` | `RolesGuard` | Enforces `@Roles()` decorator |
-| `APP_INTERCEPTOR` | `UserContextInterceptor` | Populates `req.userContext` from token payload |
 | `APP_INTERCEPTOR` | `TimezoneInterceptor` | Normalises timezone across requests |
 | Middleware | `SanitizationMiddleware` | Strips MongoDB operators from all input |
 

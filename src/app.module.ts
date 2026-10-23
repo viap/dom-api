@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TimezoneInterceptor } from './common/interceptors/timezone.interceptor';
-import { UserContextInterceptor } from './common/user-context/user-context.interceptor';
 import { assertRequiredAuthEnv } from './common/utils/required-auth-env';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ApiClientsModule } from './api-clients/api-clients.module';
@@ -88,10 +87,6 @@ import { cwd } from 'process';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: UserContextInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

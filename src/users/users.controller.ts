@@ -9,7 +9,6 @@ import {
   Param,
   Post,
   Put,
-  UseInterceptors,
 } from '@nestjs/common';
 import { currentUserAlias } from '@/common/const/current-user-alias';
 import {
@@ -20,7 +19,6 @@ import { UserContext } from '@/common/user-context/user-context.interface';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
-import { UserContextInterceptor } from '../common/user-context/user-context.interceptor';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -49,7 +47,6 @@ export class UsersController {
   }
 
   @Get(currentUserAlias)
-  @UseInterceptors(UserContextInterceptor)
   getMe(@GetUser() user: UserDocument): UserResponseDto {
     return transformUserToDto(user);
   }
