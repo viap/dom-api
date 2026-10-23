@@ -10,6 +10,7 @@
 /docs/**/scratch/
 
 #env
+/config/.env
 /config/.env.prod
 
 # Logs
