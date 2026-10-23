@@ -164,6 +164,8 @@ All variables are loaded from `config/.env` via `ConfigModule.forRoot({ envFileP
 |---|---|
 | `PORT` | HTTP server port (default: 3003) |
 | `WEBSOCKET_PORT` | Socket.IO port (default: 3004) |
+| `CORS_ORIGINS` | Comma-separated exact frontend origins allowed by CORS |
+| `PUBLIC_WEB_URL` | Telegram-compatible site origin used for both links in application notifications |
 | `MONGO_URL` | MongoDB connection string |
 | `MONGO_DBNAME` | Database name |
 | `MONGO_INITDB_ROOT_USERNAME` | MongoDB auth username |

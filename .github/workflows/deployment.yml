@@ -58,6 +58,7 @@ jobs:
           envkey_PORT: ${{secrets.PORT}}
           envkey_WEBSOCKET_PORT: ${{secrets.WEBSOCKET_PORT}}
           envkey_CORS_ORIGINS: ${{secrets.CORS_ORIGINS}}
+          envkey_PUBLIC_WEB_URL: ${{secrets.PUBLIC_WEB_URL}}
           envkey_JWT_SECRET: ${{secrets.JWT_SECRET}}
           envkey_BOT_CLIENT_NAME: ${{secrets.BOT_CLIENT_NAME}}
           envkey_BOT_CLIENT_PASSWORD: ${{secrets.BOT_CLIENT_PASSWORD}}
@@ -126,6 +127,7 @@ jobs:
             export PORT="${{secrets.PORT}}"
             export WEBSOCKET_PORT="${{secrets.WEBSOCKET_PORT}}"
             export CORS_ORIGINS="${{secrets.CORS_ORIGINS}}"
+            export PUBLIC_WEB_URL="${{secrets.PUBLIC_WEB_URL}}"
             export JWT_SECRET="${{secrets.JWT_SECRET}}"
             export BOT_CLIENT_NAME="${{secrets.BOT_CLIENT_NAME}}"
             export BOT_CLIENT_PASSWORD="${{secrets.BOT_CLIENT_PASSWORD}}"

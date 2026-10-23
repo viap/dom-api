@@ -76,6 +76,7 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
    PORT=3000
    WEBSOCKET_PORT=3004
    CORS_ORIGINS=http://localhost:3006
+   PUBLIC_WEB_URL=https://psydom.org
 
    # Database
    MONGO_URL=mongodb://localhost:27017
@@ -89,6 +90,12 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
    ```
 
    `CORS_ORIGINS` accepts a comma-separated allowlist. Empty/omitted values default to `http://localhost:3006`.
+
+   `PUBLIC_WEB_URL` is the required site origin used for both the linked site address and administrator application deep link in notifications. It must be an absolute HTTP(S) origin without credentials, path, query, or fragment and with a Telegram-compatible hostname. Use `https://psydom.org` locally and in production.
+
+   With the standard local value, an application notification created by a local API links to the production admin site, where the local application ID does not exist. This is an accepted limitation of using one origin for both links. For a temporary same-machine Telegram Desktop check, set `PUBLIC_WEB_URL=http://127.0.0.1:3006` and add `http://127.0.0.1:3006` to `CORS_ORIGINS`; both notification links will then point to loopback.
+
+   Website application notifications use the existing `MESSAGE` notification type with `roles: [Role.Admin]`. After a successful application save, the API synchronously awaits one best-effort notification creation attempt. The stored message contains two UTF-16 `text_link` entities: the site address and `Открыть заявку`, whose URL is `${PUBLIC_WEB_URL}/ru/admin/applications?applicationId=<id>`. Notification preparation or creation failures are logged safely and do not change the successful application response; retry, outbox, and exactly-once delivery remain outside this contract.
 
 4. **Database Setup**
 
@@ -218,7 +225,7 @@ The API implements comprehensive protection against NoSQL injection attacks:
 ### Deployment Workflow Requirements
 
 - Required GitHub Actions secrets:
-  - `PORT`, `WEBSOCKET_PORT`, `CORS_ORIGINS`
+  - `PORT`, `WEBSOCKET_PORT`, `CORS_ORIGINS`, `PUBLIC_WEB_URL`
   - `JWT_SECRET`
   - `BOT_CLIENT_NAME`, `BOT_CLIENT_PASSWORD`
   - `WEB_CLIENT_NAME`, `WEB_CLIENT_PASSWORD`
@@ -239,6 +246,8 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - `CORS_ORIGINS` must be comma-separated exact origins only (`scheme://host:port`), for example:
   - `http://207.154.221.110:3006,https://dom.example.com`
   - Do not include paths (like `/ru/login`) or trailing slashes.
+- `PUBLIC_WEB_URL` must be the HTTPS origin of the deployed site (`https://psydom.org` in production). It is used for both notification links; configure the matching origin independently in staging environments.
+- Telegram does not render `localhost` notification links. Use `https://psydom.org` for the standard local smoke check; use numeric loopback only for the temporary same-machine Telegram Desktop flow documented above.
 
 ### CORS Runtime Verification (Operator Runbook)
 
