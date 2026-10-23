@@ -111,7 +111,7 @@ export class PsychologistsController {
   }
 
   @Post(':id/add-client/:clientId')
-  @Roles(Role.Admin, Role.Editor, Role.Psychologist)
+  @Roles(Role.Admin, Role.Editor)
   async addClient(
     @Param('id') id: string,
     @Param('clientId') clientId: string,

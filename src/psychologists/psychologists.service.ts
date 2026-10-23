@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
@@ -156,7 +156,10 @@ export class PsychologistsService {
     if (psychologist && user) {
       if (
         !psychologist.clients.find((client) => {
-          return client.user === user._id.toString();
+          // client.user is populated here; compare ids, not objects to strings
+          return (
+            String(client.user?._id ?? client.user) === user._id.toString()
+          );
         })
       ) {
         psychologist.clients.push({
@@ -216,15 +219,20 @@ export class PsychologistsService {
   }
 
   async deleteClient(psychologistId: string, userId: string): Promise<boolean> {
+    const validUserId = validateObjectId(userId);
+    if (!validUserId) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const result = await this.psychologistModel.updateMany(
-        {},
+      const result = await this.psychologistModel.updateOne(
+        { _id: psychologist._id },
         {
           $pull: {
             clients: {
               user: {
-                $eq: new mongoose.Types.ObjectId(userId),
+                $eq: new mongoose.Types.ObjectId(validUserId),
               },
             },
           },
@@ -242,6 +250,10 @@ export class PsychologistsService {
     userId: string,
     client: EditMyClientDto,
   ): Promise<boolean> {
+    if (!validateObjectId(userId)) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     await this.psychologistModel.findByIdAndUpdate(
       psychologistId,
       {

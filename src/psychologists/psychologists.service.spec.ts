@@ -178,4 +178,56 @@ describe('PsychologistService', () => {
     });
     expect(psychologist.save).toHaveBeenCalled();
   });
+
+  describe('client management', () => {
+    const psychologistId = '507f1f77bcf86cd799439011';
+    const userId = '507f1f77bcf86cd799439012';
+
+    function mockPsychologist(clients: unknown[]) {
+      const psychologist = {
+        _id: psychologistId,
+        clients,
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      const model = (service as any).psychologistModel;
+      model.findById.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(psychologist),
+        }),
+      });
+      return psychologist;
+    }
+
+    it('deleteClient removes the client only from the caller', async () => {
+      mockPsychologist([]);
+      const model = (service as any).psychologistModel;
+      model.updateOne = jest.fn().mockResolvedValue({ modifiedCount: 1 });
+
+      await expect(service.deleteClient(psychologistId, userId)).resolves.toBe(
+        true,
+      );
+      expect(model.updateOne.mock.calls[0][0]).toEqual({ _id: psychologistId });
+    });
+
+    it('deleteClient rejects invalid user ids', async () => {
+      await expect(
+        service.deleteClient(psychologistId, 'not-an-id'),
+      ).rejects.toThrow('Invalid user id');
+    });
+
+    it('addClientFromUser does not duplicate an existing client', async () => {
+      const psychologist = mockPsychologist([
+        { user: { _id: { toString: () => userId } } },
+      ]);
+      mockUsersService.getById.mockResolvedValue({
+        _id: { toString: () => userId },
+      });
+
+      await expect(
+        service.addClientFromUser(psychologistId, userId),
+      ).resolves.toBe(true);
+      expect(psychologist.clients).toHaveLength(1);
+      expect(psychologist.save).not.toHaveBeenCalled();
+    });
+  });
 });
