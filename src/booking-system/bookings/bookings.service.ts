@@ -885,7 +885,10 @@ export class BookingsService {
   async bulkApproveBookings(
     bookingIds: string[],
     adminUserId: string,
-  ): Promise<BookingDocument[]> {
+  ): Promise<{
+    approved: BookingDocument[];
+    skipped: Array<{ id: string; reason: string }>;
+  }> {
     const validAdminId = validateObjectId(adminUserId);
     if (!validAdminId) {
       throw new BadRequestException('Invalid admin user ID format');
@@ -909,21 +912,21 @@ export class BookingsService {
     }
 
     // Approve one by one so every booking passes the same availability check
-    // as a single approval; bookings that are not approvable are skipped.
-    const approvedBookings: BookingDocument[] = [];
+    // as a single approval; bookings that cannot be approved are reported.
+    const approved: BookingDocument[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
     for (const bookingId of validBookingIds) {
       try {
-        approvedBookings.push(
-          await this.approveBooking(bookingId, validAdminId),
-        );
+        approved.push(await this.approveBooking(bookingId, validAdminId));
       } catch (error) {
         if (!(error instanceof HttpException)) {
           throw error;
         }
+        skipped.push({ id: bookingId, reason: error.message });
       }
     }
 
-    return approvedBookings;
+    return { approved, skipped };
   }
 
   async getRecurringBookingSeries(

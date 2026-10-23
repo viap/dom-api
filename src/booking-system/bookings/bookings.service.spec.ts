@@ -490,7 +490,10 @@ describe('BookingsService', () => {
       );
 
       expect(approveSpy).toHaveBeenCalledTimes(2);
-      expect(result).toEqual([{ _id: okId }]);
+      expect(result).toEqual({
+        approved: [{ _id: okId }],
+        skipped: [{ id: conflictId, reason: 'Room is not available' }],
+      });
     });
 
     it('rejects a non-array body', async () => {
