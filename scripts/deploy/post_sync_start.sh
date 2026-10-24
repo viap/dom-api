@@ -57,7 +57,6 @@ validate_cors_origins "${CORS_ORIGINS}"
 echo "Configured CORS_ORIGINS: ${CORS_ORIGINS}"
 
 pm2_cutover_domapi
-pm2_cutover_dombot_optional
 pm2 status
 
 if ! healthcheck_with_retries "${PORT}" "Deploy"; then

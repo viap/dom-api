@@ -36,7 +36,6 @@ echo "Configured CORS_ORIGINS: ${CORS_ORIGINS}"
 
 echo "Restarting domApi with updated environment..."
 pm2 restart domApi --update-env
-pm2_cutover_dombot_optional
 pm2 status
 
 if ! healthcheck_with_retries "${PORT}" "Manual restart"; then

@@ -262,11 +262,3 @@ pm2_cutover_domapi() {
   fi
 }
 
-pm2_cutover_dombot_optional() {
-  echo "Cutting over domBot application (if exists)..."
-  if pm2 describe domBot >/dev/null 2>&1; then
-    pm2 restart domBot --update-env
-  else
-    echo "Warning: failed to reload domBot - skipping"
-  fi 
-}
