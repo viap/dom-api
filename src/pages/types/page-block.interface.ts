@@ -10,6 +10,9 @@ import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
 import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
 import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
+import type { EntityCollectionColumns } from './entity-collection-columns';
+
+export type { EntityCollectionColumns } from './entity-collection-columns';
 
 export type BlockSpacing = 'none' | 'sm' | 'md' | 'lg' | 'xl';
 export type BlockVariant = 'section' | 'block' | 'element';
@@ -98,6 +101,7 @@ export interface EntityCollectionBlockBase extends PageBlockBase {
   layout: EntityCollectionLayout;
   cardVariant?: string;
   itemOrder?: EntityCollectionItemOrder;
+  columns?: EntityCollectionColumns;
 }
 
 export interface ManualEntityCollectionBlock extends EntityCollectionBlockBase {

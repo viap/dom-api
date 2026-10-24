@@ -17,6 +17,7 @@ import {
   toBulkResolveResponse,
 } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import { formatMongooseUpdateValidationError } from '@/common/utils/mongoose-validation-error';
 import {
   safeFindParams,
   validateObjectId,
@@ -360,13 +361,22 @@ export class EventsService {
       updateData.blocks = normalizedBlocks;
     }
 
-    const event = await this.eventModel
-      .findByIdAndUpdate(validId, updateData, {
-        new: true,
-        runValidators: true,
-      })
-      .lean()
-      .exec();
+    let event: unknown;
+    try {
+      event = await this.eventModel
+        .findByIdAndUpdate(validId, updateData, {
+          new: true,
+          runValidators: true,
+        })
+        .lean()
+        .exec();
+    } catch (error) {
+      const message = formatMongooseUpdateValidationError(error);
+      if (message) {
+        throw new BadRequestException(message);
+      }
+      throw error;
+    }
 
     return event as DomainEventDocument;
   }

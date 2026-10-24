@@ -186,6 +186,8 @@ Ownership decorators (`@IsMyTherapySessions`, `@IsMyBooking`) set a metadata fla
 
 ## Dual-Schema Pattern
 
+- `EntityCollection.columns` uses a feature-local `mongoose.SchemaType` plus an explicit `null` validator because its exact heterogeneous scalar contract must reject coercion. Do not register that type globally or replace this field with `Mixed`; this does not prohibit `Mixed` for arbitrary payloads whose validation is intentionally owned by Joi.
+
 Every entity needs exactly two schema files.
 
 ### Mongoose Schema (`schemas/[entity].schema.ts`)

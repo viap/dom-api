@@ -81,6 +81,115 @@ describe('createPageSchema', () => {
     expect(dynamic.value.blocks[0].limit).toBe(12);
   });
 
+  it.each([undefined, 'auto', 2, 3, 4, 5])(
+    'preserves strict EntityCollection columns value %p',
+    (columns) => {
+      const block = {
+        id: 'team',
+        type: 'entityCollection',
+        entityType: 'people',
+        layout: 'grid',
+        items: [objectId],
+        ...(columns === undefined ? {} : { columns }),
+      };
+      const { error, value } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [block],
+      });
+
+      expect(error).toBeUndefined();
+      expect(value.blocks[0].columns).toBe(columns);
+      if (columns !== undefined) {
+        expect(typeof value.blocks[0].columns).toBe(typeof columns);
+      }
+    },
+  );
+
+  it.each([null, '', '2', 'Auto', 1, 6, 2.5, true, [], {}, NaN, Infinity])(
+    'rejects invalid EntityCollection columns value %p without coercion',
+    (columns) => {
+      const { error } = createPageSchema.validate({
+        title: 'About',
+        slug: 'about',
+        blocks: [
+          {
+            id: 'team',
+            type: 'entityCollection',
+            entityType: 'people',
+            layout: 'grid',
+            items: [objectId],
+            columns,
+          },
+        ],
+      });
+
+      expect(error).toBeDefined();
+    },
+  );
+
+  it('validates EntityCollection columns recursively in Group and embedded modal blocks', () => {
+    const entityCollection = (id: string, columns: unknown) => ({
+      id,
+      type: 'entityCollection',
+      entityType: 'people',
+      layout: 'grid',
+      items: [objectId],
+      columns,
+    });
+    const valid = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'group',
+          type: 'group',
+          blocks: [entityCollection('group-collection', 'auto')],
+        },
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'block',
+              block: entityCollection('modal-collection', 5),
+            },
+          ],
+        },
+      ],
+    });
+    expect(valid.error).toBeUndefined();
+
+    for (const blocks of [
+      [
+        {
+          id: 'group',
+          type: 'group',
+          blocks: [entityCollection('group-collection', '4')],
+        },
+      ],
+      [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'block',
+              block: entityCollection('modal-collection', null),
+            },
+          ],
+        },
+      ],
+    ]) {
+      expect(
+        createPageSchema.validate({ title: 'About', slug: 'about', blocks })
+          .error,
+      ).toBeDefined();
+    }
+  });
+
   it('should allow only supported People language filters', () => {
     const valid = createPageSchema.validate({
       title: 'About',

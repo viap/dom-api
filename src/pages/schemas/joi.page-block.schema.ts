@@ -15,6 +15,7 @@ import { PersonRole } from '@/people/enums/person-role.enum';
 import { WorkFormat } from '@/people/enums/work-format.enum';
 import { PartnerType } from '@/partners/enums/partner-type.enum';
 import { EventType } from '@/events/enums/event-type.enum';
+import { ENTITY_COLLECTION_COLUMNS } from '@/pages/types/entity-collection-columns';
 
 const stringSchema = Joi.string().trim().max(5000);
 const spacingSchema = Joi.string().valid('none', 'sm', 'md', 'lg', 'xl');
@@ -252,6 +253,9 @@ const entityCollectionBaseSchema = {
   layout: Joi.string()
     .valid(...Object.values(EntityCollectionLayout))
     .required(),
+  columns: Joi.any()
+    .valid(...ENTITY_COLLECTION_COLUMNS)
+    .optional(),
   cardVariant: Joi.string().trim().max(120).optional(),
 };
 
