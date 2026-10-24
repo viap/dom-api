@@ -8,13 +8,17 @@ import {
 import { Reflector } from '@nestjs/core';
 import { UserContext } from '@/common/user-context/user-context.interface';
 import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
-import { Role } from '@/roles/enums/roles.enum';
+import { UsersService } from '@/users/users.service';
 import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private authService: AuthService, private reflector: Reflector) {}
+  constructor(
+    private authService: AuthService,
+    private reflector: Reflector,
+    private usersService: UsersService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -32,22 +36,30 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
+    let payload: UserContext | undefined;
     try {
-      const payload = await this.authService.verifyToken(token);
-
-      if (!payload?.userId) {
-        throw new Error('Invalid token payload');
-      }
-
-      // User context from JWT payload
-      request.userContext = {
-        userId: payload.userId,
-        roles: payload.roles as Role[],
-        clientName: payload.clientName,
-      } as UserContext;
+      payload = await this.authService.verifyToken(token);
     } catch {
       throw new UnauthorizedException();
     }
+
+    if (!payload?.userId) {
+      throw new UnauthorizedException();
+    }
+
+    // Roles come from the database, not the token, so role changes and
+    // deleted accounts take effect before the token expires.
+    const user = await this.usersService.getById(payload.userId);
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    request.user = user;
+    request.userContext = {
+      userId: payload.userId,
+      roles: user.roles,
+      clientName: payload.clientName,
+    };
     return true;
   }
 }

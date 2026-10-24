@@ -94,8 +94,8 @@ describe('AuthLoginAttemptsService', () => {
     jest.advanceTimersByTime(5 * 60 * 1000);
 
     const attempts = (service as any).attempts as Map<string, unknown>;
-    expect(attempts.has('127.0.0.1|expired-user')).toBe(false);
-    expect(attempts.has('127.0.0.1|active-user')).toBe(true);
+    expect(attempts.has('user:127.0.0.1|expired-user')).toBe(false);
+    expect(attempts.has('user:127.0.0.1|active-user')).toBe(true);
 
     service.onModuleDestroy();
     jest.useRealTimers();
@@ -111,5 +111,75 @@ describe('AuthLoginAttemptsService', () => {
     expect(jest.getTimerCount()).toBe(0);
 
     jest.useRealTimers();
+  });
+
+  it('evicts the oldest entry instead of growing without bound', () => {
+    const limited = new AuthLoginAttemptsService();
+    (limited as any).maxTrackedKeys = 2;
+
+    limited.registerFailure('ip', 'first', 1000);
+    limited.registerFailure('ip', 'second', 1000);
+    limited.registerFailure('ip', 'third', 1000);
+
+    const keys = [...(limited as any).attempts.keys()];
+    expect(keys).toEqual(['user:ip|second', 'user:ip|third']);
+  });
+
+  describe('per-login backstop', () => {
+    it('locks a login after 30 failures from different IPs within an hour', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        expect(
+          service.registerFailure(`10.0.0.${i}`, 'admin', now).locked,
+        ).toBe(false);
+      }
+
+      expect(service.registerFailure('10.0.1.1', 'admin', now).locked).toBe(
+        true,
+      );
+      expect(service.isLocked('192.168.0.1', 'admin', now + 1000)).toBe(true);
+      expect(service.isLocked('192.168.0.1', 'other', now + 1000)).toBe(false);
+    });
+
+    it('keeps counting after a successful login from another IP', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        service.registerFailure(`10.0.0.${i}`, 'admin', now);
+      }
+      service.reset('192.168.0.1', 'admin');
+
+      expect(service.registerFailure('10.0.1.1', 'admin', now).locked).toBe(
+        true,
+      );
+    });
+
+    it('forgets failures older than an hour', () => {
+      const now = 1_000_000;
+      for (let i = 0; i < 29; i++) {
+        service.registerFailure(`10.0.0.${i}`, 'admin', now);
+      }
+
+      const later = now + 61 * 60 * 1000;
+      expect(service.registerFailure('10.0.1.1', 'admin', later).locked).toBe(
+        false,
+      );
+    });
+  });
+
+  it('keeps an active lock when a flood of new keys fills the map', () => {
+    const limited = new AuthLoginAttemptsService();
+    (limited as any).maxTrackedKeys = 3;
+    const now = Date.now();
+
+    for (let i = 0; i < 5; i++) {
+      limited.registerFailure('attacker-target', 'admin', now);
+    }
+    expect(limited.isLocked('attacker-target', 'admin', now)).toBe(true);
+
+    for (let i = 0; i < 10; i++) {
+      limited.registerFailure('flood', `random-${i}`, now);
+    }
+
+    expect(limited.isLocked('attacker-target', 'admin', now)).toBe(true);
   });
 });

@@ -8,9 +8,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
@@ -29,7 +28,6 @@ export class ApplicationsController {
 
   @Post()
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   create(

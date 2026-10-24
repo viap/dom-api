@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PsychologistsController } from './psychologists.controller';
 import { PsychologistsService } from './psychologists.service';
+import { ROLES_KEY } from '@/roles/decorators/role.docorator';
+import { Role } from '@/roles/enums/roles.enum';
 
 describe('PsychologistController', () => {
   let controller: PsychologistsController;
@@ -34,4 +36,16 @@ describe('PsychologistController', () => {
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
+
+  it.each(['getAll', 'getOne'] as const)(
+    '%s is not available to plain users',
+    (method) => {
+      const roles = Reflect.getMetadata(
+        ROLES_KEY,
+        PsychologistsController.prototype[method],
+      );
+
+      expect(roles).toEqual([Role.Admin, Role.Editor, Role.Psychologist]);
+    },
+  );
 });

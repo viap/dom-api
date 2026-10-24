@@ -2,21 +2,23 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Post,
   Put,
-  UseInterceptors,
-  UsePipes,
 } from '@nestjs/common';
 import { currentUserAlias } from '@/common/const/current-user-alias';
-import { GetUser } from '@/common/user-context/user-context.decorator';
+import {
+  GetUser,
+  GetUserContext,
+} from '@/common/user-context/user-context.decorator';
+import { UserContext } from '@/common/user-context/user-context.interface';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
-import { UserContextInterceptor } from '../common/user-context/user-context.interceptor';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -28,6 +30,12 @@ import {
   transformUserToDto,
   transformUsersToDto,
 } from './utils/user.transformer';
+
+// Editors may set only these fields; everything else (roles, login,
+// password, contacts holding the Telegram login identity, and any field added
+// later) is admin-only unless added here on purpose.
+const EDITOR_EDITABLE_USER_FIELDS = ['name', 'descr', 'timeZone'];
+const PRIVILEGED_ROLES = [Role.Admin, Role.Editor];
 
 @Controller('users')
 export class UsersController {
@@ -41,7 +49,6 @@ export class UsersController {
   }
 
   @Get(currentUserAlias)
-  @UseInterceptors(UserContextInterceptor)
   getMe(@GetUser() user: UserDocument): UserResponseDto {
     return transformUserToDto(user);
   }
@@ -56,8 +63,11 @@ export class UsersController {
   @Post()
   @Roles(Role.Admin, Role.Editor)
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new JoiValidationPipe(joiCreateUserSchema))
-  async create(@Body() createData: CreateUserDto): Promise<UserResponseDto> {
+  async create(
+    @GetUserContext() actor: UserContext,
+    @Body(new JoiValidationPipe(joiCreateUserSchema)) createData: CreateUserDto,
+  ): Promise<UserResponseDto> {
+    await this.assertCanManageUser(actor, createData);
     const user = await this.usersService.create(createData);
     return transformUserToDto(user);
   }
@@ -65,9 +75,11 @@ export class UsersController {
   @Put(':id')
   @Roles(Role.Admin, Role.Editor)
   async update(
+    @GetUserContext() actor: UserContext,
     @Param('id') id: string,
     @Body(new JoiValidationPipe(joiUpdateUserSchema)) updateData: UpdateUserDto,
   ): Promise<UserResponseDto> {
+    await this.assertCanManageUser(actor, updateData, id);
     const user = await this.usersService.update(id, updateData);
     return transformUserToDto(user);
   }
@@ -76,5 +88,32 @@ export class UsersController {
   @Delete(':id')
   remove(@Param('id') id: string): Promise<UserDocument | null> {
     return this.usersService.remove(id);
+  }
+
+  // Only admins manage privileges and credentials; editors may edit ordinary
+  // profile fields of non-privileged users.
+  private async assertCanManageUser(
+    actor: UserContext | null,
+    data: object,
+    targetId?: string,
+  ): Promise<void> {
+    if (actor?.roles?.includes(Role.Admin)) {
+      return;
+    }
+
+    if (
+      Object.keys(data).some(
+        (field) => !EDITOR_EDITABLE_USER_FIELDS.includes(field),
+      )
+    ) {
+      throw new ForbiddenException();
+    }
+
+    if (targetId) {
+      const target = await this.usersService.getById(targetId);
+      if (target?.roles?.some((role) => PRIVILEGED_ROLES.includes(role))) {
+        throw new ForbiddenException();
+      }
+    }
   }
 }

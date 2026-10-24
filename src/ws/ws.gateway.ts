@@ -1,38 +1,42 @@
-import { OnModuleInit } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-  WsResponse,
 } from '@nestjs/websockets';
-import { Observable, from } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { Server, Socket } from 'socket.io';
-import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
 import { AuthService } from '@/auth/auth.service';
 import extractApiClientFromHeaders from '@/common/utils/extract-api-client-from-headers';
-import extractTokenFromHeaders from '@/common/utils/extract-token-from-headers';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationDocument } from '@/notifications/schemas/notification.schema';
 
-const socketToUser: { [key: string]: string } = {};
-const socketToApiClient: { [key: string]: ApiClientDto } = {};
+// The gateway serves only dom-bot: notification batches carry applicant
+// contacts and receipts act on behalf of users. dom-web has no socket client.
+// ponytail: in-memory socket set, correct only with a single pm2 fork.
+const botSockets = new Set<string>();
+let warnedAboutLegacyReceipt = false;
 const webSocketPort = process.env.WEBSOCKET_PORT
   ? parseInt(process.env.WEBSOCKET_PORT)
   : 3004;
 @WebSocketGateway(webSocketPort, {
   transports: ['websocket'],
+  // The bot's get-all-batch payload lists its session user ids (~27 bytes
+  // each), so this leaves room for tens of thousands of sessions.
+  maxHttpBufferSize: 1e6,
   cors: {
     origin: '*',
     credentials: true,
     methods: ['GET', 'POST'],
   },
 })
-export class WsGateway implements OnModuleInit {
+export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(WsGateway.name);
 
   constructor(
     private authService: AuthService,
@@ -40,116 +44,75 @@ export class WsGateway implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.server.on('connection', async (client: Socket) => {
-      // NOTICE: authorization by token
-      const token = extractTokenFromHeaders(client.handshake.headers);
-      // NOTICE: authorization by ApiClient
+    this.server.on('connection', (client: Socket) => {
       const initClient = extractApiClientFromHeaders(client.handshake.headers);
 
-      if (token) {
-        const payload = await this.authService.verifyToken(token);
-
-        if (payload?.userId) {
-          socketToUser[client.id] = payload.userId;
-          client.emit('inited', {
-            clientId: client.id,
-            userId: payload.userId,
-          });
-        }
-      } else if (initClient) {
-        if (this.authService.isAvailableClient(initClient)) {
-          socketToApiClient[client.id] = initClient;
-          client.emit('inited', {
-            clientId: client.id,
-            apiClient: initClient.name,
-          });
-        } else {
-          client.emit('unauthorized', {
-            message: 'Unauthorized API client',
-          });
-        }
+      if (
+        initClient &&
+        initClient.name === process.env.BOT_CLIENT_NAME &&
+        this.authService.isAvailableClient(initClient)
+      ) {
+        botSockets.add(client.id);
+        client.emit('inited', {
+          clientId: client.id,
+          apiClient: initClient.name,
+        });
+        return;
       }
+
+      client.emit('unauthorized', { message: 'Unauthorized client' });
+      client.disconnect(true);
     });
   }
 
-  @SubscribeMessage('auth-by-token')
-  async authUser(
-    @MessageBody('token') token: string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const payload = await this.authService.verifyToken(token);
-    if (payload?.userId) {
-      socketToUser[client.id] = payload.userId;
-    }
-  }
-
-  @SubscribeMessage('notifications/get-my')
-  async getEventsForMe(
-    @ConnectedSocket() client: Socket,
-  ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
-    const userId = socketToUser[client.id];
-
-    let notifications: Array<NotificationDocument> = [];
-
-    if (userId) {
-      notifications = await this.notificationsService.getAllByUserId(userId);
-    }
-
-    return from(notifications).pipe(
-      map((event) => ({ event: 'notification', data: event })),
-    );
-  }
-
-  @SubscribeMessage('notifications/get-all')
-  async getAllActiveEvents(
-    @ConnectedSocket() client: Socket,
-  ): Promise<Observable<WsResponse<NotificationDocument>> | never> {
-    const notifications = await this.getAllActiveNotifications(client);
-
-    return from(notifications).pipe(
-      map((event) => ({ event: 'notification', data: event })),
-    );
+  handleDisconnect(client: Socket) {
+    botSockets.delete(client.id);
   }
 
   @SubscribeMessage('notifications/get-all-batch')
   async getAllActiveEventsBatch(
     @ConnectedSocket() client: Socket,
-  ): Promise<Array<NotificationDocument>> {
-    return this.getAllActiveNotifications(client);
+    @MessageBody() data?: { userIds?: Array<string> },
+  ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
+    if (!botSockets.has(client.id)) {
+      return [];
+    }
+
+    // The bot sends the user ids it has sessions for and gets back, per
+    // notification, which of them are eligible by current roles.
+    return this.notificationsService.getAllActiveForBot(data?.userIds);
   }
 
   @SubscribeMessage('notifications/add-received')
   async addReceived(
-    @MessageBody() data: { notificationId: string; token?: string },
+    @MessageBody()
+    data: { notificationId: string; userId?: string; token?: string },
     @ConnectedSocket() client: Socket,
   ): Promise<boolean> {
-    const { notificationId, token } = data;
+    if (!botSockets.has(client.id)) {
+      return false;
+    }
 
-    let userId: string | undefined = socketToUser[client.id];
+    const { notificationId, token } = data || ({} as typeof data);
+    let userId = typeof data?.userId === 'string' ? data.userId : undefined;
+
+    // TODO(remove once 'ws.legacy_receipt_token' no longer appears in logs
+    // after the dom-bot deploy): older bots send the recipient's stored
+    // session token; only its userId is read.
     if (!userId && token) {
-      // NOTICE: don't check the token validity, only look for the userId
+      if (!warnedAboutLegacyReceipt) {
+        warnedAboutLegacyReceipt = true;
+        this.logger.warn(JSON.stringify({ event: 'ws.legacy_receipt_token' }));
+      }
       const payload = await this.authService.decode(token);
       if (payload !== null && typeof payload === 'object' && payload.userId) {
         userId = String(payload.userId);
       }
     }
 
-    if (userId) {
-      return this.notificationsService.addReceived(notificationId, userId);
-    }
-
-    return false;
-  }
-
-  private async getAllActiveNotifications(
-    client: Socket,
-  ): Promise<Array<NotificationDocument>> {
-    const apiClient = socketToApiClient[client.id];
-
-    if (apiClient) {
-      return this.notificationsService.getAllActive();
-    }
-
-    return [];
+    // The audience is rechecked against current data in addReceived.
+    return userId
+      ? this.notificationsService.addReceived(notificationId, userId)
+      : false;
   }
 }

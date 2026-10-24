@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import { addItems } from '@/common/utils/add-items';
+import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { removeItems } from '@/common/utils/remove-item';
 import { Role } from '@/roles/enums/roles.enum';
 import { TherapyRequestDocument } from '@/therapy-requests/schemas/therapy-request.schema';
@@ -16,6 +17,8 @@ import {
   Psychologist,
   PsychologistDocument,
 } from './schemas/psychologist.schema';
+
+const directoryUserFields = 'name';
 
 const submodels = [
   'user',
@@ -42,12 +45,51 @@ export class PsychologistsService {
     private userService: UsersService,
   ) {}
 
+  // Directory responses never include clients: they carry client contacts and
+  // therapy request texts. Clients are served only via /psychologists/me/clients.
   async getAll(): Promise<Array<PsychologistDocument>> {
-    return (await this.psychologistModel.find().populate(submodels)).filter(
-      (psychologist) => {
-        return psychologist.user.roles.includes(Role.Psychologist);
-      },
-    );
+    const psychologists = await this.psychologistModel
+      .find()
+      .select('-clients')
+      .populate({
+        path: 'user',
+        select: directoryUserFields,
+        // users without the psychologist role are not populated (null)
+        match: { roles: Role.Psychologist },
+      })
+      .exec();
+
+    return psychologists.filter((psychologist) => !!psychologist.user);
+  }
+
+  async getDirectoryEntry(id: string): Promise<PsychologistDocument | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    const psychologist = await this.psychologistModel
+      .findById(validId)
+      .select('-clients')
+      .populate({
+        path: 'user',
+        select: directoryUserFields,
+        match: { roles: Role.Psychologist },
+      })
+      .exec();
+
+    // Same rule as the list: profiles of users without the role are hidden.
+    return psychologist?.user ? psychologist : null;
+  }
+
+  async getProfileByUserId(
+    userId: string,
+  ): Promise<PsychologistDocument | null> {
+    return this.psychologistModel
+      .findOne({ user: userId })
+      .select('-clients')
+      .populate('user')
+      .exec();
   }
 
   async getById(
@@ -124,7 +166,10 @@ export class PsychologistsService {
     if (psychologist && user) {
       if (
         !psychologist.clients.find((client) => {
-          return client.user === user._id.toString();
+          // client.user is populated here; compare ids, not objects to strings
+          return (
+            String(client.user?._id ?? client.user) === user._id.toString()
+          );
         })
       ) {
         psychologist.clients.push({
@@ -147,7 +192,11 @@ export class PsychologistsService {
   ): Promise<boolean> {
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const contacts = newClient.contacts ?? [];
+      // The Telegram id is the bot login identity; a client created from a
+      // form or a therapy request must not get one (it could be anyone's).
+      const contacts = (newClient.contacts ?? []).map(
+        ({ network, username, hidden }) => ({ network, username, hidden }),
+      );
       const telegramUserName = contacts.find(
         (contact) => contact.network === SocialNetworks.Telegram,
       )?.username;
@@ -184,15 +233,20 @@ export class PsychologistsService {
   }
 
   async deleteClient(psychologistId: string, userId: string): Promise<boolean> {
+    const validUserId = validateObjectId(userId);
+    if (!validUserId) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     const psychologist = await this.getById(psychologistId);
     if (psychologist) {
-      const result = await this.psychologistModel.updateMany(
-        {},
+      const result = await this.psychologistModel.updateOne(
+        { _id: psychologist._id },
         {
           $pull: {
             clients: {
               user: {
-                $eq: new mongoose.Types.ObjectId(userId),
+                $eq: new mongoose.Types.ObjectId(validUserId),
               },
             },
           },
@@ -210,6 +264,10 @@ export class PsychologistsService {
     userId: string,
     client: EditMyClientDto,
   ): Promise<boolean> {
+    if (!validateObjectId(userId)) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     await this.psychologistModel.findByIdAndUpdate(
       psychologistId,
       {

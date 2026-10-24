@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Get the project code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -36,21 +36,28 @@ jobs:
       - name: Run e2e tests
         run: npm run test:e2e
 
+      - name: Audit production dependencies (critical blocks deploy)
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Audit production dependencies (non-blocking)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
   deploy:
     runs-on: ubuntu-latest
     environment: prod
     needs: test
     steps:
       - name: Get the project code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
       - name: Make env file with secrets
-        uses: SpicyPizza/create-envfile@v2.0
+        uses: SpicyPizza/create-envfile@ace6d4f5d7802b600276c23ca417e669f1a06f6f # v2.0
         with:
           directory: 'config/'
           fail_on_empty: true
@@ -73,7 +80,7 @@ jobs:
       - name: Build the project
         run: npm run build
       - name: Deploy to server
-        uses: easingthemes/ssh-deploy@v6.0.1
+        uses: easingthemes/ssh-deploy@5d8aeab1a56041e269567e67a08ce00df324a617 # v6.0.1
         with:
           SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
           ARGS: '-avzr --delete'
@@ -121,7 +128,7 @@ jobs:
               echo "No existing deployment found, skipping backup"
             fi
       - name: Remote | Init and start the project
-        uses: fifsky/ssh-action@v0.0.6
+        uses: fifsky/ssh-action@58b3c484be9c20cf118fd3b939a6d2cb3c769512 # v0.0.6
         with:
           command: |
             export PORT="${{secrets.PORT}}"
@@ -200,7 +207,7 @@ jobs:
     needs: deploy
     steps:
       - name: Rollback to previous deployment
-        uses: fifsky/ssh-action@v0.0.6
+        uses: fifsky/ssh-action@58b3c484be9c20cf118fd3b939a6d2cb3c769512 # v0.0.6
         with:
           command: |
             export PORT="${{secrets.PORT}}"

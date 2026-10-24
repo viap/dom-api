@@ -51,6 +51,12 @@ const payloadSchema = Joi.when('formType', {
   otherwise: Joi.object().default({}),
 });
 
+// Public form input: same shape as other contacts, with length caps.
+const applicantContactSchema = joiContactSchema.keys({
+  username: Joi.string().max(200).required(),
+  id: Joi.string().max(100),
+});
+
 export const createApplicationSchema = Joi.object({
   domainId: joiObjectId.optional(),
 
@@ -65,12 +71,17 @@ export const createApplicationSchema = Joi.object({
     entityId: joiObjectId.optional(),
     utm: Joi.object()
       .pattern(Joi.string().max(50), Joi.string().max(200))
+      .max(10)
       .optional(),
   }).optional(),
 
   applicant: Joi.object({
     name: Joi.string().trim().min(1).max(150).required(),
-    contacts: Joi.array().items(joiContactSchema).min(1).required(),
+    contacts: Joi.array()
+      .items(applicantContactSchema)
+      .min(1)
+      .max(5)
+      .required(),
   }).required(),
 
   payload: payloadSchema,

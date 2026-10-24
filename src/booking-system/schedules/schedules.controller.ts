@@ -23,6 +23,7 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleQueryParams } from '../shared/types/query-params.interface';
 
 @Controller('booking-system/schedules')
+@Roles(Role.Admin)
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 

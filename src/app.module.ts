@@ -1,16 +1,15 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TimezoneInterceptor } from './common/interceptors/timezone.interceptor';
-import { UserContextInterceptor } from './common/user-context/user-context.interceptor';
 import { assertRequiredAuthEnv } from './common/utils/required-auth-env';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ApiClientsModule } from './api-clients/api-clients.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthGuard } from './auth/auth.guard';
+import { APP_GUARD_PROVIDERS } from './common/guards/app-guards';
 import { AuthModule } from './auth/auth.module';
 import { BookingSystemModule } from './booking-system/booking-system.module';
 import { SanitizationMiddleware } from './common/middleware/sanitization.middleware';
@@ -26,7 +25,6 @@ import { ProgramsModule } from './programs/programs.module';
 import { WsModule } from './ws/ws.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PsychologistsModule } from './psychologists/psychologists.module';
-import { RolesGuard } from './roles/roles.guard';
 import { RolesModule } from './roles/roles.module';
 import { TherapyRequestsModule } from './therapy-requests/therapy-requests.module';
 import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
@@ -42,13 +40,15 @@ import { cwd } from 'process';
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
-        limit: 100,
+        limit: 300,
       },
     ]),
     MongooseModule.forRoot(process.env.MONGO_URL, {
       dbName: process.env.MONGO_DBNAME,
       user: process.env.MONGO_INITDB_ROOT_USERNAME,
       pass: process.env.MONGO_INITDB_ROOT_PASSWORD,
+      // Fail fast instead of holding requests for 30s when Mongo is down.
+      serverSelectionTimeoutMS: 5000,
     }),
     UsersModule,
     AuthModule,
@@ -74,18 +74,7 @@ import { cwd } from 'process';
   controllers: [AppController],
   providers: [
     AppService,
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: UserContextInterceptor,
-    },
+    ...APP_GUARD_PROVIDERS,
     {
       provide: APP_INTERCEPTOR,
       useClass: TimezoneInterceptor,

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
@@ -47,6 +48,9 @@ import {
 const dayMs = 1000 * 60 * 60 * 24;
 const DEFAULT_REQUEST_LIMIT = 20;
 const MAX_REQUEST_LIMIT = 1000;
+const MAX_EXPORT_ROWS = 10_000;
+// Unbounded analytics queries (export, lifecycle) give up after this.
+const EXPORT_QUERY_MAX_TIME_MS = 15_000;
 const MAX_TIME_SERIES_RANGE_DAYS = 52 * 7;
 const LTV_RATES_TO_GEL = {
   gel: 1,
@@ -1046,6 +1050,23 @@ export class TherapyRequestAnalyticsService {
   }
 
   async exportXlsx(query: TherapyRequestAnalyticsQuery): Promise<Buffer> {
+    // The workbook is built in memory, so refuse exports that are too large
+    // instead of silently truncating them.
+    const [total, lifecycleTotal] = await Promise.all(
+      [this.buildRequestFilter(query), this.buildLifecycleFilter(query)].map(
+        (filter) =>
+          this.therapyRequestModel
+            .countDocuments(filter)
+            .maxTimeMS(EXPORT_QUERY_MAX_TIME_MS)
+            .exec(),
+      ),
+    );
+    if (Math.max(total, lifecycleTotal) > MAX_EXPORT_ROWS) {
+      throw new UnprocessableEntityException(
+        `Export is limited to ${MAX_EXPORT_ROWS} requests; narrow the filters`,
+      );
+    }
+
     const [requests, kpiRequests] = await Promise.all([
       this.findRequests(query, { capped: false }),
       this.findLifecycleRequests(query),
@@ -1292,23 +1313,27 @@ export class TherapyRequestAnalyticsService {
       requestQuery
         .skip(options.offset ?? parseRequestOffset(query.offset))
         .limit(options.limit ?? parseRequestLimit(query.limit));
+    } else {
+      requestQuery.maxTimeMS(EXPORT_QUERY_MAX_TIME_MS);
     }
 
     return requestQuery.exec() as Promise<ProjectedTherapyRequest[]>;
   }
 
-  private async findLifecycleRequests(
-    query: TherapyRequestAnalyticsQuery,
-  ): Promise<ProjectedTherapyRequest[]> {
+  private buildLifecycleFilter(query: TherapyRequestAnalyticsQuery) {
     const lifecycleQuery = { ...query };
     delete lifecycleQuery.accepted;
-    const filter = {
+    return {
       ...this.buildRequestFilter(lifecycleQuery),
       accepted: true,
     };
+  }
 
+  private async findLifecycleRequests(
+    query: TherapyRequestAnalyticsQuery,
+  ): Promise<ProjectedTherapyRequest[]> {
     return this.therapyRequestModel
-      .find(filter)
+      .find(this.buildLifecycleFilter(query))
       .select('_id createdAt name accepted psychologist')
       .populate({
         path: 'psychologist',
@@ -1320,6 +1345,7 @@ export class TherapyRequestAnalyticsService {
         },
       })
       .sort({ createdAt: -1 })
+      .maxTimeMS(EXPORT_QUERY_MAX_TIME_MS)
       .exec() as Promise<ProjectedTherapyRequest[]>;
   }
 

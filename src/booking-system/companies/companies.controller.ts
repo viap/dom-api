@@ -21,6 +21,7 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyQueryParams } from '../shared/types/query-params.interface';
 
 @Controller('booking-system/companies')
+@Roles(Role.Admin)
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 

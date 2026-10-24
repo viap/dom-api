@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Post,
@@ -16,7 +18,6 @@ import { TherapyRequestQueryParams } from '@/common/types/therapy-request-params
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
-import { IsMyData } from './decorators/is-my-data.decorator';
 import { CreateTherapyRequestDto } from './dto/create-therapy-request.dto';
 import { UpdateTherapyRequestDto } from './dto/update-therapy-request.dto';
 import { joiCreateTherapyRequestSchema } from './schemas/joi.create-therapy-request.schema';
@@ -31,6 +32,7 @@ export class TherapyRequestsController {
   constructor(private therapyRequestService: TherapyRequestsService) {}
 
   @Get()
+  @Roles(Role.Admin, Role.Editor)
   getAll(@Query() params?: TherapyRequestQueryParams) {
     let accepted: boolean | undefined;
     try {
@@ -44,13 +46,11 @@ export class TherapyRequestsController {
   }
 
   @Get(':therapyRequestId')
-  @IsMyData()
   getOne(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.getById(therapyRequestId);
   }
 
   @Get('/psychologist/:psychologistId')
-  @IsMyData()
   getAllForPsychologist(
     @Request() request: EnhancedRequest,
     @Param('psychologistId') psychologistId: string,
@@ -80,7 +80,7 @@ export class TherapyRequestsController {
   }
 
   @Post()
-  @Roles(Role.User)
+  @Roles(Role.Admin, Role.Editor)
   create(
     @Body(new JoiValidationPipe(joiCreateTherapyRequestSchema))
     createData: CreateTherapyRequestDto,
@@ -89,29 +89,76 @@ export class TherapyRequestsController {
   }
 
   @Post(':therapyRequestId/accept')
-  @IsMyData()
-  acceptRequest(@Param('therapyRequestId') therapyRequestId: string) {
-    return this.therapyRequestService.acceptRequest(therapyRequestId);
+  acceptRequest(
+    @Request() request: EnhancedRequest,
+    @Param('therapyRequestId') therapyRequestId: string,
+  ) {
+    // A psychologist's claim must still name them, so a concurrent transfer
+    // to a colleague wins; admins and editors accept on anyone's behalf.
+    return this.therapyRequestService.acceptRequest(
+      therapyRequestId,
+      this.ownPsychologistId(request),
+    );
   }
 
   @Post(':therapyRequestId/reject')
-  @IsMyData()
-  rejectRequest(@Param('therapyRequestId') therapyRequestId: string) {
-    return this.therapyRequestService.rejectRequest(therapyRequestId);
+  rejectRequest(
+    @Request() request: EnhancedRequest,
+    @Param('therapyRequestId') therapyRequestId: string,
+  ) {
+    return this.therapyRequestService.rejectRequest(
+      therapyRequestId,
+      this.ownPsychologistId(request),
+    );
   }
 
   @Put(':therapyRequestId')
-  @IsMyData()
   update(
+    @Request() request: EnhancedRequest,
     @Param('therapyRequestId') therapyRequestId: string,
     @Body(new JoiValidationPipe(joiUpdateTherapyRequestSchema))
     updateData: UpdateTherapyRequestDto,
   ) {
-    return this.therapyRequestService.update(therapyRequestId, updateData);
+    // A psychologist may only transfer their own request to a colleague.
+    if (!this.canManageAll(request)) {
+      if (Object.keys(updateData).some((field) => field !== 'psychologist')) {
+        throw new ForbiddenException();
+      }
+      if (!updateData.psychologist) {
+        throw new BadRequestException('psychologist is required');
+      }
+    }
+
+    return this.therapyRequestService.update(
+      therapyRequestId,
+      updateData,
+      this.ownPsychologistId(request),
+    );
   }
 
   @Delete(':therapyRequestId')
+  @Roles(Role.Admin, Role.Editor)
   remove(@Param('therapyRequestId') therapyRequestId: string) {
     return this.therapyRequestService.remove(therapyRequestId);
+  }
+
+  // A psychologist's writes are conditional on still owning the request, so
+  // they cannot race a concurrent transfer; admins and editors act on anyone's.
+  // undefined means "any request" and is returned only to admins and editors;
+  // anyone else without a psychologist profile is refused here as well as in
+  // the guard.
+  private ownPsychologistId(request: EnhancedRequest): string | undefined {
+    if (this.canManageAll(request)) {
+      return undefined;
+    }
+    if (!request.psychologistContext?.id) {
+      throw new ForbiddenException();
+    }
+    return request.psychologistContext.id;
+  }
+
+  private canManageAll(request: EnhancedRequest): boolean {
+    const roles = request.userContext?.roles || [];
+    return roles.includes(Role.Admin) || roles.includes(Role.Editor);
   }
 }

@@ -147,21 +147,40 @@ describe('NotificationsService', () => {
   });
 
   describe('addReceived', () => {
-    it('returns true only when the call claims a new received user', async () => {
+    const NOTIFICATION_ID = '507f1f77bcf86cd799439011';
+
+    function mockNotification(notification: Record<string, unknown> | null) {
+      mockNotificationModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(notification),
+      });
+    }
+
+    it('rejects invalid notification ids without touching the database', async () => {
+      await expect(service.addReceived('not-an-id', 'user-id')).resolves.toBe(
+        false,
+      );
+      expect(mockUsersService.getById).not.toHaveBeenCalled();
+    });
+
+    it('claims a receipt for an eligible user', async () => {
       const exec = jest.fn().mockResolvedValue({ _id: 'notification-id' });
       const updateStatusSpy = jest
         .spyOn(service, 'updateNotificationStatus')
         .mockResolvedValue(undefined);
-      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockUsersService.getById.mockResolvedValue({
+        _id: 'user-id',
+        roles: ['admin'],
+      });
+      mockNotification({ roles: ['admin'], recipients: [], received: [] });
       mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
 
       await expect(
-        service.addReceived('notification-id', 'user-id'),
+        service.addReceived(NOTIFICATION_ID, 'user-id'),
       ).resolves.toBe(true);
 
       expect(mockNotificationModel.findOneAndUpdate).toHaveBeenCalledWith(
         {
-          _id: 'notification-id',
+          _id: NOTIFICATION_ID,
           received: {
             $not: { $elemMatch: { $eq: 'user-id' } },
           },
@@ -170,8 +189,20 @@ describe('NotificationsService', () => {
           $addToSet: { received: 'user-id' },
         },
       );
-      expect(updateStatusSpy).toHaveBeenCalledWith('notification-id');
-      expect(mockNotificationModel.findOne).not.toHaveBeenCalled();
+      expect(updateStatusSpy).toHaveBeenCalledWith(NOTIFICATION_ID);
+    });
+
+    it('refuses users outside the audience by current roles', async () => {
+      mockUsersService.getById.mockResolvedValue({
+        _id: 'user-id',
+        roles: ['user'],
+      });
+      mockNotification({ roles: ['admin'], recipients: [], received: [] });
+
+      await expect(
+        service.addReceived(NOTIFICATION_ID, 'user-id'),
+      ).resolves.toBe(false);
+      expect(mockNotificationModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
     it('returns false when the user was already received', async () => {
@@ -179,15 +210,15 @@ describe('NotificationsService', () => {
       const updateStatusSpy = jest
         .spyOn(service, 'updateNotificationStatus')
         .mockResolvedValue(undefined);
-      mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
+      mockUsersService.getById.mockResolvedValue({ _id: 'user-id', roles: [] });
+      mockNotification({ roles: [], recipients: [], received: [] });
       mockNotificationModel.findOneAndUpdate.mockReturnValue({ exec });
 
       await expect(
-        service.addReceived('notification-id', 'user-id'),
+        service.addReceived(NOTIFICATION_ID, 'user-id'),
       ).resolves.toBe(false);
 
       expect(updateStatusSpy).not.toHaveBeenCalled();
-      expect(mockNotificationModel.findOne).not.toHaveBeenCalled();
     });
 
     it('returns false when the user cannot be found', async () => {
@@ -197,11 +228,56 @@ describe('NotificationsService', () => {
       mockUsersService.getById.mockResolvedValue(null);
 
       await expect(
-        service.addReceived('notification-id', 'missing-user-id'),
+        service.addReceived(NOTIFICATION_ID, 'missing-user-id'),
       ).resolves.toBe(false);
 
       expect(mockNotificationModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAllActiveForBot', () => {
+    const ADMIN = '507f1f77bcf86cd799439001';
+    const STALE = '507f1f77bcf86cd799439002';
+    const DONE = '507f1f77bcf86cd799439003';
+
+    it('lists eligible bot users by current database roles', async () => {
+      const notification = {
+        roles: ['admin'],
+        recipients: [],
+        received: [DONE],
+        toObject: () => ({ _id: 'n1' }),
+      };
+      mockNotificationModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([notification]),
+        }),
+      });
+      (mockUsersService as any).getRolesByIds = jest.fn().mockResolvedValue([
+        { _id: ADMIN, roles: ['admin'] },
+        { _id: STALE, roles: ['user'] },
+        { _id: DONE, roles: ['admin'] },
+      ]);
+
+      await expect(
+        service.getAllActiveForBot([ADMIN, STALE, DONE, 'not-an-id']),
+      ).resolves.toEqual([{ _id: 'n1', eligibleUserIds: [ADMIN] }]);
+      expect((mockUsersService as any).getRolesByIds).toHaveBeenCalledWith([
+        ADMIN,
+        STALE,
+        DONE,
+      ]);
+    });
+
+    it('keeps the previous response when no user ids are sent', async () => {
+      const notifications = [{ _id: 'n1' }];
+      mockNotificationModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(notifications),
+        }),
+      });
+
+      await expect(service.getAllActiveForBot()).resolves.toBe(notifications);
     });
   });
 });

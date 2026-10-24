@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
@@ -60,7 +61,7 @@ export class PartnersService {
     const query: Record<string, unknown> = { isPublished: true };
 
     if (safeParams.title && typeof safeParams.title === 'string') {
-      query.title = { $regex: new RegExp(safeParams.title, 'i') };
+      query.title = { $regex: new RegExp(escapeRegExp(safeParams.title), 'i') };
     }
 
     if (safeParams.type && typeof safeParams.type === 'string') {
@@ -211,7 +212,7 @@ export class PartnersService {
     const query: Record<string, unknown> = {};
 
     if (safeParams.title && typeof safeParams.title === 'string') {
-      query.title = { $regex: new RegExp(safeParams.title, 'i') };
+      query.title = { $regex: new RegExp(escapeRegExp(safeParams.title), 'i') };
     }
 
     if (safeParams.type && typeof safeParams.type === 'string') {

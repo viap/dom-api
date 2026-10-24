@@ -45,7 +45,7 @@ export class TherapySessionsController {
   }
 
   @Get('/from/:from/to/:to')
-  @IsMyTherapySessions()
+  @Roles(Role.Admin)
   getAllForPeriod(
     @Param('from', new ParseIntPipe()) from: number,
     @Param('to', new ParseIntPipe()) to: number,
@@ -54,7 +54,7 @@ export class TherapySessionsController {
   }
 
   @Get('/statistic/from/:from/to/:to')
-  @IsMyTherapySessions()
+  @Roles(Role.Admin, Role.Accountant)
   getStatisticForPeriod(
     @Param('from', new ParseIntPipe()) from: number,
     @Param('to', new ParseIntPipe()) to: number,
@@ -65,15 +65,22 @@ export class TherapySessionsController {
   @Get('/statistic/psychologist/:psychologistId/from/:from/to/:to')
   @IsMyTherapySessions()
   getStatisticForPsychologistForPeriod(
+    @Request() request: EnhancedRequest,
     @Param('psychologistId') psychologistId: string,
     @Param('from', new ParseIntPipe()) from: number,
     @Param('to', new ParseIntPipe()) to: number,
   ): Promise<Array<TherapySessionsControllerStatistic>> {
-    return this.therapySessionService.getStatisticForPeriod(
-      from,
-      to,
-      psychologistId,
-    );
+    const ownId =
+      psychologistId === currentUserAlias
+        ? request.psychologistContext?.id
+        : psychologistId;
+
+    // Without an id the service would return statistics for everyone.
+    if (!ownId) {
+      return Promise.resolve([]);
+    }
+
+    return this.therapySessionService.getStatisticForPeriod(from, to, ownId);
   }
 
   @Get(':sessionId')
@@ -128,6 +135,7 @@ export class TherapySessionsController {
   }
 
   @Post()
+  @Roles(Role.Admin)
   @UsePipes(new JoiValidationPipe(joiCreateTherapySessionSchema))
   create(
     @Body() createData: CreateTherapySessionDto,

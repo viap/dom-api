@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Role } from '../roles/enums/roles.enum';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -10,6 +11,9 @@ import { UsersService } from './users.service';
 describe('Users Controller', () => {
   let controller: UsersController;
   let service: UsersService;
+
+  const adminActor = { userId: 'admin-id', roles: [Role.Admin] };
+  const editorActor = { userId: 'editor-id', roles: [Role.Editor] };
 
   const createUserDto: CreateUserDto = {
     name: 'User #1',
@@ -107,7 +111,7 @@ describe('Users Controller', () => {
         contacts: [],
       });
 
-      const result = await controller.create(createUserDto);
+      const result = await controller.create(adminActor, createUserDto);
 
       expect(createSpy).toHaveBeenCalledWith(createUserDto);
       expect(result).toEqual(expectedResponse);
@@ -225,7 +229,7 @@ describe('Users Controller', () => {
         contacts: [],
       });
 
-      const result = await controller.update(userId, updateUserDto);
+      const result = await controller.update(adminActor, userId, updateUserDto);
 
       expect(updateSpy).toHaveBeenCalledWith(userId, updateUserDto);
       expect(result).toEqual(expectedResponse);
@@ -266,9 +270,9 @@ describe('Users Controller', () => {
           .spyOn(service, 'create')
           .mockRejectedValueOnce(new Error('Database connection failed'));
 
-        await expect(controller.create(createUserDto)).rejects.toThrow(
-          'Database connection failed',
-        );
+        await expect(
+          controller.create(adminActor, createUserDto),
+        ).rejects.toThrow('Database connection failed');
         expect(createSpy).toHaveBeenCalledWith(createUserDto);
       });
     });
@@ -307,9 +311,9 @@ describe('Users Controller', () => {
           .spyOn(service, 'update')
           .mockRejectedValueOnce(new Error('Update validation failed'));
 
-        await expect(controller.update(userId, updateUserDto)).rejects.toThrow(
-          'Update validation failed',
-        );
+        await expect(
+          controller.update(adminActor, userId, updateUserDto),
+        ).rejects.toThrow('Update validation failed');
         expect(updateSpy).toHaveBeenCalledWith(userId, updateUserDto);
       });
     });
@@ -328,6 +332,68 @@ describe('Users Controller', () => {
         );
         expect(removeSpy).toHaveBeenCalledWith(userId);
       });
+    });
+  });
+
+  describe('editor restrictions', () => {
+    it.each([
+      { roles: [Role.Admin] },
+      { password: 'x' },
+      { login: 'x' },
+      { contacts: [{ network: 'telegram', id: '1', username: 'u' }] },
+    ])('forbids editors from setting %o', async (data) => {
+      await expect(
+        controller.update(editorActor, 'target-id', data as UpdateUserDto),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        controller.create(editorActor, {
+          name: 'New',
+          ...data,
+        } as CreateUserDto),
+      ).rejects.toThrow(ForbiddenException);
+      expect(service.update).not.toHaveBeenCalled();
+      expect(service.create).not.toHaveBeenCalled();
+    });
+
+    it.each([Role.Admin, Role.Editor])(
+      'forbids editors from editing %s accounts',
+      async (role) => {
+        jest
+          .spyOn(service, 'getById')
+          .mockResolvedValueOnce({ roles: [role] } as UserDocument);
+
+        await expect(
+          controller.update(editorActor, 'target-id', { name: 'x' }),
+        ).rejects.toThrow(ForbiddenException);
+        expect(service.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('lets editors edit ordinary fields of plain users', async () => {
+      jest
+        .spyOn(service, 'getById')
+        .mockResolvedValueOnce({ roles: [Role.User] } as UserDocument);
+      jest
+        .spyOn(service, 'update')
+        .mockResolvedValueOnce(mockUpdatedUserDocument);
+
+      await controller.update(editorActor, 'target-id', updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith('target-id', updateUserDto);
+    });
+
+    it('lets admins change roles and credentials', async () => {
+      jest
+        .spyOn(service, 'update')
+        .mockResolvedValueOnce(mockUpdatedUserDocument);
+
+      await controller.update(adminActor, 'target-id', {
+        roles: [Role.Admin],
+        password: 'x',
+      });
+
+      expect(service.getById).not.toHaveBeenCalled();
+      expect(service.update).toHaveBeenCalled();
     });
   });
 });

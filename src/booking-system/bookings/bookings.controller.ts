@@ -30,6 +30,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { IsMyBookingGuard } from './guards/is-my-booking.guard';
 
 @Controller('booking-system/bookings')
+@Roles(Role.Admin)
 @UseGuards(IsMyBookingGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
@@ -331,7 +332,8 @@ export class BookingsController {
    * Bulk approve bookings (Admin only)
    * @param body Array of booking IDs
    * @param req Request object containing admin user info
-   * @returns Approved bookings
+   * @returns { approved, skipped }: approved bookings, and the ids that failed
+   *   the single-approval checks with the reason
    *
    * Example request:
    * PATCH /booking-system/bookings/bulk-approve

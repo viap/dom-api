@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
+import { validateObjectId } from '@/common/utils/mongo-sanitizer';
+import { Role } from '@/roles/enums/roles.enum';
 import { valueToObjectId } from '@/common/utils/value-to-object-id';
 import { UsersService } from '@/users/users.service';
 import { NOTIFICATION_DAYS_LIFETIME } from './consts';
@@ -38,8 +40,45 @@ function parseDateValue(value?: string | Date): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+// Upper bound for the bot's session user ids in one batch request.
+const MAX_BOT_CANDIDATES = 5000;
+
+type AudienceUser = { _id?: unknown; roles?: Array<Role> };
+type AudienceNotification = Pick<
+  Notification,
+  'roles' | 'recipients' | 'received'
+>;
+
+const toId = (value: unknown): string =>
+  String((value as { _id?: unknown })?._id ?? value);
+
+// The single audience rule for notifications: no roles or one of the user's
+// roles, and no recipients or the user among them. Used by the bot batch,
+// per-user lists and receipts so they cannot drift apart.
+export function isNotificationAudience(
+  notification: AudienceNotification,
+  user: AudienceUser,
+): boolean {
+  const userId = toId(user);
+  const roleMatches =
+    !notification.roles.length ||
+    notification.roles.some((role) => user.roles?.includes(role));
+  const recipientMatches =
+    !notification.recipients.length ||
+    notification.recipients.some((recipient) => toId(recipient) === userId);
+
+  return roleMatches && recipientMatches;
+}
+
+function hasReceived(notification: AudienceNotification, userId: string) {
+  return notification.received.some((item) => toId(item) === userId);
+}
+
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+  private warnedAboutLegacyBatch = false;
+
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
@@ -87,28 +126,55 @@ export class NotificationsService {
     const user = await this.userService.getById(userId);
     if (!user) return [];
 
-    const filters: Array<FilterQuery<Notification>> = [
-      {
-        // NOTICE: roles empty or user have any required role
-        $or: [
-          { roles: { $size: 0 } },
-          { roles: { $elemMatch: { $in: user.roles } } },
-        ],
-      },
-      {
-        // NOTICE: recipients empty or user is in recipients list
-        $or: [
-          { recipients: { $size: 0 } },
-          { recipients: { $elemMatch: { $eq: user._id } } },
-        ],
-      },
-      {
-        // NOTICE: user is not in received list
-        received: { $not: { $elemMatch: { $eq: user._id } } },
-      },
-    ];
+    const notifications = await this.getAllActive();
+    return notifications.filter(
+      (notification) =>
+        isNotificationAudience(notification, user) &&
+        !hasReceived(notification, toId(user)),
+    );
+  }
 
-    return await this.getAllActive(filters);
+  // Active notifications for the bot. When the bot sends the user ids it has
+  // sessions for, each notification lists which of them may still receive it,
+  // judged by current database roles rather than the bot's stored tokens.
+  async getAllActiveForBot(
+    candidateUserIds?: unknown,
+  ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
+    const notifications = await this.getAllActive();
+    // TODO(remove once 'notifications.legacy_batch_without_user_ids' no
+    // longer appears in logs after the dom-bot deploy): older bots send no
+    // ids and filter recipients themselves.
+    if (!Array.isArray(candidateUserIds)) {
+      if (!this.warnedAboutLegacyBatch) {
+        this.warnedAboutLegacyBatch = true;
+        this.logger.warn(
+          JSON.stringify({
+            event: 'notifications.legacy_batch_without_user_ids',
+          }),
+        );
+      }
+      return notifications;
+    }
+
+    const ids = [
+      ...new Set(
+        candidateUserIds
+          .map((id) => validateObjectId(id))
+          .filter((id): id is string => !!id),
+      ),
+    ].slice(0, MAX_BOT_CANDIDATES);
+    const users = ids.length ? await this.userService.getRolesByIds(ids) : [];
+
+    return notifications.map((notification) => ({
+      ...notification.toObject(),
+      eligibleUserIds: users
+        .filter(
+          (user) =>
+            isNotificationAudience(notification, user) &&
+            !hasReceived(notification, toId(user)),
+        )
+        .map((user) => toId(user)),
+    }));
   }
 
   async create(
@@ -175,14 +241,25 @@ export class NotificationsService {
   }
 
   async addReceived(notificationId: string, userId: string): Promise<boolean> {
+    const validNotificationId = validateObjectId(notificationId);
+    if (!validNotificationId) return false;
+
     const user = await this.userService.getById(userId);
     if (!user) return false;
 
-    // NOTICE: add user to received list in notification
+    // NOTICE: the user must still be in the audience by current roles.
+    const notification = await this.notificationModel
+      .findById(validNotificationId)
+      .exec();
+    if (!notification || !isNotificationAudience(notification, user)) {
+      return false;
+    }
+
+    // NOTICE: add user to received list; the filter makes the claim atomic.
     const updatedNotification = await this.notificationModel
       .findOneAndUpdate(
         {
-          _id: notificationId,
+          _id: validNotificationId,
           received: {
             $not: { $elemMatch: { $eq: user._id } },
           },
@@ -197,7 +274,7 @@ export class NotificationsService {
       return false;
     }
 
-    await this.updateNotificationStatus(notificationId);
+    await this.updateNotificationStatus(validNotificationId);
 
     return true;
   }
@@ -232,7 +309,7 @@ export class NotificationsService {
 
     if (isEveryoneWasNotified || isTimeOver) {
       notification.status = NotificationStatuses.INACTIVE;
-      notification.save();
+      await notification.save();
     }
   }
 

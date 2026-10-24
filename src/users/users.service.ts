@@ -4,9 +4,10 @@ import {
   validateObjectId,
   validateRoles,
 } from '@/common/utils/mongo-sanitizer';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { normalizeLogin } from '@/common/utils/normalize-login';
 import { Role } from '@/roles/enums/roles.enum';
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
@@ -25,6 +26,7 @@ type MongoDuplicateLoginError = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   private readonly saltRounds = 12;
 
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
@@ -61,6 +63,16 @@ export class UsersService {
     return this.userModel.findById(validId).exec();
   }
 
+  async getRolesByIds(
+    ids: Array<string>,
+  ): Promise<Array<{ _id: unknown; roles: Array<Role> }>> {
+    return this.userModel
+      .find({ _id: { $in: ids } })
+      .select('roles')
+      .lean()
+      .exec();
+  }
+
   async getByTelegramId(telegramId: string): Promise<UserDocument> {
     const sanitizedTelegramId = sanitizeObject(telegramId);
     if (
@@ -70,12 +82,33 @@ export class UsersService {
     ) {
       return null;
     }
-    return await this.userModel
-      .findOne({
-        'contacts.id': sanitizedTelegramId,
-        'contacts.network': SocialNetworks.Telegram,
+    // Both conditions must hold for the same contact. If several accounts
+    // share the id, the oldest wins: that is the account Telegram login
+    // created first, and newer duplicates cannot take it over or lock it.
+    const users = await this.userModel
+      .find({
+        contacts: {
+          $elemMatch: {
+            id: sanitizedTelegramId,
+            network: SocialNetworks.Telegram,
+          },
+        },
       })
+      .sort({ _id: 1 })
+      .limit(2)
       .exec();
+
+    if (users.length > 1) {
+      // ObjectIds only, so the duplicates can be found and merged.
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.telegram.ambiguous_account',
+          userIds: users.map((user) => user._id.toString()),
+        }),
+      );
+    }
+
+    return users[0] ?? null;
   }
 
   async getByLogin(login: string): Promise<UserDocument> {
@@ -109,22 +142,12 @@ export class UsersService {
       user = await this.userModel
         .findOne({
           'contacts.username': {
-            $regex: new RegExp(`^${normalizedLogin}$`, 'i'),
+            $regex: new RegExp(`^${escapeRegExp(normalizedLogin)}$`, 'i'),
           },
           'contacts.network': SocialNetworks.Telegram,
         })
         .select('+password')
         .exec();
-
-      // Auto-assign login from Telegram username if not yet set
-      // validateUniqueLogin throws ConflictException (409) if already taken
-      if (user && !user.login) {
-        await this.validateUniqueLogin(normalizedLogin);
-        await this.userModel.findByIdAndUpdate(user._id, {
-          login: normalizedLogin,
-        });
-        user.login = normalizedLogin;
-      }
     }
 
     if (!user || !user.password) {
@@ -132,8 +155,21 @@ export class UsersService {
     }
 
     const isPasswordValid = await this.comparePassword(password, user.password);
+    if (!isPasswordValid) {
+      return null;
+    }
 
-    return isPasswordValid ? user : null;
+    // Auto-assign login from Telegram username if not yet set, only after the
+    // password is verified. validateUniqueLogin throws ConflictException (409).
+    if (!user.login) {
+      await this.validateUniqueLogin(normalizedLogin);
+      await this.userModel.findByIdAndUpdate(user._id, {
+        login: normalizedLogin,
+      });
+      user.login = normalizedLogin;
+    }
+
+    return user;
   }
 
   async getByTelegramUserName(telegramUserName: string): Promise<UserDocument> {

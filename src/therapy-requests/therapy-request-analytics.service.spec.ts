@@ -6,7 +6,11 @@ import {
   buildSessionDatePipeline,
   deriveExactMedianFromHistogram,
 } from './therapy-request-analytics.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import mongoose from 'mongoose';
 
@@ -17,6 +21,7 @@ function chain(result: unknown) {
     select: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
+    maxTimeMS: jest.fn().mockReturnThis(),
     exec: jest.fn().mockResolvedValue(result),
   };
 }
@@ -29,6 +34,7 @@ function aggregateChain(result: unknown) {
 
 function countChain(result: number) {
   return {
+    maxTimeMS: jest.fn().mockReturnThis(),
     exec: jest.fn().mockResolvedValue(result),
   };
 }
@@ -1733,6 +1739,7 @@ describe('TherapyRequestAnalyticsService', () => {
     const service = new TherapyRequestAnalyticsService(
       {
         find,
+        countDocuments: jest.fn().mockReturnValue(countChain(requests.length)),
         aggregate: jest.fn().mockReturnValue(aggregateChain([])),
         distinct: jest.fn(),
       } as any,
@@ -2055,6 +2062,7 @@ describe('TherapyRequestAnalyticsService', () => {
     const service = new TherapyRequestAnalyticsService(
       {
         find,
+        countDocuments: jest.fn().mockReturnValue(countChain(requests.length)),
         aggregate: jest.fn().mockReturnValue(aggregateChain([])),
         distinct: jest.fn(),
       } as any,
@@ -2096,5 +2104,25 @@ describe('TherapyRequestAnalyticsService', () => {
       psychologistName: 'Dr 11',
     });
     expect(psychologistRows).toHaveLength(21);
+  });
+
+  it('refuses exports when the lifecycle rows exceed the limit', async () => {
+    const find = jest.fn();
+    const service = new TherapyRequestAnalyticsService(
+      {
+        find,
+        countDocuments: jest
+          .fn()
+          .mockReturnValueOnce(countChain(10))
+          .mockReturnValueOnce(countChain(10_001)),
+      } as any,
+      {} as any,
+      { find: jest.fn() } as any,
+    );
+
+    await expect(service.exportXlsx({})).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+    expect(find).not.toHaveBeenCalled();
   });
 });

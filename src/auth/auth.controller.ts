@@ -6,11 +6,13 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
   Post,
   Req,
   Res,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { normalizeLogin } from '@/common/utils/normalize-login';
@@ -18,6 +20,7 @@ import { GetUserContext } from '../common/user-context/user-context.decorator';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthLoginAttemptsService } from './auth-login-attempts.service';
 import { AuthService } from './auth.service';
+import { getClientIp, hasUntrustedClientIpHeader } from './utils/client-ip';
 import { Public } from './decorators/public.decorator';
 import { AuthByTelegramDto } from './dto/auth-by-telegram.dto';
 import { AuthByUserDto } from './dto/auth-by-user.dto';
@@ -33,19 +36,21 @@ const UUID_REGEX =
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private authService: AuthService,
     private authLoginAttemptsService: AuthLoginAttemptsService,
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login/telegram')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new JoiValidationPipe(joiAuthByTelegramSchema))
   async getAuthTokenForTelegram(
     @Body() data: AuthByTelegramDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
     @Headers('x-request-id') requestIdHeader?: string,
   ) {
     const normalizedTelegramId = this.normalizeTelegramId(data.telegram?.id);
@@ -56,52 +61,19 @@ export class AuthController {
       data.apiClient?.name,
     );
 
-    const lockedState = this.authLoginAttemptsService.getLockedState(
-      metadata.sourceIp,
-      normalizedTelegramId,
+    // No failed-attempt lockout here: the only failure is a wrong API client,
+    // which says nothing about the Telegram account, and counting it per
+    // Telegram id would let anyone lock a user out of the bot. Attempts are
+    // limited per IP by the route throttle.
+    return this.authService.signInByTelegram(
+      data.apiClient,
+      data.telegram,
+      metadata,
     );
-
-    if (normalizedTelegramId && lockedState.locked) {
-      this.authService.logAuthFailure({
-        reason: AuthFailureReason.InvalidUserCredentials,
-        metadata,
-        locked: true,
-      });
-      this.throwTooManyAttempts(response, lockedState.retryAfterSeconds);
-    }
-
-    try {
-      const token = await this.authService.signInByTelegram(
-        data.apiClient,
-        data.telegram,
-        metadata,
-      );
-      if (normalizedTelegramId) {
-        this.authLoginAttemptsService.reset(
-          metadata.sourceIp,
-          normalizedTelegramId,
-        );
-      }
-      return token;
-    } catch (error) {
-      if (error instanceof AuthFailureError && normalizedTelegramId) {
-        const attempt = this.authLoginAttemptsService.registerFailure(
-          metadata.sourceIp,
-          normalizedTelegramId,
-        );
-        if (attempt.locked) {
-          this.authService.logAuthFailure({
-            reason: AuthFailureReason.InvalidUserCredentials,
-            metadata,
-            locked: true,
-          });
-        }
-      }
-      throw error;
-    }
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login/user')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new JoiValidationPipe(joiAuthByUserSchema))
@@ -193,7 +165,12 @@ export class AuthController {
     normalizedLogin?: string,
     clientName?: string,
   ): AuthRequestMetadata {
-    const sourceIp = request.ip || request.socket?.remoteAddress || 'unknown';
+    const sourceIp = getClientIp(request);
+    if (hasUntrustedClientIpHeader(request)) {
+      this.logger.warn(
+        JSON.stringify({ event: 'auth.client_ip_header.untrusted', sourceIp }),
+      );
+    }
 
     const userAgent = this.readHeaderValue(request.headers['user-agent']);
 

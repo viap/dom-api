@@ -106,9 +106,9 @@ These are registered once in `AppModule` and apply to every route automatically.
 
 | Type | Class | Effect |
 |---|---|---|
-| `APP_GUARD` | `AuthGuard` | Validates JWT; rejects unauthenticated requests |
+| `APP_GUARD` | `AppThrottlerGuard` | Global rate limit (300/min per user, Telegram id or IP); anonymous reads only where `@Throttle` is set |
+| `APP_GUARD` | `AuthGuard` | Validates JWT, loads the user and sets `req.user` / `req.userContext` with current database roles |
 | `APP_GUARD` | `RolesGuard` | Enforces `@Roles()` decorator |
-| `APP_INTERCEPTOR` | `UserContextInterceptor` | Populates `req.userContext` from token payload |
 | `APP_INTERCEPTOR` | `TimezoneInterceptor` | Normalises timezone across requests |
 | Middleware | `SanitizationMiddleware` | Strips MongoDB operators from all input |
 
@@ -117,7 +117,7 @@ These are registered once in `AppModule` and apply to every route automatically.
 The project uses a consistent dual-schema approach:
 - **Joi schemas** for request validation via custom `JoiValidationPipe`
 - **Mongoose schemas** for database modeling
-- Custom decorators for authorization (`@IsMyData`, `@IsMyTherapySession`)
+- Ownership checks: `TherapyRequestsGuard` (by `psychologistId`/`therapyRequestId` route params), `@IsMyTherapySessions`, `@IsMyBooking`
 
 ### Public EntityCollection ordering
 
@@ -137,6 +137,10 @@ The project uses a consistent dual-schema approach:
 6. Add the new module to the `imports` array of `AppModule`.
 7. Update both `CLAUDE.md` and `AGENTS.md` if the new module establishes a pattern others should follow.
 
+### Single-process constraint
+
+The rate limiter (`AppThrottlerGuard`), login attempt counters (`AuthLoginAttemptsService`) and WebSocket socket maps (`WsGateway`) keep state in process memory. They are correct only with one pm2 instance in fork mode (`ecosystem.config.js`). Scaling out requires moving that state to a shared store first.
+
 ### Configuration
 - Environment variables loaded from `config/.env`
 - MongoDB connection with credentials from environment
@@ -144,11 +148,10 @@ The project uses a consistent dual-schema approach:
 - Application port from `PORT` environment variable
 
 ### Real-time Features
-WebSocket gateway handles:
-- User authentication via JWT tokens in headers
-- Real-time notifications
-- Socket-to-user mapping for targeted messaging
-- API client tracking per socket connection
+The WebSocket gateway (`src/ws/`) serves only dom-bot:
+- The handshake must carry the bot API client; other sockets are disconnected
+- `notifications/get-all-batch`: active notifications with `eligibleUserIds` for the user ids the bot sends
+- `notifications/add-received`: the bot confirms delivery for a `userId`; the audience is rechecked
 
 ### Testing Setup
 - Jest for unit testing
@@ -233,7 +236,6 @@ const { from, to } = sanitizeDateRange(fromParam, toParam);
 | `@Roles(...roles)` | `@/roles/decorators/role.docorator` | Require one of the listed roles |
 | `@GetUserContext()` | `@/common/user-context/user-context.decorator` | Inject `UserContext` into a param |
 | `@GetUser()` | `@/common/user-context/user-context.decorator` | Inject full `UserDocument` into a param |
-| `@IsMyData()` | `@/therapy-requests/decorators/is-my-data.decorator` | Owner-only access for therapy requests |
 | `@IsMyTherapySessions()` | `@/therapy-sessions/decorators/is-my-therapy-session.decorator` | Owner-only access for therapy sessions |
 | `@IsMyBooking()` | `@/booking-system/bookings/decorators/is-my-booking.decorator` | Owner-only access for bookings |
 | `validateObjectId(id)` | `@/common/utils/mongo-sanitizer` | Validate & return safe ObjectId string |

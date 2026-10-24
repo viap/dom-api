@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
@@ -53,6 +53,8 @@ const submodels = [
 
 @Injectable()
 export class TherapyRequestsService {
+  private readonly logger = new Logger(TherapyRequestsService.name);
+
   constructor(
     @InjectModel(TherapyRequest.name)
     private therapyRequestModel: Model<TherapyRequestDocument>,
@@ -166,6 +168,21 @@ export class TherapyRequestsService {
     }
   }
 
+  async getAssignedPsychologistId(id: string): Promise<string | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+    const therapyRequest = await this.therapyRequestModel
+      .findById(validId)
+      .select('psychologist')
+      .lean()
+      .exec();
+    return therapyRequest?.psychologist
+      ? therapyRequest.psychologist.toString()
+      : null;
+  }
+
   async getById(id: string): Promise<TherapyRequestDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -219,22 +236,38 @@ export class TherapyRequestsService {
     const hasPsychologist =
       therapyRequest.psychologist && therapyRequest.psychologist.user;
 
-    this.notificationService.create({
-      type: NotificationTypes.NEW_THERAPY_REQUEST,
-      roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
-      recipients: hasPsychologist
-        ? [therapyRequest.psychologist.user._id.toString()]
-        : undefined,
-    });
+    // Not awaited on purpose: the request is already saved. Failures are
+    // logged instead of becoming unhandled rejections.
+    this.notificationService
+      .create({
+        type: NotificationTypes.NEW_THERAPY_REQUEST,
+        roles: hasPsychologist ? [Role.Psychologist] : [Role.Admin],
+        recipients: hasPsychologist
+          ? [therapyRequest.psychologist.user._id.toString()]
+          : undefined,
+      })
+      .catch((error) =>
+        this.logger.error(
+          `New therapy request notification failed: ${error?.message}`,
+        ),
+      );
 
     return therapyRequest;
   }
 
+  // ownPsychologistId: the write only applies while the request is still
+  // assigned to that psychologist (transfer by the owner).
   async update(
     id: string,
     updateData: UpdateTherapyRequestDto,
-  ): Promise<TherapyRequestDocument> {
-    const existingRequest = await this.getById(id);
+    ownPsychologistId?: string,
+  ): Promise<TherapyRequestDocument | null> {
+    const validId = validateObjectId(id);
+    if (!validId) {
+      return null;
+    }
+
+    const existingRequest = await this.getById(validId);
     const shouldReclassify =
       !!existingRequest &&
       ['name', 'descr', 'user', 'contacts'].some((field) =>
@@ -260,13 +293,22 @@ export class TherapyRequestsService {
         )
       : {};
 
-    await this.therapyRequestModel.findByIdAndUpdate(
-      id,
-      { ...updateData, ...analyticsPatch },
-      {
-        new: true,
-      },
-    );
+    const updated = await this.therapyRequestModel
+      .findOneAndUpdate(
+        {
+          _id: validId,
+          ...(ownPsychologistId
+            ? { psychologist: valueToObjectId(ownPsychologistId) }
+            : {}),
+        },
+        { ...updateData, ...analyticsPatch },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      return null;
+    }
 
     if (updateData.psychologist) {
       const psychologist = await this.psychologistService.getById(
@@ -282,7 +324,7 @@ export class TherapyRequestsService {
       }
     }
 
-    return this.getById(id);
+    return this.getById(validId);
   }
 
   async updateAnalytics(
@@ -352,65 +394,102 @@ export class TherapyRequestsService {
     return this.getById(id);
   }
 
-  async acceptRequest(therapyRequestId: string): Promise<boolean> {
-    const therapyRequest = await this.getById(therapyRequestId);
+  async acceptRequest(
+    therapyRequestId: string,
+    psychologistId?: string,
+  ): Promise<boolean> {
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      return false;
+    }
+
+    // Claim first so concurrent accepts cannot add the client twice.
+    const claimed = await this.therapyRequestModel
+      .findOneAndUpdate(
+        {
+          _id: validId,
+          accepted: { $ne: true },
+          psychologist: psychologistId
+            ? valueToObjectId(psychologistId)
+            : { $ne: null },
+        },
+        { $set: { accepted: true } },
+      )
+      .exec();
+    if (!claimed) {
+      return false;
+    }
+
     let result: boolean | undefined = false;
+    try {
+      const therapyRequest = await this.getById(validId);
+      if (therapyRequest && therapyRequest.psychologist) {
+        const telegramUserFromRequest: Contact | undefined =
+          therapyRequest.contacts.find(
+            (contact) => contact.network === SocialNetworks.Telegram,
+          );
 
-    if (
-      therapyRequest &&
-      therapyRequest.psychologist &&
-      !therapyRequest.accepted
-    ) {
-      const telegramUserFromRequest: Contact | undefined =
-        therapyRequest.contacts.find(
-          (contact) => contact.network === SocialNetworks.Telegram,
-        );
+        const telegramUserFromUser: Contact | undefined =
+          therapyRequest.user?.contacts.find(
+            (contact) => contact.network === SocialNetworks.Telegram,
+          );
 
-      const telegramUserFromUser: Contact | undefined =
-        therapyRequest.user?.contacts.find(
-          (contact) => contact.network === SocialNetworks.Telegram,
-        );
-
-      if (
-        therapyRequest.user &&
-        telegramUserFromUser?.username === telegramUserFromRequest?.username
-      ) {
-        result = await this.psychologistService.addClientFromUser(
-          therapyRequest.psychologist._id.toString(),
-          therapyRequest.user._id.toString(),
-          therapyRequest,
-        );
-      } else {
-        result = await this.psychologistService.addNewClient(
-          therapyRequest.psychologist._id.toString(),
-          {
-            name: therapyRequest.name,
-            contacts: therapyRequest.contacts,
-          },
-          therapyRequest,
-        );
+        if (
+          therapyRequest.user &&
+          telegramUserFromUser?.username === telegramUserFromRequest?.username
+        ) {
+          result = await this.psychologistService.addClientFromUser(
+            therapyRequest.psychologist._id.toString(),
+            therapyRequest.user._id.toString(),
+            therapyRequest,
+          );
+        } else {
+          result = await this.psychologistService.addNewClient(
+            therapyRequest.psychologist._id.toString(),
+            {
+              name: therapyRequest.name,
+              contacts: therapyRequest.contacts,
+            },
+            therapyRequest,
+          );
+        }
       }
-
-      if (result) {
-        therapyRequest.accepted = true;
-        await therapyRequest.save();
+    } finally {
+      if (!result) {
+        await this.therapyRequestModel
+          .updateOne({ _id: validId }, { $set: { accepted: false } })
+          .exec();
       }
     }
 
-    return result;
+    return !!result;
   }
 
-  async rejectRequest(therapyRequestId: string): Promise<boolean> {
-    const therapyRequest = await this.getById(therapyRequestId);
-
-    if (therapyRequest && !therapyRequest.accepted) {
-      therapyRequest.psychologist = undefined;
-      await therapyRequest.save();
-
-      return !therapyRequest.psychologist;
+  // ownPsychologistId: a psychologist may only reject a request that is still
+  // assigned to them, so a concurrent transfer wins.
+  async rejectRequest(
+    therapyRequestId: string,
+    ownPsychologistId?: string,
+  ): Promise<boolean> {
+    const validId = validateObjectId(therapyRequestId);
+    if (!validId) {
+      return false;
     }
 
-    return false;
+    const rejected = await this.therapyRequestModel
+      .findOneAndUpdate(
+        {
+          _id: validId,
+          accepted: { $ne: true },
+          ...(ownPsychologistId
+            ? { psychologist: valueToObjectId(ownPsychologistId) }
+            : {}),
+        },
+        { $unset: { psychologist: 1 } },
+      )
+      .exec();
+
+    return !!rejected;
   }
 
   async remove(id: string): Promise<boolean> {

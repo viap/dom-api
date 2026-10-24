@@ -4,7 +4,7 @@ import { SocialNetworks } from '../enums/social-networks.enum';
 @Schema()
 export class Contact {
   @Prop()
-  id: string;
+  id?: string;
 
   @Prop({ required: true, enum: Object.values(SocialNetworks) })
   network: SocialNetworks;

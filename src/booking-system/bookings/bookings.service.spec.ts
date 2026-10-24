@@ -445,6 +445,66 @@ describe('BookingsService', () => {
     });
   });
 
+  describe('findAll limit', () => {
+    it.each([
+      [undefined, 100],
+      ['0', 100],
+      ['-5', 100],
+      ['100000', 100],
+      ['25', 25],
+    ])('limit %p is applied as %p', async (limit, expected) => {
+      const mockChain = {
+        populate: jest.fn().mockReturnThis(),
+        sort: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      };
+      mockBookingModel.find.mockReturnValue(mockChain);
+
+      await service.findAll(limit === undefined ? {} : ({ limit } as any));
+
+      expect(mockChain.limit).toHaveBeenCalledWith(expected);
+    });
+  });
+
+  describe('bulkApproveBookings', () => {
+    const adminId = '507f1f77bcf86cd799439099';
+    const okId = '507f1f77bcf86cd799439001';
+    const conflictId = '507f1f77bcf86cd799439002';
+
+    it('approves each booking through the single approval checks', async () => {
+      mockUsersService.getById.mockResolvedValue({ _id: adminId });
+      const approveSpy = jest
+        .spyOn(service, 'approveBooking')
+        .mockImplementation(async (id: string) => {
+          if (id === conflictId) {
+            throw new ConflictException('Room is not available');
+          }
+          return { _id: id } as any;
+        });
+
+      const result = await service.bulkApproveBookings(
+        [okId, conflictId],
+        adminId,
+      );
+
+      expect(approveSpy).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({
+        approved: [{ _id: okId }],
+        skipped: [{ id: conflictId, reason: 'Room is not available' }],
+      });
+    });
+
+    it('rejects a non-array body', async () => {
+      mockUsersService.getById.mockResolvedValue({ _id: adminId });
+
+      await expect(
+        service.bulkApproveBookings('nope' as any, adminId),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('findOne', () => {
     it('should return a booking by id', async () => {
       const mockChain = {

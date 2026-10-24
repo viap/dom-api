@@ -2,8 +2,6 @@ import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserContext } from '../../../common/user-context/user-context.interface';
-import { includesOther } from '../../../common/utils/includes-other';
-import { ROLES_KEY } from '../../../roles/decorators/role.docorator';
 import { Role } from '../../../roles/enums/roles.enum';
 import { BookingsService } from '../bookings.service';
 import { IS_MY_BOOKING_KEY } from '../decorators/is-my-booking.decorator';
@@ -22,12 +20,6 @@ export class IsMyBookingGuard implements CanActivate {
         context.getHandler(),
       ]) || false;
 
-    const requiredRoles =
-      this.reflector.getAllAndOverride<Array<Role>>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) || [];
-
     if (shouldBeMyBooking) {
       try {
         if (!request.userContext) {
@@ -35,16 +27,6 @@ export class IsMyBookingGuard implements CanActivate {
         }
 
         const params = request.params || {};
-
-        // NOTICE: check if user has any required role except regular user roles
-        // Admins can access any booking
-        if (
-          includesOther<Role>(requiredRoles, request.userContext.roles, [
-            Role.User,
-          ])
-        ) {
-          return true;
-        }
 
         // Allow admins to access any booking
         if (request.userContext.roles.includes(Role.Admin)) {
@@ -61,7 +43,8 @@ export class IsMyBookingGuard implements CanActivate {
           return this.checkIfIsMyBooking(request.userContext, params.id);
         }
 
-        return true;
+        // NOTICE: an owner-only route without an id cannot be checked.
+        return false;
       } catch {
         return false;
       }

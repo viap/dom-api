@@ -1,3 +1,6 @@
+// Relative import: scripts require this module from dist, where @/ aliases
+// are not resolved.
+import { escapeRegExp } from '../common/utils/escape-regexp';
 import {
   TherapyRequestCategory,
   TherapyRequestClientGender,
@@ -33,10 +36,6 @@ const REQUEST_CATEGORY_CONFIDENCE_THRESHOLD = 0.75;
 
 function normalizeText(value?: string): string {
   return (value || '').toLowerCase().trim();
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function hasCyrillicWord(text: string, signal: string): boolean {

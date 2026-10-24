@@ -8,9 +8,8 @@ import {
   Param,
   Patch,
   Post,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
 import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
@@ -37,7 +36,6 @@ export class DomainsController {
   // Keep this specific slug route above the ObjectId route below.
   @Get('slug/:slug')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   findOneBySlug(
     @Param(new JoiValidationPipe(domainSlugParamsSchema))
@@ -56,7 +54,6 @@ export class DomainsController {
 
   @Post('bulk')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
     return this.domainsService.findManyByIds(body.ids);

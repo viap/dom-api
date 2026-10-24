@@ -18,6 +18,7 @@ describe('PeopleService', () => {
 
   const createLeanExecChain = (value: unknown) => {
     const chain = {
+      select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue(value),
@@ -27,6 +28,7 @@ describe('PeopleService', () => {
   };
   const createLeanRejectChain = (error: unknown) => {
     const chain = {
+      select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockRejectedValue(error),
@@ -504,6 +506,29 @@ describe('PeopleService', () => {
     await expect(
       service.update('507f1f77bcf86cd799439032', { slug: 'jane-doe' }),
     ).rejects.toThrow(ConflictException);
+  });
+
+  const publicFields = expect.not.stringMatching(
+    /\b(contacts|userId|socialLinks|schemaVersion)\b/,
+  );
+
+  it('public reads exclude contacts and the linked user', async () => {
+    const chain = createLeanExecChain({ _id: '507f1f77bcf86cd799439032' });
+    mockPersonModel.findOne.mockReturnValue(chain);
+
+    await service.findOneBySlug('john-doe');
+
+    expect(chain.select).toHaveBeenCalledWith(publicFields);
+  });
+
+  it('public list search treats fullName literally', async () => {
+    mockQueryChain.select.mockClear();
+    await service.findAll({ fullName: '(a+)+$' });
+
+    const query = mockPersonModel.find.mock.calls.at(-1)[0];
+    expect(query.fullName.$regex.test('(a+)+$')).toBe(true);
+    expect(query.fullName.$regex.test('aaaa')).toBe(false);
+    expect(mockQueryChain.select).toHaveBeenCalledWith(publicFields);
   });
 
   it('should return published person by slug', async () => {

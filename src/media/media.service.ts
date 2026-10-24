@@ -20,6 +20,7 @@ import {
   prepareBulkIds,
   toBulkResolveResponse,
 } from '@/common/utils/bulk-resolve';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
 import {
   safeFindParams,
@@ -135,7 +136,7 @@ export class MediaService {
 
     if (typeof safeParams.search === 'string' && safeParams.search.trim()) {
       query.title = {
-        $regex: this.escapeRegExp(safeParams.search.trim()),
+        $regex: escapeRegExp(safeParams.search.trim()),
         $options: 'i',
       };
     }
@@ -178,7 +179,7 @@ export class MediaService {
 
     if (typeof safeParams.search === 'string' && safeParams.search.trim()) {
       query.title = {
-        $regex: this.escapeRegExp(safeParams.search.trim()),
+        $regex: escapeRegExp(safeParams.search.trim()),
         $options: 'i',
       };
     }
@@ -1167,10 +1168,6 @@ export class MediaService {
     }
 
     return date;
-  }
-
-  private escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private readImageFormatFromBuffer(

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import { escapeRegExp } from '@/common/utils/escape-regexp';
 import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
 import {
   safeFindParams,
@@ -30,6 +31,30 @@ import { UpdatePersonDto } from './dto/update-person.dto';
 import { Person, PersonDocument } from './schemas/person.schema';
 import { PersonQueryParams } from './types/query-params.interface';
 import { PeopleEntityCollectionFilters } from './types/entity-collection-filters.interface';
+
+// Public person responses list the fields public pages render. Contacts, the
+// linked user account, social links and any field added later stay private
+// unless added here on purpose; admin endpoints return the full document.
+const PUBLIC_PERSON_FIELDS = [
+  'slug',
+  'fullName',
+  'title',
+  'intro',
+  'roles',
+  'bio',
+  'education',
+  'educationItems',
+  'experience',
+  'experienceItems',
+  'services',
+  'specializations',
+  'availability',
+  'workFormat',
+  'languages',
+  'workLocationId',
+  'photoId',
+  'isPublished',
+].join(' ');
 
 @Injectable()
 export class PeopleService {
@@ -69,7 +94,9 @@ export class PeopleService {
     const query: Record<string, unknown> = { isPublished: true };
 
     if (safeParams.fullName && typeof safeParams.fullName === 'string') {
-      query.fullName = { $regex: new RegExp(safeParams.fullName, 'i') };
+      query.fullName = {
+        $regex: new RegExp(escapeRegExp(safeParams.fullName), 'i'),
+      };
     }
 
     if (safeParams.role && typeof safeParams.role === 'string') {
@@ -78,6 +105,7 @@ export class PeopleService {
 
     return this.personModel
       .find(query)
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .sort({ fullName: 1 })
       .skip(offset)
@@ -95,7 +123,9 @@ export class PeopleService {
     const query: Record<string, unknown> = {};
 
     if (safeParams.fullName && typeof safeParams.fullName === 'string') {
-      query.fullName = { $regex: new RegExp(safeParams.fullName, 'i') };
+      query.fullName = {
+        $regex: new RegExp(escapeRegExp(safeParams.fullName), 'i'),
+      };
     }
 
     if (safeParams.role && typeof safeParams.role === 'string') {
@@ -120,6 +150,7 @@ export class PeopleService {
 
     const person = await this.personModel
       .findOne({ _id: validId, isPublished: true })
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();
@@ -142,6 +173,7 @@ export class PeopleService {
 
     const people = await this.personModel
       .find({ _id: { $in: preparedIds.validIds }, isPublished: true })
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();
@@ -309,6 +341,7 @@ export class PeopleService {
   async findOneBySlug(slug: string): Promise<PersonDocument> {
     const person = await this.personModel
       .findOne({ slug, isPublished: true })
+      .select(PUBLIC_PERSON_FIELDS)
       .populate('workLocationId')
       .lean()
       .exec();

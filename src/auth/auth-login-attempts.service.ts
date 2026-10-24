@@ -1,4 +1,10 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { createHash } from 'crypto';
 
 type LoginAttemptState = {
   failedCount: number;
@@ -18,13 +24,34 @@ type LockedState = {
   retryAfterSeconds?: number;
 };
 
+type LockoutPolicy = {
+  windowMs: number;
+  maxFailedAttempts: number;
+  lockoutMs: number;
+};
+
+// Two counters: per client IP + login (5 failures in 15 min), and a backstop
+// per login across all IPs (30 failures per hour) that caps brute force even
+// when the attacker rotates or spoofs IPs. The backstop is not reset by a
+// successful login so it keeps capping an ongoing attack.
+// ponytail: in-memory and per process; correct only with a single pm2 fork.
 @Injectable()
 export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AuthLoginAttemptsService.name);
   private readonly attempts = new Map<string, LoginAttemptState>();
-  private readonly windowMs = 15 * 60 * 1000;
-  private readonly lockoutMs = 15 * 60 * 1000;
-  private readonly maxFailedAttempts = 5;
+  private readonly loginAttempts = new Map<string, LoginAttemptState>();
+  private readonly ipPolicy: LockoutPolicy = {
+    windowMs: 15 * 60 * 1000,
+    maxFailedAttempts: 5,
+    lockoutMs: 15 * 60 * 1000,
+  };
+  private readonly loginPolicy: LockoutPolicy = {
+    windowMs: 60 * 60 * 1000,
+    maxFailedAttempts: 30,
+    lockoutMs: 15 * 60 * 1000,
+  };
   private readonly cleanupIntervalMs = 5 * 60 * 1000;
+  private readonly maxTrackedKeys = 10_000;
   private cleanupTimer?: NodeJS.Timeout;
 
   onModuleInit(): void {
@@ -57,8 +84,78 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       return { locked: false };
     }
 
-    const key = this.makeKey(sourceIp, normalizedLogin);
-    const state = this.attempts.get(key);
+    return this.longerLock(
+      this.readState(
+        this.attempts,
+        this.makeKey(sourceIp, normalizedLogin),
+        this.ipPolicy,
+        now,
+      ),
+      this.readState(
+        this.loginAttempts,
+        this.makeLoginKey(normalizedLogin),
+        this.loginPolicy,
+        now,
+      ),
+    );
+  }
+
+  registerFailure(
+    sourceIp: string,
+    normalizedLogin: string,
+    now = Date.now(),
+  ): LoginAttemptResult {
+    if (!this.shouldTrack(sourceIp, normalizedLogin)) {
+      return { locked: false };
+    }
+
+    const ipResult = this.recordFailure(
+      this.attempts,
+      this.makeKey(sourceIp, normalizedLogin),
+      this.ipPolicy,
+      now,
+    );
+    const wasLoginLocked = this.isLockedIn(
+      this.loginAttempts,
+      this.makeLoginKey(normalizedLogin),
+      now,
+    );
+    const loginResult = this.recordFailure(
+      this.loginAttempts,
+      this.makeLoginKey(normalizedLogin),
+      this.loginPolicy,
+      now,
+    );
+
+    if (loginResult.locked && !wasLoginLocked) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.login.backstop_locked',
+          loginFingerprint: createHash('sha256')
+            .update(normalizedLogin)
+            .digest('hex')
+            .slice(0, 16),
+        }),
+      );
+    }
+
+    return this.longerLock(ipResult, loginResult);
+  }
+
+  reset(sourceIp: string, normalizedLogin: string): void {
+    if (!this.shouldTrack(sourceIp, normalizedLogin)) {
+      return;
+    }
+    this.attempts.delete(this.makeKey(sourceIp, normalizedLogin));
+  }
+
+  private readState(
+    map: Map<string, LoginAttemptState>,
+    key: string,
+    policy: LockoutPolicy,
+    now: number,
+  ): LockedState {
+    const state = map.get(key);
 
     if (!state) {
       return { locked: false };
@@ -72,30 +169,23 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    if (state.lockedUntil && state.lockedUntil <= now) {
-      this.attempts.delete(key);
-      return { locked: false };
-    }
-
-    if (now - state.firstFailedAt > this.windowMs) {
-      this.attempts.delete(key);
-      return { locked: false };
+    if (
+      (state.lockedUntil && state.lockedUntil <= now) ||
+      now - state.firstFailedAt > policy.windowMs
+    ) {
+      map.delete(key);
     }
 
     return { locked: false };
   }
 
-  registerFailure(
-    sourceIp: string,
-    normalizedLogin: string,
-    now = Date.now(),
+  private recordFailure(
+    map: Map<string, LoginAttemptState>,
+    key: string,
+    policy: LockoutPolicy,
+    now: number,
   ): LoginAttemptResult {
-    if (!this.shouldTrack(sourceIp, normalizedLogin)) {
-      return { locked: false };
-    }
-
-    const key = this.makeKey(sourceIp, normalizedLogin);
-    const current = this.attempts.get(key);
+    const current = map.get(key);
 
     if (current?.lockedUntil && current.lockedUntil > now) {
       return {
@@ -105,8 +195,13 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    if (!current || now - current.firstFailedAt > this.windowMs) {
-      this.attempts.set(key, {
+    if (
+      !current ||
+      current.lockedUntil ||
+      now - current.firstFailedAt > policy.windowMs
+    ) {
+      this.evictOldestIfFull(map);
+      map.set(key, {
         failedCount: 1,
         firstFailedAt: now,
       });
@@ -119,11 +214,11 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       failedCount,
     };
 
-    // Lockout semantics: the 5th failed credential is recorded and triggers
-    // lock state; subsequent attempts (6th+) are blocked by pre-check.
-    if (failedCount >= this.maxFailedAttempts) {
-      nextState.lockedUntil = now + this.lockoutMs;
-      this.attempts.set(key, nextState);
+    // Lockout semantics: the Nth failed credential is recorded and triggers
+    // lock state; subsequent attempts are blocked by pre-check.
+    if (failedCount >= policy.maxFailedAttempts) {
+      nextState.lockedUntil = now + policy.lockoutMs;
+      map.set(key, nextState);
       return {
         locked: true,
         lockedUntil: nextState.lockedUntil,
@@ -134,20 +229,58 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    this.attempts.set(key, nextState);
+    map.set(key, nextState);
     return { locked: false };
   }
 
-  reset(sourceIp: string, normalizedLogin: string): void {
-    if (!this.shouldTrack(sourceIp, normalizedLogin)) {
+  private isLockedIn(
+    map: Map<string, LoginAttemptState>,
+    key: string,
+    now: number,
+  ): boolean {
+    const lockedUntil = map.get(key)?.lockedUntil;
+    return !!lockedUntil && lockedUntil > now;
+  }
+
+  private longerLock(first: LockedState, second: LockedState): LockedState {
+    if (!second.locked) {
+      return first;
+    }
+    if (!first.locked) {
+      return second;
+    }
+    return (first.lockedUntil ?? 0) >= (second.lockedUntil ?? 0)
+      ? first
+      : second;
+  }
+
+  // Map keeps insertion order, so iteration starts with the oldest entry.
+  // Active locks are kept, otherwise a flood of new keys could lift them.
+  private evictOldestIfFull(map: Map<string, LoginAttemptState>): void {
+    if (map.size < this.maxTrackedKeys) {
       return;
     }
-    const key = this.makeKey(sourceIp, normalizedLogin);
-    this.attempts.delete(key);
+
+    const now = Date.now();
+    for (const [key, state] of map) {
+      if (!state.lockedUntil || state.lockedUntil <= now) {
+        map.delete(key);
+        return;
+      }
+    }
+
+    const oldestKey = map.keys().next().value;
+    if (oldestKey !== undefined) {
+      map.delete(oldestKey);
+    }
   }
 
   private makeKey(sourceIp: string, normalizedLogin: string): string {
-    return `${sourceIp}|${normalizedLogin}`;
+    return `user:${sourceIp}|${normalizedLogin}`;
+  }
+
+  private makeLoginKey(normalizedLogin: string): string {
+    return `user:${normalizedLogin}`;
   }
 
   private shouldTrack(sourceIp: string, normalizedLogin: string): boolean {
@@ -160,13 +293,21 @@ export class AuthLoginAttemptsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private evictExpiredEntries(now = Date.now()): void {
-    for (const [key, state] of this.attempts.entries()) {
-      const lockExpired = state.lockedUntil && state.lockedUntil <= now;
-      const windowExpired = now - state.firstFailedAt > this.windowMs;
+    const sweep = (
+      map: Map<string, LoginAttemptState>,
+      policy: LockoutPolicy,
+    ) => {
+      for (const [key, state] of map.entries()) {
+        const lockExpired = state.lockedUntil && state.lockedUntil <= now;
+        const windowExpired = now - state.firstFailedAt > policy.windowMs;
 
-      if (lockExpired || windowExpired) {
-        this.attempts.delete(key);
+        if (lockExpired || windowExpired) {
+          map.delete(key);
+        }
       }
-    }
+    };
+
+    sweep(this.attempts, this.ipPolicy);
+    sweep(this.loginAttempts, this.loginPolicy);
   }
 }

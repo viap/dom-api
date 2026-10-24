@@ -2,13 +2,15 @@ import { EnhancedRequest } from '@/common/types/enhanced-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { currentUserAlias } from '@/common/const/current-user-alias';
-import { includesOther } from '@/common/utils/includes-other';
 import { PsychologistsService } from '@/psychologists/psychologists.service';
 import { PsychologistDocument } from '@/psychologists/schemas/psychologist.schema';
-import { ROLES_KEY } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
 import { IS_MY_THERAPY_SESSIONS_KEY } from './decorators/is-my-therapy-session.decorator';
 import { TherapySessionsService } from './therapy-sessions.service';
+
+// Owner-only handlers that take no psychologistId/sessionId param
+// (POST /therapy-sessions/me). Any other id-less route is denied.
+const ID_LESS_OWNER_HANDLERS = new Set(['createForMe']);
 
 @Injectable()
 export class TherapySessionsGuard implements CanActivate {
@@ -24,39 +26,33 @@ export class TherapySessionsGuard implements CanActivate {
         context.getHandler(),
       ]) || false;
 
-    const requiredRoles =
-      this.reflector.getAllAndOverride<Array<Role>>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) || [];
-
     if (ShouldBeMyTherapySessions) {
       try {
         if (!request.userContext) {
           return false;
         }
 
-        const psychologist = await this.psychologistsService.getByUserId(
+        const psychologist = await this.psychologistsService.getProfileByUserId(
           request.userContext.userId,
         );
+
+        if (psychologist) {
+          request.psychologistContext = {
+            id: psychologist._id.toString(),
+          };
+        }
+
+        // NOTICE: only admins see every psychologist's sessions; editors and
+        // psychologists see their own (decision D6).
+        if (request.userContext.roles?.includes(Role.Admin)) {
+          return true;
+        }
 
         if (!psychologist) {
           return false;
         }
 
         const params = request.params || {};
-        request.psychologistContext = {
-          id: psychologist._id.toString(),
-        };
-
-        // NOTICE: check if user have any required role except psychologist
-        if (
-          includesOther<Role>(requiredRoles, request.userContext.roles, [
-            Role.Psychologist,
-          ])
-        ) {
-          return true;
-        }
 
         if (params.psychologistId) {
           return (
@@ -69,7 +65,9 @@ export class TherapySessionsGuard implements CanActivate {
           return this.checkIfIsMyTherapySession(psychologist, params.sessionId);
         }
 
-        return true;
+        // NOTICE: owner-only routes without an id are allowed only when listed
+        // here; they act on the caller's own profile via psychologistContext.
+        return ID_LESS_OWNER_HANDLERS.has(context.getHandler().name);
       } catch {}
 
       return false;
