@@ -79,8 +79,6 @@ describe('Access rules (e2e)', () => {
   let tokenFor: (userId: string) => string;
 
   beforeAll(async () => {
-    process.env.JWT_SECRET = process.env.JWT_SECRET || 'x'.repeat(32);
-
     const builder = Test.createTestingModule({ imports: [TestAppModule] });
     const overrides: Array<[string, unknown]> = [
       [
