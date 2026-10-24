@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
@@ -47,6 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod
     needs: test
+    outputs:
+      rollback_required: ${{ steps.arm_rollback.outputs.required }}
     steps:
       - name: Get the project code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -54,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Make env file with secrets
         uses: SpicyPizza/create-envfile@ace6d4f5d7802b600276c23ca417e669f1a06f6f # v2.0
@@ -79,26 +81,34 @@ jobs:
         run: npm ci
       - name: Build the project
         run: npm run build
-      - name: Deploy to server
-        uses: easingthemes/ssh-deploy@5d8aeab1a56041e269567e67a08ce00df324a617 # v6.0.1
+      - name: Read Node version
+        id: node
+        run: echo "major=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Remote | Preflight and backup
+        uses: fifsky/ssh-action@58b3c484be9c20cf118fd3b939a6d2cb3c769512 # v0.0.6
         with:
-          SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
-          ARGS: '-avzr --delete'
-          REMOTE_HOST: ${{secrets.REMOTE_HOST}}
-          REMOTE_USER: ${{secrets.REMOTE_USER}}
-          TARGET: ${{secrets.REMOTE_TARGET}}
-          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/, /test/, /coverage/, /uploads/'
-          SCRIPT_BEFORE: |
-            [ -n "${{secrets.REMOTE_TARGET}}" ] || { echo "REMOTE_TARGET secret is missing"; exit 1; }
-            [ -n "${{secrets.REMOTE_UPLOADS_PATH}}" ] || { echo "REMOTE_UPLOADS_PATH secret is missing"; exit 1; }
-            mkdir -p ${{secrets.REMOTE_TARGET}}
-            if [ ! -d "${{secrets.REMOTE_UPLOADS_PATH}}" ]; then
-              echo "Creating REMOTE_UPLOADS_PATH directory..."
-              mkdir -p "${{secrets.REMOTE_UPLOADS_PATH}}"
+          command: |
+            export NVM_DIR="${NVM_DIR:-/root/.nvm}"
+            if [ -s "${NVM_DIR}/nvm.sh" ]; then
+              source "${NVM_DIR}/nvm.sh" --no-use
+              nvm use ${{ steps.node.outputs.major }} --silent || true
             fi
-            mkdir -p "${{secrets.REMOTE_UPLOADS_PATH}}/media" "${{secrets.REMOTE_UPLOADS_PATH}}/thumbnails"
-            UPLOADS_LINK="${{secrets.REMOTE_TARGET}}/uploads"
-            UPLOADS_TARGET="${{secrets.REMOTE_UPLOADS_PATH}}"
+            node -v | grep -q '^v${{ steps.node.outputs.major }}\.' || { echo "Node ${{ steps.node.outputs.major }} required on host, got $(node -v)"; exit 1; }
+            command -v pm2 >/dev/null || { echo "pm2 not on PATH under Node $(node -v)"; exit 1; }
+            set -e
+            REMOTE_TARGET="${{secrets.REMOTE_TARGET}}"
+            [ -n "$REMOTE_TARGET" ] || { echo "REMOTE_TARGET secret is missing"; exit 1; }
+            REMOTE_UPLOADS_PATH="${{secrets.REMOTE_UPLOADS_PATH}}"
+            [ -n "${REMOTE_UPLOADS_PATH}" ] || { echo "REMOTE_UPLOADS_PATH secret is missing"; exit 1; }
+            mkdir -p "$REMOTE_TARGET"
+            if [ ! -d "${REMOTE_UPLOADS_PATH}" ]; then
+              echo "Creating REMOTE_UPLOADS_PATH directory..."
+              mkdir -p "${REMOTE_UPLOADS_PATH}"
+            fi
+            mkdir -p "${REMOTE_UPLOADS_PATH}/media" "${REMOTE_UPLOADS_PATH}/thumbnails"
+            UPLOADS_LINK="${REMOTE_TARGET}/uploads"
+            UPLOADS_TARGET="${REMOTE_UPLOADS_PATH}"
             if [ -L "$UPLOADS_LINK" ]; then
               CURRENT_TARGET="$(readlink -f "$UPLOADS_LINK")"
               EXPECTED_TARGET="$(readlink -f "$UPLOADS_TARGET")"
@@ -118,15 +128,33 @@ jobs:
               ln -s "$UPLOADS_TARGET" "$UPLOADS_LINK"
             fi
             echo "Creating backup of current deployment..."
-            if [ -d "${{secrets.REMOTE_TARGET}}" ] && [ "$(ls -A ${{secrets.REMOTE_TARGET}})" ]; then
-              BACKUP_DIR="${{secrets.REMOTE_TARGET}}_backup_$(date +%Y%m%d_%H%M%S)"
-              cp -r ${{secrets.REMOTE_TARGET}} $BACKUP_DIR
+            if [ -d "${REMOTE_TARGET}" ] && [ "$(ls -A "$REMOTE_TARGET")" ]; then
+              BACKUP_DIR="${REMOTE_TARGET}_backup_$(date +%Y%m%d_%H%M%S)"
+              cp -r "$REMOTE_TARGET" "$BACKUP_DIR"
               echo "Backup created at: $BACKUP_DIR"
               # Keep only the last 5 backups
-              ls -dt ${{secrets.REMOTE_TARGET}}_backup_* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+              ls -dt "$REMOTE_TARGET"_backup_* 2>/dev/null | tail -n +6 | xargs -r rm -rf
             else
               echo "No existing deployment found, skipping backup"
             fi
+          host: ${{secrets.REMOTE_HOST}}
+          user: ${{secrets.REMOTE_USER}}
+          key: ${{secrets.SSH_PRIVATE_KEY}}
+
+      - name: Arm rollback for server deployment
+        id: arm_rollback
+        run: echo "required=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to server
+        uses: easingthemes/ssh-deploy@5d8aeab1a56041e269567e67a08ce00df324a617 # v6.0.1
+        with:
+          SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
+          ARGS: '-avzr --delete'
+          REMOTE_HOST: ${{secrets.REMOTE_HOST}}
+          REMOTE_USER: ${{secrets.REMOTE_USER}}
+          TARGET: ${{secrets.REMOTE_TARGET}}
+          EXCLUDE: '/.github/, /.git/, /.gitignore, /src/, /node_modules/, /test/, /coverage/, /uploads/'
+
       - name: Remote | Init and start the project
         uses: fifsky/ssh-action@58b3c484be9c20cf118fd3b939a6d2cb3c769512 # v0.0.6
         with:
@@ -203,7 +231,7 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     environment: prod
-    if: ${{ always() && needs.deploy.result == 'failure' }}
+    if: ${{ always() && needs.deploy.result == 'failure' && needs.deploy.outputs.rollback_required == 'true' }}
     needs: deploy
     steps:
       - name: Rollback to previous deployment

@@ -7,6 +7,8 @@ APP_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=./lib.sh
 source "${SCRIPT_DIR}/lib.sh"
 
+use_node
+
 echo "Loading environment from ${APP_ROOT}/config/.env..."
 set -a
 # shellcheck source=../../config/.env
@@ -63,4 +65,5 @@ if ! auth_reason_smoke_check "${PORT}"; then
   exit 1
 fi
 
+pm2_save
 echo "Manual restart completed successfully"

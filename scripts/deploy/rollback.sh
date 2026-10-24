@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib.sh
 source "${SCRIPT_DIR}/lib.sh"
 
+use_node
+
 require_env PORT REMOTE_TARGET REMOTE_UPLOADS_PATH
 
 echo "Rolling back to previous deployment..."
@@ -40,4 +42,5 @@ if ! healthcheck_with_retries "${PORT}" "Rollback"; then
 fi
 
 pm2 status
+pm2_save
 echo "Rollback completed successfully"
