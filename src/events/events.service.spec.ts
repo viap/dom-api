@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { createRandomOrdering } from '@/pages/utils/entity-collection-ordering';
 import { DomainsService } from '@/domains/domains.service';
 import { LocationsService } from '@/locations/locations.service';
@@ -714,6 +714,72 @@ describe('EventsService', () => {
       { new: true, runValidators: true },
     );
     expect(result.description).toBe('');
+  });
+
+  it.each([
+    [
+      'validation',
+      (() => {
+        const error = new mongoose.Error.ValidationError();
+        error.addError(
+          'title',
+          new mongoose.Error.ValidatorError({ path: 'title' }),
+        );
+        return error;
+      })(),
+      'Update validation failed: title',
+    ],
+    [
+      'cast',
+      new mongoose.Error.CastError('String', {}, 'blocks'),
+      'Update validation failed: blocks',
+    ],
+    [
+      'strict',
+      new mongoose.Error.StrictModeError('blocks'),
+      'Update validation failed: blocks',
+    ],
+  ])(
+    'maps Mongoose %s errors from event updates to HTTP 400',
+    async (_name, persistenceError, expectedMessage) => {
+      mockEventModel.findOne.mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(mockEvent),
+        }),
+      });
+      mockEventModel.findByIdAndUpdate.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockRejectedValue(persistenceError),
+        }),
+      });
+
+      await expect(
+        service.update(mockEvent._id, { title: 'Updated title' }),
+      ).rejects.toMatchObject({
+        message: expectedMessage,
+        status: 400,
+      });
+    },
+  );
+
+  it('preserves unknown persistence failures from event updates', async () => {
+    const persistenceError = new Error('database unavailable');
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockEvent),
+      }),
+    });
+    mockEventModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue(persistenceError),
+      }),
+    });
+
+    await expect(
+      service.update(mockEvent._id, { title: 'Updated title' }),
+    ).rejects.toBe(persistenceError);
   });
 
   it('derives compatibility timing when creating with a schedule', async () => {

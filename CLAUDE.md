@@ -118,6 +118,7 @@ The project uses a consistent dual-schema approach:
 - **Joi schemas** for request validation via custom `JoiValidationPipe`
 - **Mongoose schemas** for database modeling
 - Ownership checks: `TherapyRequestsGuard` (by `psychologistId`/`therapyRequestId` route params), `@IsMyTherapySessions`, `@IsMyBooking`
+- `EntityCollection.columns` uses a feature-local custom `mongoose.SchemaType` with an explicit `null` validator so its exact heterogeneous scalar contract rejects coercion. Do not register that type globally or replace this field with `Mixed`; arbitrary Joi-owned payloads may still use `Mixed` where intended.
 
 ### Public EntityCollection ordering
 

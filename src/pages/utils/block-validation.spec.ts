@@ -571,6 +571,60 @@ describe('prepareBlocksForWrite embedded blocks', () => {
     ).rejects.toThrow(/Referenced person not found/);
   });
 
+  it('preserves valid columns and rejects invalid columns in root, Group and embedded blocks', async () => {
+    const collection = (id: string, columns: unknown) => ({
+      id,
+      type: PageBlockType.EntityCollection,
+      entityType: 'people',
+      layout: 'grid',
+      items: ['507f1f77bcf86cd799439299'],
+      columns,
+    });
+    const prepared = await prepareBlocksForWrite(
+      [
+        collection('root', 'auto'),
+        {
+          id: 'group',
+          type: PageBlockType.Group,
+          blocks: [collection('group-child', 4)],
+        },
+        {
+          id: 'cta',
+          type: PageBlockType.Cta,
+          buttons: [
+            {
+              label: 'Open',
+              type: 'block',
+              block: collection('modal-child', 5),
+            },
+          ],
+        },
+      ] as unknown as PageRootBlock[],
+      allExist,
+    );
+    expect((prepared[0] as Record<string, any>).columns).toBe('auto');
+    expect((prepared[1] as Record<string, any>).blocks[0].columns).toBe(4);
+    expect((prepared[2] as Record<string, any>).buttons[0].block.columns).toBe(
+      5,
+    );
+
+    for (const source of [
+      [collection('root-invalid', '4')],
+      [
+        {
+          id: 'group',
+          type: PageBlockType.Group,
+          blocks: [collection('group-invalid', null)],
+        },
+      ],
+      ctaWithBlockButton(collection('modal-invalid', 6)),
+    ]) {
+      await expect(
+        prepareBlocksForWrite(source as unknown as PageRootBlock[], allExist),
+      ).rejects.toThrow(/entityCollection\.columns/);
+    }
+  });
+
   it('collects Custom media and button references and sanitizes item modal content', async () => {
     const mediaId = '507f1f77bcf86cd799439291';
     const pageId = '507f1f77bcf86cd799439292';

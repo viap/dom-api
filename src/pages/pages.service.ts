@@ -23,6 +23,7 @@ import {
   toBulkResolveResponse,
 } from '@/common/utils/bulk-resolve';
 import { resolveExistingIds } from '@/common/utils/resolve-ids';
+import { formatMongooseUpdateValidationError } from '@/common/utils/mongoose-validation-error';
 import {
   safeFindParams,
   validateObjectId,
@@ -506,10 +507,24 @@ export class PagesService {
       updateData.blocks = normalizedBlocks;
     }
 
-    const page = await this.pageModel
-      .findByIdAndUpdate(validId, updateData, { new: true })
-      .lean()
-      .exec();
+    let page: unknown;
+    try {
+      page = await this.pageModel
+        .findByIdAndUpdate(validId, updateData, {
+          new: true,
+          ...(normalizedBlocks !== undefined ? { runValidators: true } : {}),
+        })
+        .lean()
+        .exec();
+    } catch (error) {
+      if (normalizedBlocks !== undefined) {
+        const message = formatMongooseUpdateValidationError(error);
+        if (message) {
+          throw new BadRequestException(message);
+        }
+      }
+      throw error;
+    }
 
     if (!page) {
       throw new NotFoundException('Page not found');

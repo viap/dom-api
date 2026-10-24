@@ -1,6 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Activate the Node major from .nvmrc (via NVM when present) and fail before any
+# PM2 change otherwise. fifsky/ssh-action does not source ~/.bashrc or
+# ~/.nvm/nvm.sh, so without this `command -v node` resolves to the system node.
+# PM2 starts apps with the first `node` in the saved PATH, so this also picks
+# the runtime Node of every process started or restarted with --update-env.
+NODE_MAJOR="$(cat "$(dirname "${BASH_SOURCE[0]}")/../../.nvmrc")"
+
+use_node() {
+  export NVM_DIR="${NVM_DIR:-/root/.nvm}"
+  if [ -s "${NVM_DIR}/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    source "${NVM_DIR}/nvm.sh" --no-use
+    # A system-wide Node of the right major is fine too; the check below decides.
+    nvm use "${NODE_MAJOR}" --silent || true
+  fi
+  local v
+  v="$(node --version)"
+  echo "Using Node.js: ${v} at $(dirname "$(command -v node)")"
+  [[ "${v}" == "v${NODE_MAJOR}."* ]] || { echo "ERROR: Node.js ${NODE_MAJOR} required. Got: ${v}"; exit 1; }
+}
+
+# Persist the PM2 process list for reboots. The apps are already up and
+# checked at this point, so a failure here must not fail (and roll back) them.
+pm2_save() {
+  pm2 save || echo "WARNING: pm2 save failed; the process list will not survive a reboot"
+}
+
 require_env() {
   local var_name
   for var_name in "$@"; do
@@ -262,11 +289,3 @@ pm2_cutover_domapi() {
   fi
 }
 
-pm2_cutover_dombot_optional() {
-  echo "Cutting over domBot application (if exists)..."
-  if pm2 describe domBot >/dev/null 2>&1; then
-    pm2 restart domBot --update-env
-  else
-    echo "Warning: failed to reload domBot - skipping"
-  fi 
-}

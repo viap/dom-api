@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import mongoose from 'mongoose';
 import { EntityCollectionItemOrder } from './enums/entity-collection-item-order.enum';
 import { createRandomOrdering } from './utils/entity-collection-ordering';
 import { EventsService } from '@/events/events.service';
@@ -1141,12 +1142,21 @@ describe('PagesService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should keep blocks unchanged when patch omits blocks', async () => {
+  it('should keep historical blocks unchanged and skip validators when patch omits blocks', async () => {
     mockPageModel.findById.mockReturnValue({
       lean: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue({
           ...mockPage,
-          blocks: [{ id: 'intro', type: PageBlockType.RichText }],
+          blocks: [
+            {
+              id: 'legacy-collection',
+              type: PageBlockType.EntityCollection,
+              entityType: EntityCollectionEntityType.People,
+              layout: EntityCollectionLayout.Grid,
+              items: [],
+              columns: '2',
+            },
+          ],
         }),
       }),
     });
@@ -1156,7 +1166,16 @@ describe('PagesService', () => {
         exec: jest.fn().mockResolvedValue({
           ...mockPage,
           title: 'Updated',
-          blocks: [{ id: 'intro', type: PageBlockType.RichText }],
+          blocks: [
+            {
+              id: 'legacy-collection',
+              type: PageBlockType.EntityCollection,
+              entityType: EntityCollectionEntityType.People,
+              layout: EntityCollectionLayout.Grid,
+              items: [],
+              columns: '2',
+            },
+          ],
         }),
       }),
     });
@@ -1298,9 +1317,270 @@ describe('PagesService', () => {
           }),
         ],
       }),
+      { new: true, runValidators: true },
+    );
+  });
+
+  it.each([
+    [
+      'validation',
+      new mongoose.Error.ValidationError(),
+      'Update validation failed',
+    ],
+    [
+      'cast',
+      new mongoose.Error.CastError('String', {}, 'blocks'),
+      'Update validation failed: blocks',
+    ],
+    [
+      'strict',
+      new mongoose.Error.StrictModeError('blocks'),
+      'Update validation failed: blocks',
+    ],
+  ])(
+    'maps Mongoose %s errors from validated block updates to HTTP 400',
+    async (_name, persistenceError, expectedMessage) => {
+      mockPageModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ ...mockPage, blocks: [] }),
+        }),
+      });
+      mockPageModel.findOne.mockResolvedValue(null);
+      mockPageModel.findByIdAndUpdate.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockRejectedValue(persistenceError),
+        }),
+      });
+
+      const result = service.update(mockPage._id, {
+        blocks: [{ id: 'rich', type: PageBlockType.RichText }],
+      });
+
+      await expect(result).rejects.toMatchObject({
+        message: expectedMessage,
+        status: 400,
+      });
+      await expect(result).rejects.toBeInstanceOf(BadRequestException);
+    },
+  );
+
+  it('reports a non-block validation path when blocks are updated together', async () => {
+    const persistenceError = new mongoose.Error.ValidationError();
+    persistenceError.addError(
+      'title',
+      new mongoose.Error.ValidatorError({ path: 'title' }),
+    );
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...mockPage, blocks: [] }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue(persistenceError),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, {
+        title: 'Updated title',
+        blocks: [{ id: 'rich', type: PageBlockType.RichText }],
+      }),
+    ).rejects.toMatchObject({
+      message: 'Update validation failed: title',
+      status: 400,
+    });
+  });
+
+  it('preserves unknown persistence failures from validated block updates', async () => {
+    const persistenceError = new Error('database unavailable');
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...mockPage, blocks: [] }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue(persistenceError),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, {
+        blocks: [{ id: 'rich', type: PageBlockType.RichText }],
+      }),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it('does not remap Mongoose validation errors for metadata-only updates', async () => {
+    const persistenceError = new mongoose.Error.ValidationError();
+    persistenceError.addError(
+      'title',
+      new mongoose.Error.ValidatorError({ path: 'title' }),
+    );
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...mockPage, blocks: [] }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockRejectedValue(persistenceError),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, { title: 'Updated title' }),
+    ).rejects.toBe(persistenceError);
+    expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      mockPage._id,
+      expect.objectContaining({ title: 'Updated title' }),
       { new: true },
     );
   });
+
+  it.each([
+    ['RichText', [{ id: 'rich', type: PageBlockType.RichText }]],
+    [
+      'EntityCollection',
+      [
+        {
+          id: 'collection',
+          type: PageBlockType.EntityCollection,
+          entityType: EntityCollectionEntityType.People,
+          layout: EntityCollectionLayout.Grid,
+          items: ['507f1f77bcf86cd799439221'],
+        },
+      ],
+    ],
+    [
+      'Hero',
+      [
+        {
+          id: 'hero',
+          type: PageBlockType.Hero,
+          items: [{ title: 'Card' }],
+        },
+      ],
+    ],
+    [
+      'CTA with embedded modal block',
+      [
+        {
+          id: 'cta',
+          type: PageBlockType.Cta,
+          buttons: [
+            {
+              label: 'Open',
+              type: BlockButtonType.Block,
+              block: {
+                id: 'modal-collection',
+                type: PageBlockType.EntityCollection,
+                entityType: EntityCollectionEntityType.People,
+                layout: EntityCollectionLayout.Grid,
+                items: ['507f1f77bcf86cd799439221'],
+              },
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      'Gallery',
+      [
+        {
+          id: 'gallery',
+          type: PageBlockType.Gallery,
+          items: [{ mediaId: '507f1f77bcf86cd799439222' }],
+        },
+      ],
+    ],
+    [
+      'ApplicationForm',
+      [
+        {
+          id: 'application',
+          type: PageBlockType.ApplicationForm,
+          applicationType: ApplicationFormType.General,
+        },
+      ],
+    ],
+    [
+      'HTML legacy defaults',
+      [
+        {
+          id: 'html',
+          type: PageBlockType.Html,
+          content: '<p>Existing</p>',
+        },
+      ],
+    ],
+    [
+      'Group',
+      [
+        {
+          id: 'group',
+          type: PageBlockType.Group,
+          blocks: [{ id: 'group-rich', type: PageBlockType.RichText }],
+        },
+      ],
+    ],
+    [
+      'mixed composition',
+      [
+        { id: 'mixed-rich', type: PageBlockType.RichText },
+        {
+          id: 'mixed-collection',
+          type: PageBlockType.EntityCollection,
+          entityType: EntityCollectionEntityType.People,
+          layout: EntityCollectionLayout.Grid,
+          items: ['507f1f77bcf86cd799439221'],
+        },
+        {
+          id: 'mixed-group',
+          type: PageBlockType.Group,
+          blocks: [{ id: 'mixed-group-rich', type: PageBlockType.RichText }],
+        },
+      ],
+    ],
+  ] as const)(
+    'keeps existing %s content editable when Page block update validators are enabled',
+    async (_name, blocks) => {
+      mockPageModel.findById.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ ...mockPage, blocks }),
+        }),
+      });
+      mockPageModel.findOne.mockResolvedValue(null);
+      mockPageModel.findByIdAndUpdate.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(mockPage),
+        }),
+      });
+      const edited = blocks.map((block, index) =>
+        index === 0 ? { ...block, title: 'Edited' } : block,
+      );
+
+      await service.update(mockPage._id, {
+        blocks: edited as never,
+      });
+
+      expect(mockPageModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        mockPage._id,
+        expect.objectContaining({ blocks: expect.any(Array) }),
+        { new: true, runValidators: true },
+      );
+      const savedBlocks = mockPageModel.findByIdAndUpdate.mock.calls[0][1]
+        .blocks as Array<Record<string, unknown>>;
+      expect(savedBlocks[0].title).toBe('Edited');
+      if (savedBlocks[0].type === PageBlockType.EntityCollection) {
+        expect(savedBlocks[0]).not.toHaveProperty('columns');
+      }
+    },
+  );
 
   it('preserves existing HTML snippets when an old-shaped page update omits them', async () => {
     const marker =
@@ -1355,7 +1635,7 @@ describe('PagesService', () => {
       expect.objectContaining({
         blocks: [expect.objectContaining({ snippets: savedSnippets })],
       }),
-      { new: true },
+      { new: true, runValidators: true },
     );
   });
 
@@ -1458,7 +1738,7 @@ describe('PagesService', () => {
       expect.objectContaining({
         blocks: [expect.objectContaining({ snippets: [] })],
       }),
-      { new: true },
+      { new: true, runValidators: true },
     );
   });
 

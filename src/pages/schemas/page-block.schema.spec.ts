@@ -261,6 +261,160 @@ describe('Dynamic collection persistence limit', () => {
   );
 });
 
+describe('EntityCollection columns persistence', () => {
+  const collection = (columns?: unknown) => ({
+    id: 'collection',
+    type: 'entityCollection',
+    entityType: 'people',
+    layout: 'grid',
+    items: ['507f1f77bcf86cd799439221'],
+    ...(columns === undefined ? {} : { columns }),
+  });
+
+  it.each([undefined, 'auto', 2, 3, 4, 5])(
+    'round-trips %p without changing its scalar type in Page, Group and Event blocks',
+    (columns) => {
+      const documents = [
+        new PageModel({ ...basePage, blocks: [collection(columns)] }),
+        new PageModel({
+          ...basePage,
+          blocks: [
+            {
+              id: 'group',
+              type: 'group',
+              blocks: [collection(columns)],
+            },
+          ],
+        }),
+        new EventModel({ ...baseEvent, blocks: [collection(columns)] }),
+      ];
+
+      for (const document of documents) {
+        expect(document.validateSync()).toBeUndefined();
+        const stored = document.toObject().blocks[0] as Record<string, any>;
+        const storedCollection =
+          stored.type === 'group' ? stored.blocks[0] : stored;
+        expect(storedCollection.columns).toBe(columns);
+        if (columns !== undefined) {
+          expect(typeof storedCollection.columns).toBe(typeof columns);
+        }
+      }
+    },
+  );
+
+  it.each([null, '', '2', 'Auto', 1, 6, 2.5, true, [], {}, NaN, Infinity])(
+    'rejects invalid value %p in Page, Group and Event blocks',
+    (columns) => {
+      for (const document of [
+        new PageModel({ ...basePage, blocks: [collection(columns)] }),
+        new PageModel({
+          ...basePage,
+          blocks: [
+            {
+              id: 'group',
+              type: 'group',
+              blocks: [collection(columns)],
+            },
+          ],
+        }),
+        new EventModel({ ...baseEvent, blocks: [collection(columns)] }),
+      ]) {
+        expect(document.validateSync()).toBeDefined();
+      }
+    },
+  );
+
+  it('runs update casting and validators before the driver operation', async () => {
+    const driverUpdate = jest
+      .spyOn(PageModel.collection, 'findOneAndUpdate')
+      .mockResolvedValue({ value: null } as never);
+    const id = new mongoose.Types.ObjectId();
+
+    try {
+      await PageModel.findByIdAndUpdate(
+        id,
+        { $set: { blocks: [collection('auto')] } },
+        { new: true, runValidators: true },
+      );
+      expect(driverUpdate).toHaveBeenCalledTimes(1);
+
+      driverUpdate.mockClear();
+      await expect(
+        PageModel.findByIdAndUpdate(
+          id,
+          { $set: { blocks: [collection(null)] } },
+          { new: true, runValidators: true },
+        ),
+      ).rejects.toThrow();
+      expect(driverUpdate).not.toHaveBeenCalled();
+    } finally {
+      driverUpdate.mockRestore();
+    }
+  });
+
+  it('keeps existing mixed Page content editable under update validators', async () => {
+    const blocks = [
+      { id: 'rich', type: 'richText', title: 'Rich text' },
+      collection(),
+      { id: 'hero', type: 'hero', items: [{ title: 'Hero card' }] },
+      {
+        id: 'cta',
+        type: 'cta',
+        buttons: [
+          {
+            label: 'Open',
+            type: 'block',
+            block: { id: 'modal', type: 'richText', title: 'Modal content' },
+          },
+        ],
+      },
+      {
+        id: 'gallery',
+        type: 'gallery',
+        items: [{ mediaId: '507f1f77bcf86cd799439222' }],
+      },
+      {
+        id: 'application',
+        type: 'applicationForm',
+        applicationType: 'general',
+      },
+      { id: 'html', type: 'html', content: '<p>Legacy template default</p>' },
+      {
+        id: 'group',
+        type: 'group',
+        blocks: [
+          { id: 'group-html', type: 'html', content: '<p>Group child</p>' },
+          { ...collection(), id: 'group-collection' },
+        ],
+      },
+    ];
+    const driverUpdate = jest
+      .spyOn(PageModel.collection, 'findOneAndUpdate')
+      .mockResolvedValue({ value: null } as never);
+    const id = new mongoose.Types.ObjectId();
+
+    try {
+      await PageModel.findByIdAndUpdate(
+        id,
+        { $set: { blocks } },
+        { new: true, runValidators: true },
+      );
+      expect(driverUpdate).toHaveBeenCalledTimes(1);
+
+      const edited = structuredClone(blocks) as Array<Record<string, unknown>>;
+      edited[0] = { ...edited[0], title: 'Edited rich text' };
+      await PageModel.findByIdAndUpdate(
+        id,
+        { $set: { blocks: edited } },
+        { new: true, runValidators: true },
+      );
+      expect(driverUpdate).toHaveBeenCalledTimes(2);
+    } finally {
+      driverUpdate.mockRestore();
+    }
+  });
+});
+
 describe('Hero optional presentation persistence', () => {
   it.each([2, 3, 4, 5])(
     'round-trips %i columns and hidden item data',

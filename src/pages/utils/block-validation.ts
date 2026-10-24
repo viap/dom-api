@@ -41,6 +41,7 @@ import {
   RichTextBlock,
 } from '../types/page-block.interface';
 import { EventEntityCollectionFilters } from '@/events/types/entity-collection-filters.interface';
+import { isEntityCollectionColumns } from '@/pages/types/entity-collection-columns';
 import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
 import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
 import {
@@ -226,6 +227,15 @@ function validateEntityCollectionBlock(
   refs: ValidationRefs,
   depth: number,
 ): void {
+  if (
+    block.columns !== undefined &&
+    !isEntityCollectionColumns(block.columns)
+  ) {
+    throw new BadRequestException(
+      'entityCollection.columns must be auto or an integer from 2 to 5',
+    );
+  }
+
   if (block.entityType === EntityCollectionEntityType.Custom) {
     if (block.items.length !== 0) {
       throw new BadRequestException(

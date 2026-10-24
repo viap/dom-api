@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib.sh
 source "${SCRIPT_DIR}/lib.sh"
 
+use_node
+
 require_env PORT REMOTE_TARGET REMOTE_UPLOADS_PATH
 
 echo "Rolling back to previous deployment..."
@@ -17,7 +19,7 @@ if [ -z "${LATEST_BACKUP}" ]; then
 fi
 
 echo "Stopping current applications..."
-pm2 stop domApi domBot || true
+pm2 stop domApi || true
 pm2 delete domApi || true
 
 echo "Restoring from backup: ${LATEST_BACKUP}"
@@ -32,7 +34,6 @@ verify_uploads_invariant "${REMOTE_TARGET}" "${REMOTE_UPLOADS_PATH}"
 echo "Restarting applications..."
 npm ci --omit=dev
 pm2_cutover_domapi
-pm2_cutover_dombot_optional
 
 if ! healthcheck_with_retries "${PORT}" "Rollback"; then
   pm2 logs domApi --lines 20 --nostream
@@ -41,4 +42,5 @@ if ! healthcheck_with_retries "${PORT}" "Rollback"; then
 fi
 
 pm2 status
+pm2_save
 echo "Rollback completed successfully"

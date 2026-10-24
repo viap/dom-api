@@ -13,6 +13,8 @@ import {
 } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { Languages } from '@/people/enums/languages.enum';
+import { EntityCollectionColumnsSchemaType } from '@/pages/schemas/entity-collection-columns.schema-type';
+import { isEntityCollectionColumns } from '@/pages/types/entity-collection-columns';
 
 const spacingValues = ['none', 'sm', 'md', 'lg', 'xl'];
 const variantValues = ['section', 'block', 'element'];
@@ -111,6 +113,14 @@ export const customEntityCollectionItemSchema = new mongoose.Schema(
   { _id: false, id: false, strict: 'throw' },
 );
 
+const entityCollectionColumnsSchemaType = new EntityCollectionColumnsSchemaType(
+  'columns',
+);
+entityCollectionColumnsSchemaType.validate(
+  (value: unknown) => isEntityCollectionColumns(value),
+  'EntityCollection columns must be auto or an integer from 2 to 5',
+);
+
 export const pageBlockBaseSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, trim: true },
@@ -162,6 +172,10 @@ export const entityCollectionBlockSchema = new mongoose.Schema(
       required: true,
       enum: Object.values(EntityCollectionLayout),
     },
+    // Mongoose accepts a local SchemaType instance at runtime, but its schema
+    // definition typings only model constructors and built-in definitions.
+    columns:
+      entityCollectionColumnsSchemaType as unknown as mongoose.SchemaDefinitionProperty,
     items: { type: [String], required: true, default: [] },
     customItems: {
       type: [customEntityCollectionItemSchema],
