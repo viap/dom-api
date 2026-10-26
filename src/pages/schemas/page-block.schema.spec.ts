@@ -169,6 +169,123 @@ describe('Page group block persistence (Mongoose)', () => {
     expect(stored.blocks[0].content).toBe('<p>x</p>');
   });
 
+  it.each([undefined, 'horizontal', 'vertical'])(
+    'round-trips Group layout %p without materializing a default',
+    (layout) => {
+      const doc = new PageModel({
+        ...basePage,
+        blocks: [
+          {
+            id: 'g',
+            type: 'group',
+            ...(layout === undefined ? {} : { layout }),
+            blocks: [{ ...htmlChild('c1'), padding: 'xl' }],
+          },
+        ],
+      });
+
+      expect(doc.validateSync()).toBeUndefined();
+      const stored = doc.toObject().blocks[0] as Record<string, any>;
+      expect(stored.layout).toBe(layout);
+      expect(stored.blocks[0].padding).toBe('xl');
+    },
+  );
+
+  it.each(['diagonal', '', null, 1, {}])(
+    'rejects invalid Group layout %p',
+    (layout) => {
+      const doc = new PageModel({
+        ...basePage,
+        blocks: [{ id: 'g', type: 'group', layout, blocks: [htmlChild('c1')] }],
+      });
+      expect(doc.validateSync()).toBeDefined();
+    },
+  );
+
+  it.each([1, 4])('accepts %i Group children', (childCount) => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          id: 'g',
+          type: 'group',
+          layout: 'vertical',
+          blocks: Array.from({ length: childCount }, (_, index) =>
+            htmlChild(`c${index + 1}`),
+          ),
+        },
+      ],
+    });
+    expect(doc.validateSync()).toBeUndefined();
+  });
+
+  it.each([0, 5])('rejects %i Group children', (childCount) => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          id: 'g',
+          type: 'group',
+          layout: 'horizontal',
+          blocks: Array.from({ length: childCount }, (_, index) =>
+            htmlChild(`c${index + 1}`),
+          ),
+        },
+      ],
+    });
+    expect(doc.validateSync()).toBeDefined();
+  });
+
+  it('runs Group layout update casting and validators before the driver operation', async () => {
+    const driverUpdate = jest
+      .spyOn(PageModel.collection, 'findOneAndUpdate')
+      .mockResolvedValue({ value: null } as never);
+    const id = new mongoose.Types.ObjectId();
+
+    try {
+      await PageModel.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            blocks: [
+              {
+                id: 'g',
+                type: 'group',
+                layout: 'vertical',
+                blocks: [htmlChild('c1')],
+              },
+            ],
+          },
+        },
+        { new: true, runValidators: true },
+      );
+      expect(driverUpdate).toHaveBeenCalledTimes(1);
+
+      driverUpdate.mockClear();
+      await expect(
+        PageModel.findByIdAndUpdate(
+          id,
+          {
+            $set: {
+              blocks: [
+                {
+                  id: 'g',
+                  type: 'group',
+                  layout: 'diagonal',
+                  blocks: [htmlChild('c1')],
+                },
+              ],
+            },
+          },
+          { new: true, runValidators: true },
+        ),
+      ).rejects.toThrow();
+      expect(driverUpdate).not.toHaveBeenCalled();
+    } finally {
+      driverUpdate.mockRestore();
+    }
+  });
+
   it('drops a nested group child (group not registered on the child path)', () => {
     const doc = new PageModel({
       ...basePage,

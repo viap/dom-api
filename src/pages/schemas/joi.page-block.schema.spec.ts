@@ -1346,9 +1346,14 @@ describe('Group block (page-only)', () => {
     content: '<p>x</p>',
   });
 
-  const group = (id: string, blocks: unknown[]) => ({
+  const group = (
+    id: string,
+    blocks: unknown[],
+    layout?: 'horizontal' | 'vertical',
+  ) => ({
     id,
     type: 'group',
+    ...(layout ? { layout } : {}),
     blocks,
   });
 
@@ -1371,6 +1376,33 @@ describe('Group block (page-only)', () => {
     ]);
     expect(error).toBeUndefined();
   });
+
+  it.each([undefined, 'horizontal', 'vertical'] as const)(
+    'round-trips Group layout %p and child padding on create and update',
+    (layout) => {
+      const block = group('g', [{ ...htmlChild('c1'), padding: 'xl' }], layout);
+
+      for (const result of [
+        createPageSchema.validate({ title: 'P', slug: 'p', blocks: [block] }),
+        updatePageSchema.validate({ blocks: [block] }),
+      ]) {
+        expect(result.error).toBeUndefined();
+        expect(result.value.blocks[0].layout).toBe(layout);
+        expect(result.value.blocks[0].blocks[0].padding).toBe('xl');
+      }
+    },
+  );
+
+  it.each(['diagonal', '', null, 1, {}])(
+    'rejects invalid Group layout %p on create and update',
+    (layout) => {
+      const block = { ...group('g', [htmlChild('c1')]), layout };
+      expect(pageWith([block]).error).toBeDefined();
+      expect(
+        updatePageSchema.validate({ blocks: [block] }).error,
+      ).toBeDefined();
+    },
+  );
 
   it('rejects a group with 0 children', () => {
     const { error } = pageWith([group('g', [])]);

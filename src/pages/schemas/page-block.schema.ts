@@ -6,6 +6,7 @@ import { ApplicationFormType } from '@/applications/enums/application-form-type.
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
+import { GroupLayout } from '../enums/group-layout.enum';
 import {
   GROUP_CHILD_BLOCK_TYPES,
   GroupChildBlockType,
@@ -295,7 +296,16 @@ const groupChildBaseSchema = pageBlockBaseSchema.clone();
 
 export const groupBlockSchema = new mongoose.Schema(
   {
-    blocks: { type: [groupChildBaseSchema], default: [] },
+    layout: { type: String, enum: Object.values(GroupLayout) },
+    blocks: {
+      type: [groupChildBaseSchema],
+      default: [],
+      validate: {
+        validator: (blocks: unknown[]) =>
+          blocks.length >= 1 && blocks.length <= 4,
+        message: 'Group blocks must contain between 1 and 4 children',
+      },
+    },
   },
   { _id: false, id: false, strict: 'throw' },
 );
