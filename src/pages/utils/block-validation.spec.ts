@@ -754,6 +754,47 @@ describe('Group blocks (page-only)', () => {
     expect(group.blocks[0].id).toBe('c1');
   });
 
+  it('preserves Group layout, child padding, order, and visibility semantics', async () => {
+    const source = [
+      {
+        id: 'grp',
+        type: PageBlockType.Group,
+        layout: 'vertical',
+        blocks: [
+          { ...htmlChild('c1'), padding: 'sm' },
+          { ...htmlChild('c2'), padding: 'xl', isVisible: false },
+        ],
+      },
+    ] as unknown as PageRootBlock[];
+
+    const [prepared] = await prepareBlocksForWrite(source, allExist);
+    expect(prepared).toEqual(
+      expect.objectContaining({
+        layout: 'vertical',
+        blocks: [
+          expect.objectContaining({ id: 'c1', padding: 'sm' }),
+          expect.objectContaining({
+            id: 'c2',
+            padding: 'xl',
+            isVisible: false,
+          }),
+        ],
+      }),
+    );
+
+    const [published] = await toPublicBlocks(
+      source as unknown as Record<string, unknown>[],
+      publicServices,
+      context,
+    );
+    expect(published).toEqual(
+      expect.objectContaining({
+        layout: 'vertical',
+        blocks: [expect.objectContaining({ id: 'c1', padding: 'sm' })],
+      }),
+    );
+  });
+
   it('sanitizes an HTML child inside a group on write', async () => {
     const [group] = await prepareBlocksForWrite(
       [

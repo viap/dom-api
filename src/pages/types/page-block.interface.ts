@@ -5,6 +5,7 @@ import { ApplicationFormType } from '@/applications/enums/application-form-type.
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
+import { GroupLayout } from '../enums/group-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
@@ -230,6 +231,7 @@ export type GroupChildBlock = Exclude<PageBlock, HeroBlock>;
 
 export interface GroupBlock extends PageBlockBase {
   type: PageBlockType.Group;
+  layout?: GroupLayout;
   blocks: GroupChildBlock[];
 }
 

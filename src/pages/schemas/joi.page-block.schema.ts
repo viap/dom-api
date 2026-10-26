@@ -7,6 +7,7 @@ import { ApplicationFormType } from '@/applications/enums/application-form-type.
 import { BlockButtonType } from '../enums/block-button-type.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
 import { EntityCollectionLayout } from '../enums/entity-collection-layout.enum';
+import { GroupLayout } from '../enums/group-layout.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
 import { PersonAvailability } from '@/people/enums/person-availability.enum';
@@ -549,6 +550,9 @@ const groupChildBlockSchema = Joi.alternatives().try(
 const groupBlockSchema = Joi.object({
   ...pageBlockBaseSchema,
   type: Joi.string().valid(PageBlockType.Group).required(),
+  layout: Joi.string()
+    .valid(...Object.values(GroupLayout))
+    .optional(),
   blocks: Joi.array().items(groupChildBlockSchema).min(1).max(4).required(),
 });
 
