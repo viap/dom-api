@@ -43,6 +43,17 @@ describe('sanitizeHtmlBlockContent', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it('should strip javascript: in form and svg url attributes', () => {
+    const result = sanitizeHtmlBlockContent(
+      '<form action="javascript:alert(1)"><button formaction="javascript:alert(2)">x</button></form>' +
+        '<svg><a xlink:href="javascript:alert(3)">y</a></svg>' +
+        '<form action="https://ok.example/x"></form><svg><use xlink:href="#icon"></use></svg>',
+    );
+    expect(result).not.toContain('javascript:');
+    expect(result).toContain('action="https://ok.example/x"');
+    expect(result).toContain('xlink:href="#icon"');
+  });
+
   it('should preserve script and style tags', () => {
     const html =
       '<script>window.x = 1</script><style>.foo { color: red; }</style><p>Hello</p>';

@@ -76,6 +76,16 @@ export function sanitizeHtmlBlockContent(html: string): string {
     allowedSchemesByTag: {
       a: ['http', 'https', 'mailto', 'tel'],
     },
+    // Every URL-carrying attribute, not only href/src/cite: otherwise
+    // javascript: in form action, formaction or SVG xlink:href survives.
+    allowedSchemesAppliedToAttributes: [
+      'href',
+      'src',
+      'cite',
+      'action',
+      'formaction',
+      'xlink:href',
+    ],
     disallowedTagsMode: 'discard',
     allowProtocolRelative: false,
     enforceHtmlBoundary: true,
