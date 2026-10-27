@@ -118,10 +118,12 @@ describe('AuthService', () => {
 
   describe('signInByTelegram', () => {
     const originalBotClientName = process.env.BOT_CLIENT_NAME;
+    const originalBotClientPassword = process.env.BOT_CLIENT_PASSWORD;
     const telegram = { id: '12345', username: '' };
 
     beforeEach(() => {
       process.env.BOT_CLIENT_NAME = 'domBot';
+      process.env.BOT_CLIENT_PASSWORD = 'expected-password';
       mockApiClientsService.findOne.mockImplementation((name: string) => ({
         name,
         password: 'expected-password',
@@ -131,6 +133,7 @@ describe('AuthService', () => {
 
     afterEach(() => {
       process.env.BOT_CLIENT_NAME = originalBotClientName;
+      process.env.BOT_CLIENT_PASSWORD = originalBotClientPassword;
     });
 
     it('rejects a valid non-bot client without touching users', async () => {

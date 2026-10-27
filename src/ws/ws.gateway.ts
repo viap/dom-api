@@ -8,7 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { AuthService } from '@/auth/auth.service';
+import { isTrustedApiClient } from '@/auth/utils/client-ip';
 import extractApiClientFromHeaders from '@/common/utils/extract-api-client-from-headers';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationDocument } from '@/notifications/schemas/notification.schema';
@@ -35,20 +35,13 @@ export class WsGateway implements OnModuleInit, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(
-    private authService: AuthService,
-    private notificationsService: NotificationsService,
-  ) {}
+  constructor(private notificationsService: NotificationsService) {}
 
   onModuleInit() {
     this.server.on('connection', (client: Socket) => {
       const initClient = extractApiClientFromHeaders(client.handshake.headers);
 
-      if (
-        initClient &&
-        initClient.name === process.env.BOT_CLIENT_NAME &&
-        this.authService.isAvailableClient(initClient)
-      ) {
+      if (isTrustedApiClient(initClient, 'BOT')) {
         botSockets.add(client.id);
         client.emit('inited', {
           clientId: client.id,

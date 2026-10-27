@@ -1,17 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WsGateway } from './ws.gateway';
 
 describe('WsGateway', () => {
   let gateway: WsGateway;
-  let mockAuthService: { isAvailableClient: jest.Mock };
   let mockNotificationsService: {
     getAllActiveForBot: jest.Mock;
     addReceived: jest.Mock;
   };
   let connectionHandler: (client: unknown) => void;
   const originalBotClientName = process.env.BOT_CLIENT_NAME;
+  const originalBotClientPassword = process.env.BOT_CLIENT_PASSWORD;
 
   const botHeader = `ApiClient ${JSON.stringify({
     name: 'domBot',
@@ -20,9 +19,7 @@ describe('WsGateway', () => {
 
   beforeEach(async () => {
     process.env.BOT_CLIENT_NAME = 'domBot';
-    mockAuthService = {
-      isAvailableClient: jest.fn().mockReturnValue(true),
-    };
+    process.env.BOT_CLIENT_PASSWORD = 'secret';
     mockNotificationsService = {
       getAllActiveForBot: jest.fn(),
       addReceived: jest.fn().mockResolvedValue(true),
@@ -31,7 +28,6 @@ describe('WsGateway', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WsGateway,
-        { provide: AuthService, useValue: mockAuthService },
         { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
@@ -47,6 +43,7 @@ describe('WsGateway', () => {
 
   afterEach(() => {
     process.env.BOT_CLIENT_NAME = originalBotClientName;
+    process.env.BOT_CLIENT_PASSWORD = originalBotClientPassword;
   });
 
   it('serves notification batches to the bot', async () => {
