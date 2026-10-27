@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
 import { validateObjectId } from '@/common/utils/mongo-sanitizer';
@@ -40,7 +40,8 @@ function parseDateValue(value?: string | Date): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-// Upper bound for the bot's session user ids in one batch request.
+// Upper bound for the bot's session user ids in one batch request; the
+// WebSocket maxHttpBufferSize in ws.gateway.ts is sized for it.
 const MAX_BOT_CANDIDATES = 5000;
 
 type AudienceUser = { _id?: unknown; roles?: Array<Role> };
@@ -76,6 +77,7 @@ function hasReceived(notification: AudienceNotification, userId: string) {
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
@@ -138,13 +140,23 @@ export class NotificationsService {
     candidateUserIds?: unknown,
   ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
     const notifications = await this.getAllActive();
-    const ids = [
+    const uniqueIds = [
       ...new Set(
         (Array.isArray(candidateUserIds) ? candidateUserIds : [])
           .map((id) => validateObjectId(id))
           .filter((id): id is string => !!id),
       ),
-    ].slice(0, MAX_BOT_CANDIDATES);
+    ];
+    if (uniqueIds.length > MAX_BOT_CANDIDATES) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'notifications.bot_candidates_truncated',
+          received: uniqueIds.length,
+          kept: MAX_BOT_CANDIDATES,
+        }),
+      );
+    }
+    const ids = uniqueIds.slice(0, MAX_BOT_CANDIDATES);
     const users = ids.length ? await this.userService.getRolesByIds(ids) : [];
 
     return notifications.map((notification) => ({

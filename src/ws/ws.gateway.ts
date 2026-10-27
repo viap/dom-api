@@ -22,9 +22,9 @@ const webSocketPort = process.env.WEBSOCKET_PORT
   : 3004;
 @WebSocketGateway(webSocketPort, {
   transports: ['websocket'],
-  // The bot's get-all-batch payload lists its session user ids (~27 bytes
-  // each), so this leaves room for tens of thousands of sessions.
-  maxHttpBufferSize: 1e6,
+  // The bot's get-all-batch payload lists up to 5000 session user ids
+  // (~27 bytes each, ~135 KB); see MAX_BOT_CANDIDATES.
+  maxHttpBufferSize: 2e5,
   cors: {
     origin: '*',
     credentials: true,

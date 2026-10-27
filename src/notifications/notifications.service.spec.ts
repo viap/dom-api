@@ -269,6 +269,24 @@ describe('NotificationsService', () => {
       ]);
     });
 
+    it('caps the candidate ids at 5000', async () => {
+      mockNotificationModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([]),
+        }),
+      });
+      (mockUsersService as any).getRolesByIds = jest.fn().mockResolvedValue([]);
+      const ids = Array.from({ length: 5001 }, (_, i) =>
+        i.toString(16).padStart(24, '0'),
+      );
+
+      await service.getAllActiveForBot(ids);
+
+      expect(
+        (mockUsersService as any).getRolesByIds.mock.calls[0][0],
+      ).toHaveLength(5000);
+    });
+
     it('lists nobody as eligible when no user ids are sent', async () => {
       mockNotificationModel.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
