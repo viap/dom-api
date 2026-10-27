@@ -54,6 +54,19 @@ describe('sanitizeHtmlBlockContent', () => {
     expect(result).toContain('xlink:href="#icon"');
   });
 
+  it('should keep inline code but drop external scripts and css imports', () => {
+    const result = sanitizeHtmlBlockContent(
+      '<script>window.inline = 1;</script>' +
+        '<script src="https://cdn.example/a.js"></script>' +
+        '<svg><script href="https://cdn.example/b.js"></script></svg>' +
+        '<style>@import url("https://fonts.example/f.css");\n.a { color: red; }</style>',
+    );
+    expect(result).toContain('<script>window.inline = 1;</script>');
+    expect(result).not.toContain('cdn.example');
+    expect(result).not.toContain('@import');
+    expect(result).toContain('.a { color: red; }');
+  });
+
   it('should preserve script and style tags', () => {
     const html =
       '<script>window.x = 1</script><style>.foo { color: red; }</style><p>Hello</p>';

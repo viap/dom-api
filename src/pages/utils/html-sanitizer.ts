@@ -43,6 +43,26 @@ const DANGEROUS_TAGS = new Set([
   'base',
 ]);
 
+// HTML blocks may carry inline code and styles, but nothing loaded from
+// elsewhere: <script> with src/href and CSS @import are removed (<link>,
+// <iframe> etc. are already dropped above).
+const EXTERNAL_SCRIPT_ATTRIBUTES = ['src', 'href', 'xlink:href'];
+
+function isExternalScript(frame: sanitizeHtml.IFrame): boolean {
+  return (
+    frame.tag === 'script' &&
+    EXTERNAL_SCRIPT_ATTRIBUTES.some((name) => name in frame.attribs)
+  );
+}
+
+function stripCssImports(html: string): string {
+  return html.replace(
+    /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
+    (_match, open: string, css: string, close: string) =>
+      open + css.replace(/@import\b[^;]*;?/gi, '') + close,
+  );
+}
+
 function stripEventHandlers(
   _tagName: string,
   attribs: sanitizeHtml.Attributes,
@@ -68,32 +88,34 @@ function stripEventHandlers(
 }
 
 export function sanitizeHtmlBlockContent(html: string): string {
-  return sanitizeHtml(html, {
-    allowedTags: false,
-    allowVulnerableTags: true,
-    allowedAttributes: false,
-    allowedSchemes: ['http', 'https', 'mailto', 'tel', 'data'],
-    allowedSchemesByTag: {
-      a: ['http', 'https', 'mailto', 'tel'],
-    },
-    // Every URL-carrying attribute, not only href/src/cite: otherwise
-    // javascript: in form action, formaction or SVG xlink:href survives.
-    allowedSchemesAppliedToAttributes: [
-      'href',
-      'src',
-      'cite',
-      'action',
-      'formaction',
-      'xlink:href',
-    ],
-    disallowedTagsMode: 'discard',
-    allowProtocolRelative: false,
-    enforceHtmlBoundary: true,
-    exclusiveFilter(frame) {
-      return DANGEROUS_TAGS.has(frame.tag);
-    },
-    transformTags: {
-      '*': stripEventHandlers,
-    },
-  }).trim();
+  return stripCssImports(
+    sanitizeHtml(html, {
+      allowedTags: false,
+      allowVulnerableTags: true,
+      allowedAttributes: false,
+      allowedSchemes: ['http', 'https', 'mailto', 'tel', 'data'],
+      allowedSchemesByTag: {
+        a: ['http', 'https', 'mailto', 'tel'],
+      },
+      // Every URL-carrying attribute, not only href/src/cite: otherwise
+      // javascript: in form action, formaction or SVG xlink:href survives.
+      allowedSchemesAppliedToAttributes: [
+        'href',
+        'src',
+        'cite',
+        'action',
+        'formaction',
+        'xlink:href',
+      ],
+      disallowedTagsMode: 'discard',
+      allowProtocolRelative: false,
+      enforceHtmlBoundary: true,
+      exclusiveFilter(frame) {
+        return DANGEROUS_TAGS.has(frame.tag) || isExternalScript(frame);
+      },
+      transformTags: {
+        '*': stripEventHandlers,
+      },
+    }),
+  ).trim();
 }
