@@ -5,7 +5,7 @@ import { WsGateway } from './ws.gateway';
 
 describe('WsGateway', () => {
   let gateway: WsGateway;
-  let mockAuthService: { isAvailableClient: jest.Mock; decode: jest.Mock };
+  let mockAuthService: { isAvailableClient: jest.Mock };
   let mockNotificationsService: {
     getAllActiveForBot: jest.Mock;
     addReceived: jest.Mock;
@@ -22,7 +22,6 @@ describe('WsGateway', () => {
     process.env.BOT_CLIENT_NAME = 'domBot';
     mockAuthService = {
       isAvailableClient: jest.fn().mockReturnValue(true),
-      decode: jest.fn(),
     };
     mockNotificationsService = {
       getAllActiveForBot: jest.fn(),
@@ -118,23 +117,6 @@ describe('WsGateway', () => {
     expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
       'n1',
       'u1',
-    );
-    expect(mockAuthService.decode).not.toHaveBeenCalled();
-  });
-
-  it('still reads the userId from a token sent by older bots', async () => {
-    const client = createClient('bot-legacy', botHeader);
-    mockAuthService.decode.mockResolvedValue({ userId: 'u2' });
-    connectionHandler(client);
-
-    await gateway.addReceived(
-      { notificationId: 'n1', token: 'session-token' },
-      client as never,
-    );
-
-    expect(mockNotificationsService.addReceived).toHaveBeenCalledWith(
-      'n1',
-      'u2',
     );
   });
 });

@@ -18,7 +18,6 @@ describe('AuthService', () => {
 
     mockJwtService = {
       verifyAsync: jest.fn(),
-      decode: jest.fn(),
       signAsync: jest.fn(),
     };
 

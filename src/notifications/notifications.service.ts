@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { FilterQuery, Model } from 'mongoose';
 import { validateObjectId } from '@/common/utils/mongo-sanitizer';
@@ -76,9 +76,6 @@ function hasReceived(notification: AudienceNotification, userId: string) {
 
 @Injectable()
 export class NotificationsService {
-  private readonly logger = new Logger(NotificationsService.name);
-  private warnedAboutLegacyBatch = false;
-
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
@@ -141,24 +138,9 @@ export class NotificationsService {
     candidateUserIds?: unknown,
   ): Promise<Array<NotificationDocument | Record<string, unknown>>> {
     const notifications = await this.getAllActive();
-    // TODO(remove once 'notifications.legacy_batch_without_user_ids' no
-    // longer appears in logs after the dom-bot deploy): older bots send no
-    // ids and filter recipients themselves.
-    if (!Array.isArray(candidateUserIds)) {
-      if (!this.warnedAboutLegacyBatch) {
-        this.warnedAboutLegacyBatch = true;
-        this.logger.warn(
-          JSON.stringify({
-            event: 'notifications.legacy_batch_without_user_ids',
-          }),
-        );
-      }
-      return notifications;
-    }
-
     const ids = [
       ...new Set(
-        candidateUserIds
+        (Array.isArray(candidateUserIds) ? candidateUserIds : [])
           .map((id) => validateObjectId(id))
           .filter((id): id is string => !!id),
       ),

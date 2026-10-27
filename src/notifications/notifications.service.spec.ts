@@ -269,15 +269,23 @@ describe('NotificationsService', () => {
       ]);
     });
 
-    it('keeps the previous response when no user ids are sent', async () => {
-      const notifications = [{ _id: 'n1' }];
+    it('lists nobody as eligible when no user ids are sent', async () => {
       mockNotificationModel.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          exec: jest.fn().mockResolvedValue(notifications),
+          exec: jest.fn().mockResolvedValue([
+            {
+              roles: [],
+              recipients: [],
+              received: [],
+              toObject: () => ({ _id: 'n1' }),
+            },
+          ]),
         }),
       });
 
-      await expect(service.getAllActiveForBot()).resolves.toBe(notifications);
+      await expect(service.getAllActiveForBot()).resolves.toEqual([
+        { _id: 'n1', eligibleUserIds: [] },
+      ]);
     });
   });
 });

@@ -30,12 +30,6 @@ export class AuthService {
     return await this.jwtService.verifyAsync(token).catch(() => undefined);
   }
 
-  async decode(
-    token: string,
-  ): Promise<Record<string, unknown> | string | null> {
-    return this.jwtService.decode(token);
-  }
-
   isAvailableClient(initClient: ApiClientDto): boolean {
     const apiClient = this.clientService.findOne(initClient.name);
 
