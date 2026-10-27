@@ -82,9 +82,19 @@ export class UsersService {
     ) {
       return null;
     }
-    // Both conditions must hold for the same contact. If several accounts
-    // share the id, the oldest wins: that is the account Telegram login
-    // created first, and newer duplicates cannot take it over or lock it.
+    // telegramId is the login identity: set only by Telegram login, never by
+    // profile edits, unique in the database.
+    const owner = await this.userModel
+      .findOne({ telegramId: sanitizedTelegramId })
+      .exec();
+    if (owner) {
+      return owner;
+    }
+
+    // Accounts created before telegramId existed are found by their Telegram
+    // contact (id and network on the same contact). If several share it, the
+    // oldest wins, as before. The account then claims telegramId, so later
+    // edits to contacts no longer change who logs in.
     const users = await this.userModel
       .find({
         contacts: {
@@ -108,7 +118,30 @@ export class UsersService {
       );
     }
 
-    return users[0] ?? null;
+    const legacyUser = users[0];
+    if (!legacyUser) {
+      return null;
+    }
+
+    try {
+      await this.userModel
+        .updateOne(
+          { _id: legacyUser._id, telegramId: { $exists: false } },
+          { $set: { telegramId: sanitizedTelegramId } },
+        )
+        .exec();
+    } catch (error) {
+      // A concurrent login claimed it first; that account owns the id now.
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.telegram.claim_failed',
+          userId: legacyUser._id.toString(),
+        }),
+      );
+      return this.userModel.findOne({ telegramId: sanitizedTelegramId }).exec();
+    }
+
+    return legacyUser;
   }
 
   async getByLogin(login: string): Promise<UserDocument> {
@@ -251,6 +284,7 @@ export class UsersService {
 
     return this.userModel.create({
       name: name || telegram.username,
+      telegramId: telegram.id,
       roles: [Role.User],
       contacts: [
         {
