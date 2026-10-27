@@ -43,6 +43,30 @@ describe('sanitizeHtmlBlockContent', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it('should strip javascript: in form and svg url attributes', () => {
+    const result = sanitizeHtmlBlockContent(
+      '<form action="javascript:alert(1)"><button formaction="javascript:alert(2)">x</button></form>' +
+        '<svg><a xlink:href="javascript:alert(3)">y</a></svg>' +
+        '<form action="https://ok.example/x"></form><svg><use xlink:href="#icon"></use></svg>',
+    );
+    expect(result).not.toContain('javascript:');
+    expect(result).toContain('action="https://ok.example/x"');
+    expect(result).toContain('xlink:href="#icon"');
+  });
+
+  it('should keep inline code but drop external scripts and css imports', () => {
+    const result = sanitizeHtmlBlockContent(
+      '<script>window.inline = 1;</script>' +
+        '<script src="https://cdn.example/a.js"></script>' +
+        '<svg><script href="https://cdn.example/b.js"></script></svg>' +
+        '<style>@import url("https://fonts.example/f.css");\n.a { color: red; }</style>',
+    );
+    expect(result).toContain('<script>window.inline = 1;</script>');
+    expect(result).not.toContain('cdn.example');
+    expect(result).not.toContain('@import');
+    expect(result).toContain('.a { color: red; }');
+  });
+
   it('should preserve script and style tags', () => {
     const html =
       '<script>window.x = 1</script><style>.foo { color: red; }</style><p>Hello</p>';

@@ -5,6 +5,7 @@ import { ApiClientsService } from '@/api-clients/api-clients.service';
 import { ApiClientDto } from '@/api-clients/dto/api-client.dto';
 import { normalizeLogin } from '@/common/utils/normalize-login';
 import { isSameSecret } from '@/common/utils/same-secret';
+import { isTrustedApiClient } from './utils/client-ip';
 import { UsersService } from '@/users/users.service';
 import { UserContext } from '../common/user-context/user-context.interface';
 import { AuthUserDto } from './dto/auth-user.dto';
@@ -30,12 +31,6 @@ export class AuthService {
     return await this.jwtService.verifyAsync(token).catch(() => undefined);
   }
 
-  async decode(
-    token: string,
-  ): Promise<Record<string, unknown> | string | null> {
-    return this.jwtService.decode(token);
-  }
-
   isAvailableClient(initClient: ApiClientDto): boolean {
     const apiClient = this.clientService.findOne(initClient.name);
 
@@ -58,10 +53,7 @@ export class AuthService {
 
     // Telegram identity is trusted only from the bot, which receives it from
     // Telegram itself. Other clients would let callers pick any Telegram id.
-    if (
-      !this.isAvailableClient(initClient) ||
-      initClient.name !== process.env.BOT_CLIENT_NAME
-    ) {
+    if (!isTrustedApiClient(initClient, 'BOT')) {
       this.logAuthFailure({
         reason: AuthFailureReason.InvalidApiClient,
         metadata: authMetadata,

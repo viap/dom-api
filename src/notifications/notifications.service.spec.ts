@@ -269,15 +269,41 @@ describe('NotificationsService', () => {
       ]);
     });
 
-    it('keeps the previous response when no user ids are sent', async () => {
-      const notifications = [{ _id: 'n1' }];
+    it('caps the candidate ids at 5000', async () => {
       mockNotificationModel.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          exec: jest.fn().mockResolvedValue(notifications),
+          exec: jest.fn().mockResolvedValue([]),
+        }),
+      });
+      (mockUsersService as any).getRolesByIds = jest.fn().mockResolvedValue([]);
+      const ids = Array.from({ length: 5001 }, (_, i) =>
+        i.toString(16).padStart(24, '0'),
+      );
+
+      await service.getAllActiveForBot(ids);
+
+      expect(
+        (mockUsersService as any).getRolesByIds.mock.calls[0][0],
+      ).toHaveLength(5000);
+    });
+
+    it('lists nobody as eligible when no user ids are sent', async () => {
+      mockNotificationModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([
+            {
+              roles: [],
+              recipients: [],
+              received: [],
+              toObject: () => ({ _id: 'n1' }),
+            },
+          ]),
         }),
       });
 
-      await expect(service.getAllActiveForBot()).resolves.toBe(notifications);
+      await expect(service.getAllActiveForBot()).resolves.toEqual([
+        { _id: 'n1', eligibleUserIds: [] },
+      ]);
     });
   });
 });
