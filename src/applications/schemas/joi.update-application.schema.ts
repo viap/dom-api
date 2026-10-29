@@ -10,7 +10,7 @@ export const updateApplicationSchema = Joi.object({
     .valid(...Object.values(ApplicationStatus))
     .optional(),
 
-  assignedTo: joiObjectId.optional(),
+  assignedTo: joiObjectId.allow(null).optional(),
 
   source: Joi.object({
     entityType: Joi.string()

@@ -1,5 +1,16 @@
 # Release Notes
 
+## 2026-10-29
+
+- `PATCH /applications/:id` keeps sparse top-level updates, while a supplied
+  `payload` remains a full replacement.
+- Program/Event target changes derive canonical domain and source metadata;
+  explicit conflicting domain or source values are rejected.
+- Payload-backed Program, Event, and Person resolution replaces stale stored
+  source identity while preserving UTM metadata.
+- Existing targetless legacy Program/Event records remain editable without a
+  forced repair migration, and unchanged targets are not refetched.
+
 ## 2026-05-23
 
 - `pages` now include `isTitleVisible` with default `true`.

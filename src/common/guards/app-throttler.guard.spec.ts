@@ -67,6 +67,17 @@ describe('AppThrottlerGuard', () => {
     await expect(tracker({ body: body('guess') })).resolves.toBe('ip:10.0.0.1');
   });
 
+  it('tracks application reply and thread routes by telegramUserId', async () => {
+    await expect(
+      tracker({
+        body: {
+          apiClient: { name: 'domBot', password: 'bot-secret' },
+          telegramUserId: '42',
+        },
+      }),
+    ).resolves.toBe('telegram:42');
+  });
+
   describe('shouldSkip', () => {
     const context = (
       method: string,

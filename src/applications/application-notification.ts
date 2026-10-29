@@ -3,6 +3,7 @@ import { ApplicationFormType } from './enums/application-form-type.enum';
 const MAX_DISPLAY_VALUE_CODE_POINTS = 300;
 const HEADER_PREFIX = 'Новая заявка с сайта: ';
 const LINK_LABEL = 'Открыть заявку';
+const REPLY_HEADER = 'Новый ответ по заявке';
 
 const FORM_TYPE_LABELS: Record<ApplicationFormType, string> = {
   [ApplicationFormType.General]: 'Общее обращение',
@@ -11,6 +12,7 @@ const FORM_TYPE_LABELS: Record<ApplicationFormType, string> = {
   [ApplicationFormType.EventRegistration]: 'Запись на мероприятие',
   [ApplicationFormType.CorporateTraining]: 'Корпоративное обучение',
   [ApplicationFormType.SpecialistRequest]: 'Подбор специалиста',
+  [ApplicationFormType.Supervision]: 'Супервизия',
 };
 
 export interface ApplicationNotificationInput {
@@ -87,6 +89,27 @@ export function formatApplicationNotification(
       {
         type: 'text_link',
         offset: applicationLinkOffset,
+        length: LINK_LABEL.length,
+        url: input.applicationUrl,
+      },
+    ],
+  };
+}
+
+export function formatApplicationReplyNotification(input: {
+  applicantName: string;
+  applicationUrl: string;
+}): FormattedApplicationNotification {
+  const message = `${REPLY_HEADER}\nИмя: ${normalizeNotificationDisplayValue(
+    input.applicantName,
+  )}\n\n${LINK_LABEL}`;
+
+  return {
+    message,
+    messageEntities: [
+      {
+        type: 'text_link',
+        offset: message.length - LINK_LABEL.length,
         length: LINK_LABEL.length,
         url: input.applicationUrl,
       },

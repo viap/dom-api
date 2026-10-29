@@ -2034,12 +2034,15 @@ Request:
 }
 ```
 
-Request (optional `domainId` override):
+Request (move an Event application to another target; domain is derived):
 
 ```json
 {
-  "domainId": "661000000000000000000003",
-  "status": "in_review"
+  "payload": {
+    "eventId": "661600000000000000000002",
+    "ticketCount": 1,
+    "comment": "Please confirm by email"
+  }
 }
 ```
 
@@ -2052,7 +2055,7 @@ Response:
   "formType": "event_registration",
   "status": "in_review",
   "source": {
-    "entityType": "events",
+    "entityType": "event",
     "entityId": "661600000000000000000002",
     "utm": {
       "source": "instagram",
@@ -2070,6 +2073,7 @@ Response:
     ]
   },
   "payload": {
+    "eventId": "661600000000000000000002",
     "ticketCount": 1,
     "comment": "Please confirm by email"
   },

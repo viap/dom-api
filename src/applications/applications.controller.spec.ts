@@ -13,6 +13,7 @@ describe('ApplicationsController', () => {
   beforeEach(() => {
     controller = new ApplicationsController({
       create: jest.fn(),
+      createFromPublicWeb: jest.fn(),
       findAll: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),

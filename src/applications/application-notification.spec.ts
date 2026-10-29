@@ -2,6 +2,7 @@ import { ApplicationFormType } from './enums/application-form-type.enum';
 import {
   buildApplicationAdminUrl,
   formatApplicationNotification,
+  formatApplicationReplyNotification,
   normalizeNotificationDisplayValue,
 } from './application-notification';
 
@@ -13,6 +14,7 @@ describe('application notification formatting', () => {
     [ApplicationFormType.EventRegistration]: 'Запись на мероприятие',
     [ApplicationFormType.CorporateTraining]: 'Корпоративное обучение',
     [ApplicationFormType.SpecialistRequest]: 'Подбор специалиста',
+    [ApplicationFormType.Supervision]: 'Супервизия',
   };
 
   it.each(Object.values(ApplicationFormType))(
@@ -137,5 +139,26 @@ describe('application notification formatting', () => {
     ).toBe(
       'https://psydom.org/ru/admin/applications?applicationId=507f1f77bcf86cd799439031',
     );
+  });
+
+  it('formats a reply notification without message or contact content', () => {
+    const formatted = formatApplicationReplyNotification({
+      applicantName: 'Anna',
+      applicationUrl:
+        'https://psydom.org/ru/admin/applications?applicationId=507f1f77bcf86cd799439031',
+    });
+
+    expect(formatted.message).toBe(
+      'Новый ответ по заявке\nИмя: Anna\n\nОткрыть заявку',
+    );
+    expect(formatted.message).not.toContain('Applicant reply');
+    expect(formatted.messageEntities).toEqual([
+      {
+        type: 'text_link',
+        offset: formatted.message.lastIndexOf('Открыть заявку'),
+        length: 'Открыть заявку'.length,
+        url: 'https://psydom.org/ru/admin/applications?applicationId=507f1f77bcf86cd799439031',
+      },
+    ]);
   });
 });

@@ -60,12 +60,16 @@ export class AppThrottlerGuard extends ThrottlerGuard {
       }
     }
 
-    const telegramId = req.body?.telegram?.id;
+    const telegramId = req.body?.telegramUserId ?? req.body?.telegram?.id;
     if (
       typeof telegramId === 'string' &&
       isTrustedApiClient(req.body?.apiClient, 'BOT')
     ) {
       return `telegram:${telegramId}`;
+    }
+
+    if (isTrustedApiClient(req.body?.apiClient, 'BOT')) {
+      return `bot:${String(req.body.apiClient.name)}`;
     }
 
     return `ip:${getClientIp(req)}`;

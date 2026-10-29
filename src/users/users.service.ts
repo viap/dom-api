@@ -144,6 +144,21 @@ export class UsersService {
     return legacyUser;
   }
 
+  async findTelegramLoginOwnerId(telegramId: string): Promise<string | null> {
+    const normalizedTelegramId = telegramId?.trim();
+    if (!/^\d{1,20}$/.test(normalizedTelegramId)) {
+      return null;
+    }
+
+    const owner = await this.userModel
+      .findOne({ telegramId: normalizedTelegramId })
+      .select('_id')
+      .lean()
+      .exec();
+
+    return owner?._id?.toString() || null;
+  }
+
   async getByLogin(login: string): Promise<UserDocument> {
     const sanitizedLogin = sanitizeObject(login);
     if (!sanitizedLogin || typeof sanitizedLogin !== 'string') {

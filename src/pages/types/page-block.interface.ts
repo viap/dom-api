@@ -199,6 +199,7 @@ export interface GalleryBlock extends PageBlockBase {
 export interface ApplicationFormBlock extends PageBlockBase {
   type: PageBlockType.ApplicationForm;
   applicationType: ApplicationFormType;
+  supervisionBothFormatsAvailable?: boolean;
   successMessage?: string;
   buttonLabel?: string;
 }

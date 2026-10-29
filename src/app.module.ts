@@ -30,6 +30,7 @@ import { TherapyRequestsModule } from './therapy-requests/therapy-requests.modul
 import { TherapySessionsModule } from './therapy-sessions/therapy-sessions.module';
 import { UsersModule } from './users/users.module';
 import { cwd } from 'process';
+import { ApplicationMessagingPolicyModule } from './common/application-messaging/application-messaging-policy.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { cwd } from 'process';
       envFilePath: cwd() + '/config/.env',
       isGlobal: true,
     }),
+    ApplicationMessagingPolicyModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60000,

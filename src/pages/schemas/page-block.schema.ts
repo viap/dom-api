@@ -258,6 +258,7 @@ export const applicationFormBlockSchema = new mongoose.Schema(
       required: true,
       enum: Object.values(ApplicationFormType),
     },
+    supervisionBothFormatsAvailable: { type: Boolean },
     successMessage: { type: String },
     buttonLabel: { type: String },
   },
