@@ -17,6 +17,7 @@ import { ApplicationMessagesController } from './application-messages.controller
 import { ApplicationMessagesService } from './application-messages.service';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
+import { ApplicationContextResolver } from './application-context-resolver.service';
 
 @Module({
   imports: [
@@ -34,7 +35,11 @@ import { ApplicationsService } from './applications.service';
     TelegramContactModule,
   ],
   controllers: [ApplicationsController, ApplicationMessagesController],
-  providers: [ApplicationsService, ApplicationMessagesService],
+  providers: [
+    ApplicationContextResolver,
+    ApplicationsService,
+    ApplicationMessagesService,
+  ],
   exports: [ApplicationsService],
 })
 export class ApplicationsModule {}

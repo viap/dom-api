@@ -12,6 +12,8 @@ require_env \
   WEBSOCKET_PORT \
   CORS_ORIGINS \
   PUBLIC_WEB_URL \
+  TELEGRAM_BOT_USERNAME \
+  APPLICATION_MESSAGING_ENABLED \
   JWT_SECRET \
   BOT_CLIENT_NAME \
   BOT_CLIENT_PASSWORD \
@@ -38,6 +40,16 @@ npm ci --omit=dev
 echo "Validating CORS_ORIGINS format..."
 validate_cors_origins "${CORS_ORIGINS}"
 echo "Configured CORS_ORIGINS: ${CORS_ORIGINS}"
+
+if [[ ! "${TELEGRAM_BOT_USERNAME}" =~ ^[A-Za-z0-9_]{5,32}$ ]]; then
+  echo "TELEGRAM_BOT_USERNAME must be a valid Telegram username without @" >&2
+  exit 1
+fi
+
+if [[ "${APPLICATION_MESSAGING_ENABLED}" != "true" && "${APPLICATION_MESSAGING_ENABLED}" != "false" ]]; then
+  echo "APPLICATION_MESSAGING_ENABLED must be explicitly set to true or false" >&2
+  exit 1
+fi
 
 pm2_cutover_domapi
 pm2 status

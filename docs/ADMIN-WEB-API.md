@@ -1047,11 +1047,21 @@ If mapped domain is missing or inactive, request fails with `Active domain not f
 
 ### Update payload notes (`PATCH /applications/:id`)
 
-- `domainId` is optional.
-- If `domainId` is provided, backend validates it as an active domain and uses it.
-- If `domainId` is omitted:
-  - existing `domainId` is kept when present;
-  - fallback mapping is applied only for records that currently have no `domainId`.
+- Top-level fields are sparse, but a supplied `payload` is a full replacement.
+- Program and Event replacements retain their current target only when the
+  replacement includes the same `programId` or `eventId`. Removing the target
+  from a valid record is rejected. A legacy record that already lacks its target
+  may save another targetless replacement without an automatic repair migration.
+- An unchanged normalized target does not cause a target refetch. Moving a target
+  re-derives canonical `source` and, for Program/Event, canonical `domainId`.
+- Whenever a payload-backed Program, Event, or Person target is resolved, its
+  canonical identity replaces any stored source identity. Existing UTM metadata
+  is preserved. For example, a Partnership payload that gains `personId`
+  replaces a stored Partner source with the canonical Person source.
+- `domainId` is optional. For non-target-derived forms, an omitted value preserves
+  the stored domain. Program/Event moves must omit `domainId` or provide the new
+  target's domain; echoing the old domain is an explicit conflict and is rejected.
+- Explicit conflicting `source` or `domainId` values are always rejected.
 
 ### Frontend use
 

@@ -29,6 +29,7 @@ import {
   receiveApplicationReplySchema,
   reportApplicationMessageSchema,
 } from './schemas/joi.application-message.schema';
+import { ApiClient } from '@/api-clients/decorators/api-client.decorator';
 
 @Controller()
 export class ApplicationMessagesController {
@@ -60,6 +61,7 @@ export class ApplicationMessagesController {
 
   @Post('application-messages/claim')
   @Public()
+  @ApiClient('BOT')
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   claim(
@@ -71,6 +73,7 @@ export class ApplicationMessagesController {
 
   @Post('application-messages/report')
   @Public()
+  @ApiClient('BOT')
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   report(
@@ -82,7 +85,8 @@ export class ApplicationMessagesController {
 
   @Post('application-messages/threads')
   @Public()
-  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  @ApiClient('BOT')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   listThreads(
     @Body(new JoiValidationPipe(listApplicationMessageThreadsSchema))
@@ -93,7 +97,8 @@ export class ApplicationMessagesController {
 
   @Post('application-messages/reply')
   @Public()
-  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  @ApiClient('BOT')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   receiveReply(
     @Body(new JoiValidationPipe(receiveApplicationReplySchema))

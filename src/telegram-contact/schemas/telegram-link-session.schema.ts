@@ -31,6 +31,9 @@ export class TelegramLinkSession {
   @Prop()
   consumedAt?: Date;
 
+  @Prop()
+  confirmationClaimedAt?: Date;
+
   @Prop({ required: true })
   expiresAt: Date;
 }

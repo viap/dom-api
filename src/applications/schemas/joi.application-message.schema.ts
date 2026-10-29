@@ -9,6 +9,7 @@ import {
   ReportApplicationMessageDto,
 } from '../dto/application-message.dto';
 import { ApplicationMessageStatus } from '../enums/application-message.enum';
+import { APPLICATION_MESSAGE_MAX_LENGTH } from '@/common/application-messaging/application-messaging-policy.service';
 
 const telegramIdSchema = Joi.string()
   .pattern(/^-?\d{1,20}$/)
@@ -20,7 +21,11 @@ export const createApplicationMessageSchema =
     clientMessageId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .required(),
-    text: Joi.string().trim().min(1).max(3500).required(),
+    text: Joi.string()
+      .trim()
+      .min(1)
+      .max(APPLICATION_MESSAGE_MAX_LENGTH)
+      .required(),
   });
 
 export const claimApplicationMessageSchema =
@@ -72,5 +77,9 @@ export const receiveApplicationReplySchema =
     telegramMessageId: telegramMessageIdSchema,
     replyToTelegramMessageId: telegramMessageIdSchema.optional(),
     applicationId: joiObjectId.optional(),
-    text: Joi.string().trim().max(3500).allow('').optional(),
+    text: Joi.string()
+      .trim()
+      .max(APPLICATION_MESSAGE_MAX_LENGTH)
+      .allow('')
+      .optional(),
   }).xor('replyToTelegramMessageId', 'applicationId');

@@ -12,6 +12,11 @@ export class ConfirmTelegramLinkDto {
   telegram: TelegramUserDto;
 }
 
+export class CancelTelegramLinkDto {
+  apiClient: ApiClientDto;
+  startToken: string;
+}
+
 export class ExchangeTelegramLinkDto {
   apiClient: ApiClientDto;
   browserProof: string;

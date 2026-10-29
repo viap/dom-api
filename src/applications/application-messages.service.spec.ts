@@ -48,6 +48,7 @@ describe('ApplicationMessagesService', () => {
   let telegramContactService: Record<string, jest.Mock>;
   let usersService: Record<string, jest.Mock>;
   let notificationsService: Record<string, jest.Mock>;
+  let messagingPolicy: { enabled: boolean; canUseAsSoleContact: jest.Mock };
   let service: ApplicationMessagesService;
 
   beforeEach(() => {
@@ -73,6 +74,10 @@ describe('ApplicationMessagesService', () => {
       getAllByRole: jest.fn(),
     };
     notificationsService = { create: jest.fn() };
+    messagingPolicy = {
+      enabled: true,
+      canUseAsSoleContact: jest.fn().mockReturnValue(true),
+    };
     service = new ApplicationMessagesService(
       messageModel as any,
       applicationModel as any,
@@ -86,6 +91,7 @@ describe('ApplicationMessagesService', () => {
             : 'https://www.example.test',
         ),
       } as any,
+      messagingPolicy as any,
     );
   });
 
@@ -162,6 +168,220 @@ describe('ApplicationMessagesService', () => {
       privateChatId: '42',
       text: 'DOM — Editor Jane\n\nHello',
     });
+    expect(messageModel.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ApplicationMessageStatus.Sending,
+        claimedAt: { $lt: expect.any(Date) },
+      }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: ApplicationMessageStatus.Unknown,
+          deliveryErrorCode: 'delivery_lease_expired',
+        }),
+      }),
+    );
+  });
+
+  it('cleans queued and leased messages only when messaging is explicitly disabled', async () => {
+    messagingPolicy.enabled = false;
+    messageModel.updateMany.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+    });
+
+    await service.onModuleInit();
+
+    expect(messageModel.updateMany).toHaveBeenNthCalledWith(
+      1,
+      { status: ApplicationMessageStatus.Pending },
+      {
+        $set: {
+          status: ApplicationMessageStatus.Failed,
+          deliveryErrorCode: 'messaging_disabled',
+        },
+      },
+    );
+    expect(messageModel.updateMany).toHaveBeenNthCalledWith(
+      2,
+      { status: ApplicationMessageStatus.Sending },
+      {
+        $set: {
+          status: ApplicationMessageStatus.Unknown,
+          deliveryErrorCode: 'messaging_disabled_during_delivery',
+        },
+      },
+    );
+  });
+
+  it('accepts an authoritative late sent report while messaging is disabled', async () => {
+    messagingPolicy.enabled = false;
+    const existing = {
+      ...outbound,
+      status: ApplicationMessageStatus.Unknown,
+      deliveryErrorCode: 'messaging_disabled_during_delivery',
+    };
+    const updated = {
+      ...existing,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+      sentAt: now,
+      deliveryErrorCode: undefined,
+    };
+    messageModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(existing),
+    });
+    messageModel.findOneAndUpdate.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(updated),
+    });
+
+    const result = await service.reportDelivery({
+      apiClient: { name: 'domBot', password: 'bot-secret' },
+      messageId,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+    });
+
+    expect(result.status).toBe(ApplicationMessageStatus.Sent);
+    expect(messageModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: messageId, status: { $in: [ApplicationMessageStatus.Unknown] } },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: ApplicationMessageStatus.Sent,
+          telegramMessageId: 101,
+        }),
+        $unset: expect.objectContaining({ deliveryErrorCode: 1 }),
+      }),
+      { new: true },
+    );
+  });
+
+  it('treats repeated unknown reports as idempotent diagnostic updates', async () => {
+    const existing = {
+      ...outbound,
+      status: ApplicationMessageStatus.Unknown,
+      deliveryErrorCode: 'delivery_transport_unknown',
+    };
+    messageModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(existing),
+    });
+
+    const result = await service.reportDelivery({
+      apiClient: { name: 'domBot', password: 'bot-secret' },
+      messageId,
+      status: ApplicationMessageStatus.Unknown,
+      errorCode: 'delivery_lease_expired',
+    });
+
+    expect(result.status).toBe(ApplicationMessageStatus.Unknown);
+    expect(messageModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps contradictory terminal delivery reports rejected', async () => {
+    messageModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({
+        ...outbound,
+        status: ApplicationMessageStatus.Sent,
+        telegramMessageId: 101,
+      }),
+    });
+
+    await expect(
+      service.reportDelivery({
+        apiClient: { name: 'domBot', password: 'bot-secret' },
+        messageId,
+        status: ApplicationMessageStatus.Failed,
+        errorCode: 'telegram_403',
+      }),
+    ).rejects.toThrow('terminal');
+  });
+
+  it('retries a Sending to Unknown race and records the late sent report', async () => {
+    const sending = {
+      ...outbound,
+      status: ApplicationMessageStatus.Sending,
+    };
+    const unknown = {
+      ...outbound,
+      status: ApplicationMessageStatus.Unknown,
+      deliveryErrorCode: 'delivery_lease_expired',
+    };
+    const sent = {
+      ...unknown,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+      sentAt: now,
+    };
+    messageModel.findById
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(sending) })
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(unknown) });
+    messageModel.findOneAndUpdate
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(sent) });
+
+    const result = await service.reportDelivery({
+      apiClient: { name: 'domBot', password: 'bot-secret' },
+      messageId,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+    });
+
+    expect(result.status).toBe(ApplicationMessageStatus.Sent);
+    expect(messageModel.findById).toHaveBeenCalledTimes(2);
+    expect(messageModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts an identical terminal report applied during the race', async () => {
+    const sending = {
+      ...outbound,
+      status: ApplicationMessageStatus.Sending,
+    };
+    const sent = {
+      ...outbound,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+      sentAt: now,
+    };
+    messageModel.findById
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(sending) })
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(sent) });
+    messageModel.findOneAndUpdate.mockReturnValueOnce({
+      exec: jest.fn().mockResolvedValue(null),
+    });
+
+    const result = await service.reportDelivery({
+      apiClient: { name: 'domBot', password: 'bot-secret' },
+      messageId,
+      status: ApplicationMessageStatus.Sent,
+      telegramMessageId: 101,
+    });
+
+    expect(result.status).toBe(ApplicationMessageStatus.Sent);
+    expect(messageModel.findById).toHaveBeenCalledTimes(2);
+    expect(messageModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds delivery report race recovery to one retry', async () => {
+    const sending = {
+      ...outbound,
+      status: ApplicationMessageStatus.Sending,
+    };
+    messageModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(sending),
+    });
+    messageModel.findOneAndUpdate.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(
+      service.reportDelivery({
+        apiClient: { name: 'domBot', password: 'bot-secret' },
+        messageId,
+        status: ApplicationMessageStatus.Sent,
+        telegramMessageId: 101,
+      }),
+    ).rejects.toThrow('report raced');
+
+    expect(messageModel.findById).toHaveBeenCalledTimes(2);
+    expect(messageModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
   });
 
   it('lists only started threads owned by the verified Telegram identity', async () => {

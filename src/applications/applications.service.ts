@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -15,13 +16,8 @@ import {
   safeFindParams,
   validateObjectId,
 } from '@/common/utils/mongo-sanitizer';
-import { DomainCode } from '@/domains/enums/domain-code.enum';
-import { DomainsService } from '@/domains/domains.service';
-import { EventsService } from '@/events/events.service';
-import { PartnersService } from '@/partners/partners.service';
-import { PeopleService } from '@/people/people.service';
-import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
+import { DomainsService } from '@/domains/domains.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
 import { Role } from '@/roles/enums/roles.enum';
@@ -39,21 +35,17 @@ import {
 } from './types/preferred-contact.type';
 import { TelegramContactService } from '@/telegram-contact/telegram-contact.service';
 import { SocialNetworks } from '@/common/enums/social-networks.enum';
+import { ApplicationMessagingPolicyService } from '@/common/application-messaging/application-messaging-policy.service';
 import {
   buildApplicationAdminUrl,
   formatApplicationNotification,
-  normalizeNotificationDisplayValue,
 } from './application-notification';
-
-const FORM_TYPE_DOMAIN_CODE_MAP: Record<ApplicationFormType, DomainCode> = {
-  [ApplicationFormType.Partnership]: DomainCode.PsychCenter,
-  [ApplicationFormType.ProgramEnrollment]: DomainCode.Academy,
-  [ApplicationFormType.EventRegistration]: DomainCode.PsychCenter,
-  [ApplicationFormType.CorporateTraining]: DomainCode.PsychCenter,
-  [ApplicationFormType.SpecialistRequest]: DomainCode.PsychCenter,
-  [ApplicationFormType.Supervision]: DomainCode.PsychCenter,
-  [ApplicationFormType.General]: DomainCode.PsychCenter,
-};
+import {
+  ApplicationContextResolver,
+  ApplicationSourceContext,
+  PAYLOAD_TARGET_KEY,
+  toApplicationIdString,
+} from './application-context-resolver.service';
 
 @Injectable()
 export class ApplicationsService {
@@ -63,15 +55,13 @@ export class ApplicationsService {
   constructor(
     @InjectModel(Application.name)
     private applicationModel: Model<ApplicationDocument>,
-    private domainsService: DomainsService,
-    private programsService: ProgramsService,
-    private eventsService: EventsService,
-    private partnersService: PartnersService,
-    private peopleService: PeopleService,
+    private readonly contextResolver: ApplicationContextResolver,
+    private readonly domainsService: DomainsService,
     private usersService: UsersService,
     private notificationsService: NotificationsService,
     private telegramContactService: TelegramContactService,
     configService: ConfigService,
+    private readonly messagingPolicy: ApplicationMessagingPolicyService,
   ) {
     this.publicWebOrigin = parsePublicWebUrl(
       configService.get<string>('PUBLIC_WEB_URL'),
@@ -97,7 +87,6 @@ export class ApplicationsService {
   async createFromPublicWeb(
     dto: CreatePublicApplicationDto,
   ): Promise<ApplicationDocument> {
-    this.telegramContactService.assertTrustedWebClient(dto.apiClient);
     const { application } = dto;
 
     if (
@@ -109,13 +98,25 @@ export class ApplicationsService {
     }
 
     if (!dto.contactSessionToken) {
-      throw new BadRequestException('Telegram contact session is required');
+      this.throwContactUnavailable('Telegram contact session is required');
     }
 
-    const { identity, summary } =
-      await this.telegramContactService.resolveSession(dto.contactSessionToken);
-    if (!summary.username) {
-      throw new BadRequestException(
+    let resolvedContact: Awaited<
+      ReturnType<TelegramContactService['resolveSession']>
+    >;
+    try {
+      resolvedContact = await this.telegramContactService.resolveSession(
+        dto.contactSessionToken,
+      );
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        this.throwContactUnavailable('Telegram contact session is invalid');
+      }
+      throw error;
+    }
+    const { identity, summary } = resolvedContact;
+    if (!this.messagingPolicy.canUseAsSoleContact(summary.username)) {
+      this.throwContactUnavailable(
         'A Telegram account without a username cannot be the sole contact',
       );
     }
@@ -123,7 +124,7 @@ export class ApplicationsService {
     const preferredContact: PreferredContact = {
       type: PreferredContactType.TelegramIdentity,
       identityId: identity._id.toString(),
-      usernameSnapshot: summary.username,
+      ...(summary.username ? { usernameSnapshot: summary.username } : {}),
       verifiedAt: summary.verifiedAt,
     };
 
@@ -136,14 +137,26 @@ export class ApplicationsService {
     });
   }
 
+  private throwContactUnavailable(message: string): never {
+    throw new BadRequestException({
+      statusCode: 400,
+      code: 'contact_unavailable',
+      message,
+    });
+  }
+
   private async createResolved(
     createApplicationDto: CreateApplicationDto,
   ): Promise<ApplicationDocument> {
-    const domainId = await this.resolveEffectiveDomainId({
+    const context = await this.contextResolver.resolve({
       domainId: createApplicationDto.domainId,
       formType: createApplicationDto.formType,
+      source: createApplicationDto.source,
+      payload: createApplicationDto.payload as unknown as Record<
+        string,
+        unknown
+      >,
     });
-    await this.validateDomainAndRefs({ ...createApplicationDto, domainId });
 
     const applicant =
       createApplicationDto.schemaVersion === 3
@@ -153,10 +166,11 @@ export class ApplicationsService {
     const application = new this.applicationModel({
       ...createApplicationDto,
       applicant,
-      domainId,
+      domainId: context.domainId,
+      ...(context.source ? { source: context.source } : {}),
     });
     const savedApplication = await application.save();
-    await this.createAdminNotification(savedApplication);
+    await this.createAdminNotification(savedApplication, context.targetTitle);
     return savedApplication;
   }
 
@@ -214,19 +228,12 @@ export class ApplicationsService {
 
   private async createAdminNotification(
     application: ApplicationDocument,
+    targetTitle: string | null,
   ): Promise<void> {
     const applicationId = application._id.toString();
-    let stage = 'target-title';
+    let stage = 'format';
 
     try {
-      let targetTitle: string | null = null;
-      try {
-        targetTitle = await this.getNotificationTargetTitle(application);
-      } catch (error) {
-        this.logNotificationFailure(applicationId, stage, error, 'warn');
-      }
-
-      stage = 'format';
       const applicationUrl = buildApplicationAdminUrl(
         this.publicWebOrigin,
         applicationId,
@@ -265,26 +272,6 @@ export class ApplicationsService {
     }
   }
 
-  private async getNotificationTargetTitle(
-    application: ApplicationDocument,
-  ): Promise<string | null> {
-    if (application.formType === ApplicationFormType.ProgramEnrollment) {
-      const programId = application.payload?.programId;
-      return typeof programId === 'string'
-        ? this.programsService.getNotificationTitle(programId)
-        : null;
-    }
-
-    if (application.formType === ApplicationFormType.EventRegistration) {
-      const eventId = application.payload?.eventId;
-      return typeof eventId === 'string'
-        ? this.eventsService.getNotificationTitle(eventId)
-        : null;
-    }
-
-    return null;
-  }
-
   private logNotificationFailure(
     applicationId: string,
     stage: string,
@@ -292,16 +279,11 @@ export class ApplicationsService {
     level: 'error' | 'warn',
   ): void {
     const reason = error instanceof Error ? error.name : typeof error;
-    const detail =
-      stage === 'target-title' && error instanceof Error
-        ? normalizeNotificationDisplayValue(error.message)
-        : '';
     const message = [
       'Application notification failed',
       `applicationId=${applicationId}`,
       `stage=${stage}`,
       `reason=${reason}`,
-      detail ? `detail=${JSON.stringify(detail)}` : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -376,100 +358,92 @@ export class ApplicationsService {
       throw new NotFoundException('Application not found');
     }
 
-    const hasDomainIdField = Object.prototype.hasOwnProperty.call(
-      updateApplicationDto,
-      'domainId',
-    );
-    const existingDomainId = existingApplication.domainId?.toString();
-    const shouldResolveFallbackDomain = !hasDomainIdField && !existingDomainId;
+    const updateData: Record<string, unknown> = { ...updateApplicationDto };
+    for (const [key, value] of Object.entries(updateData)) {
+      if (value === undefined) {
+        delete updateData[key];
+      }
+    }
 
-    let resolvedDomainId: string | undefined;
-    if (hasDomainIdField && typeof updateApplicationDto.domainId === 'string') {
-      await this.domainsService.getActiveById(updateApplicationDto.domainId);
-      resolvedDomainId = await this.resolveEffectiveDomainId({
-        domainId: updateApplicationDto.domainId,
-        formType: existingApplication.formType as ApplicationFormType,
+    const hasDomainUpdate = typeof updateApplicationDto.domainId === 'string';
+    const hasSourceUpdate = updateApplicationDto.source !== undefined;
+    const hasPayloadUpdate = updateApplicationDto.payload !== undefined;
+    const existingSource = this.normalizeSource(
+      existingApplication.source as unknown,
+    );
+    const effectiveSource = hasSourceUpdate
+      ? this.mergeSource(existingSource, updateApplicationDto.source)
+      : existingSource;
+    const existingPayload = this.toRecord(existingApplication.payload);
+    const replacementPayload = hasPayloadUpdate
+      ? this.toRecord(updateApplicationDto.payload)
+      : existingPayload;
+    const formType = existingApplication.formType as ApplicationFormType;
+    const existingDomainId = toApplicationIdString(
+      existingApplication.domainId,
+    );
+    const targetKey = PAYLOAD_TARGET_KEY[formType];
+    // A supplied payload is a full replacement. Normalized target comparison avoids
+    // refetching unchanged targets for payload-only updates. When context resolution
+    // is needed, any payload target replaces inherited source identity canonically.
+    const payloadTargetChanged =
+      toApplicationIdString(existingPayload[targetKey]) !==
+      toApplicationIdString(replacementPayload[targetKey]);
+    const changesTargetContext =
+      (hasDomainUpdate && updateApplicationDto.domainId !== existingDomainId) ||
+      this.hasSourceIdentityChanged(existingSource, effectiveSource) ||
+      payloadTargetChanged;
+
+    let unsetResolvedSource = false;
+
+    if (changesTargetContext) {
+      const sourceForResolution =
+        payloadTargetChanged ||
+        toApplicationIdString(replacementPayload[targetKey])
+          ? this.buildSourceForResolvedTarget(
+              effectiveSource,
+              updateApplicationDto.source,
+            )
+          : effectiveSource;
+      const context = await this.contextResolver.resolve({
+        formType,
+        domainId: hasDomainUpdate ? updateApplicationDto.domainId : undefined,
+        fallbackDomainId: existingDomainId,
+        source: sourceForResolution,
+        payload: replacementPayload,
       });
-    } else if (shouldResolveFallbackDomain) {
-      resolvedDomainId = await this.resolveEffectiveDomainId({
-        formType: existingApplication.formType as ApplicationFormType,
-      });
+
+      updateData.domainId = context.domainId;
+      if (context.source) {
+        updateData.source = context.source;
+      } else {
+        delete updateData.source;
+        unsetResolvedSource = true;
+      }
+      if (hasPayloadUpdate) {
+        updateData.payload = replacementPayload;
+      }
+    } else {
+      if (hasSourceUpdate) {
+        updateData.source = effectiveSource;
+      }
+      if (hasPayloadUpdate) {
+        updateData.payload = replacementPayload;
+      }
     }
 
     await this.validateUpdateRefs(updateApplicationDto);
 
-    const updateData: Record<string, unknown> = { ...updateApplicationDto };
-    if (hasDomainIdField && updateApplicationDto.domainId === undefined) {
-      delete updateData.domainId;
-    }
-    if (resolvedDomainId) {
-      updateData.domainId = resolvedDomainId;
-    }
-
+    const mongoUpdate = {
+      $set: updateData,
+      ...(unsetResolvedSource ? { $unset: { source: 1 } } : {}),
+    };
     const application = await this.applicationModel
-      .findByIdAndUpdate(validId, updateData, { new: true })
+      .findByIdAndUpdate(validId, mongoUpdate, { new: true })
       .lean()
       .exec();
 
     return application as ApplicationDocument;
-  }
-
-  private async resolveEffectiveDomainId(data: {
-    formType: ApplicationFormType;
-    domainId?: string;
-  }): Promise<string> {
-    if (typeof data.domainId === 'string') {
-      return data.domainId;
-    }
-
-    const mappedCode = FORM_TYPE_DOMAIN_CODE_MAP[data.formType];
-    if (!mappedCode) {
-      throw new BadRequestException(
-        `No domain mapping defined for formType: ${data.formType}`,
-      );
-    }
-    const mappedDomain = await this.domainsService.getActiveByCode(mappedCode);
-    return mappedDomain._id.toString();
-  }
-
-  private async validateDomainAndRefs(data: {
-    domainId: string;
-    source?: { entityType?: string; entityId?: string };
-    payload?: object;
-  }): Promise<void> {
-    await this.domainsService.getActiveById(data.domainId);
-    await this.validateEntityReference(
-      data.source?.entityType,
-      data.source?.entityId,
-    );
-    await this.validatePayloadReferences(data.payload);
-  }
-
-  private async validatePayloadReferences(payload?: object): Promise<void> {
-    if (!payload) {
-      return;
-    }
-
-    if ('programId' in payload && typeof payload.programId === 'string') {
-      const exists = await this.programsService.exists(payload.programId);
-      if (!exists) {
-        throw new BadRequestException('Referenced program not found');
-      }
-    }
-
-    if ('eventId' in payload && typeof payload.eventId === 'string') {
-      const exists = await this.eventsService.exists(payload.eventId);
-      if (!exists) {
-        throw new BadRequestException('Referenced event not found');
-      }
-    }
-
-    if ('personId' in payload && typeof payload.personId === 'string') {
-      const exists = await this.peopleService.exists(payload.personId);
-      if (!exists) {
-        throw new BadRequestException('Referenced person not found');
-      }
-    }
   }
 
   private async validateUpdateRefs(data: UpdateApplicationDto): Promise<void> {
@@ -488,60 +462,80 @@ export class ApplicationsService {
         }
       }
     }
-
-    await this.validateEntityReference(
-      data.source?.entityType,
-      data.source?.entityId,
-    );
-    await this.validatePayloadReferences(data.payload);
   }
 
-  private async validateEntityReference(
-    entityType?: string,
-    entityId?: string,
-  ): Promise<void> {
-    if (!entityType && !entityId) {
-      return;
+  private normalizeSource(
+    value: unknown,
+  ): ApplicationSourceContext | undefined {
+    if (!value || typeof value !== 'object') {
+      return undefined;
     }
+    const source = value as Record<string, unknown>;
+    const entityId = toApplicationIdString(source.entityId);
+    const utm = this.toStringRecord(source.utm);
+    return {
+      ...(typeof source.entityType === 'string'
+        ? { entityType: source.entityType }
+        : {}),
+      ...(entityId ? { entityId } : {}),
+      ...(utm ? { utm } : {}),
+    };
+  }
 
-    if (!entityType || !entityId) {
-      throw new BadRequestException(
-        'source.entityType and source.entityId must be provided together',
-      );
+  private mergeSource(
+    existing: ApplicationSourceContext | undefined,
+    update: ApplicationSourceContext | undefined,
+  ): ApplicationSourceContext | undefined {
+    if (!update) {
+      return existing;
     }
+    return {
+      ...existing,
+      ...Object.fromEntries(
+        Object.entries(update).filter(([, value]) => value !== undefined),
+      ),
+    };
+  }
 
-    if (entityType === 'program') {
-      const exists = await this.programsService.exists(entityId);
-      if (!exists) {
-        throw new BadRequestException('Referenced program not found');
-      }
-      return;
+  private toRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object'
+      ? { ...(value as Record<string, unknown>) }
+      : {};
+  }
+
+  private hasSourceIdentityChanged(
+    existing: ApplicationSourceContext | undefined,
+    effective: ApplicationSourceContext | undefined,
+  ): boolean {
+    return (
+      existing?.entityType !== effective?.entityType ||
+      existing?.entityId !== effective?.entityId
+    );
+  }
+
+  private buildSourceForResolvedTarget(
+    effective: ApplicationSourceContext | undefined,
+    update: ApplicationSourceContext | undefined,
+  ): ApplicationSourceContext | undefined {
+    const source: ApplicationSourceContext = {
+      ...(typeof update?.entityType === 'string'
+        ? { entityType: update.entityType }
+        : {}),
+      ...(typeof update?.entityId === 'string'
+        ? { entityId: update.entityId }
+        : {}),
+      ...(effective?.utm ? { utm: effective.utm } : {}),
+    };
+    return Object.keys(source).length > 0 ? source : undefined;
+  }
+
+  private toStringRecord(value: unknown): Record<string, string> | undefined {
+    if (value instanceof Map) {
+      return Object.fromEntries(value) as Record<string, string>;
     }
-
-    if (entityType === 'event') {
-      const exists = await this.eventsService.exists(entityId);
-      if (!exists) {
-        throw new BadRequestException('Referenced event not found');
-      }
-      return;
+    if (!value || typeof value !== 'object') {
+      return undefined;
     }
-
-    if (entityType === 'partner') {
-      const exists = await this.partnersService.exists(entityId);
-      if (!exists) {
-        throw new BadRequestException('Referenced partner not found');
-      }
-      return;
-    }
-
-    if (entityType === 'person') {
-      const exists = await this.peopleService.exists(entityId);
-      if (!exists) {
-        throw new BadRequestException('Referenced person not found');
-      }
-      return;
-    }
-
-    throw new BadRequestException('Unsupported source entityType');
+    return { ...(value as Record<string, string>) };
   }
 }

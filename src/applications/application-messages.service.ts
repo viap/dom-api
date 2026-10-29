@@ -4,13 +4,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { isTrustedApiClient } from '@/auth/utils/client-ip';
+import { ApplicationMessagingPolicyService } from '@/common/application-messaging/application-messaging-policy.service';
 import { UserContext } from '@/common/user-context/user-context.interface';
 import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { parsePublicWebUrl } from '@/common/utils/web-origin';
@@ -115,9 +116,8 @@ function getInitialApplicationMessage(
 }
 
 @Injectable()
-export class ApplicationMessagesService {
+export class ApplicationMessagesService implements OnModuleInit {
   private readonly logger = new Logger(ApplicationMessagesService.name);
-  private readonly enabled: boolean;
   private readonly publicWebOrigin: string;
 
   constructor(
@@ -129,12 +129,39 @@ export class ApplicationMessagesService {
     private readonly usersService: UsersService,
     private readonly notificationsService: NotificationsService,
     configService: ConfigService,
+    private readonly messagingPolicy: ApplicationMessagingPolicyService,
   ) {
-    this.enabled =
-      configService.get<string>('APPLICATION_MESSAGING_ENABLED') === 'true';
     this.publicWebOrigin = parsePublicWebUrl(
       configService.get<string>('PUBLIC_WEB_URL'),
     );
+  }
+
+  async onModuleInit(): Promise<void> {
+    if (this.messagingPolicy.enabled) return;
+    await Promise.all([
+      this.messageModel
+        .updateMany(
+          { status: ApplicationMessageStatus.Pending },
+          {
+            $set: {
+              status: ApplicationMessageStatus.Failed,
+              deliveryErrorCode: 'messaging_disabled',
+            },
+          },
+        )
+        .exec(),
+      this.messageModel
+        .updateMany(
+          { status: ApplicationMessageStatus.Sending },
+          {
+            $set: {
+              status: ApplicationMessageStatus.Unknown,
+              deliveryErrorCode: 'messaging_disabled_during_delivery',
+            },
+          },
+        )
+        .exec(),
+    ]);
   }
 
   async getThread(applicationId: string) {
@@ -157,7 +184,7 @@ export class ApplicationMessagesService {
       .exec();
 
     return {
-      enabled: this.enabled,
+      enabled: this.messagingPolicy.enabled,
       available,
       ...(applicantDisplayName ? { applicantDisplayName } : {}),
       messages: messages.map((message) => this.toAdminMessage(message)),
@@ -232,9 +259,9 @@ export class ApplicationMessagesService {
     }
   }
 
-  async claimNext(dto: ClaimApplicationMessageDto) {
-    this.assertTrustedBot(dto.apiClient);
-    if (!this.enabled) return { enabled: false, message: null };
+  async claimNext(_dto: ClaimApplicationMessageDto) {
+    void _dto;
+    if (!this.messagingPolicy.enabled) return { enabled: false, message: null };
 
     const now = new Date();
     await this.messageModel
@@ -302,23 +329,46 @@ export class ApplicationMessagesService {
   }
 
   async reportDelivery(dto: ReportApplicationMessageDto) {
-    this.assertTrustedBot(dto.apiClient);
-    this.assertEnabled();
+    return this.reportDeliveryAttempt(dto, true);
+  }
+
+  private async reportDeliveryAttempt(
+    dto: ReportApplicationMessageDto,
+    retryOnRace: boolean,
+  ) {
     const messageId = validateObjectId(dto.messageId);
     if (!messageId) throw new NotFoundException('Invalid message ID');
 
     const existing = await this.messageModel.findById(messageId).exec();
     if (!existing) throw new NotFoundException('Application message not found');
+    if (existing.status === ApplicationMessageStatus.Sent) {
+      if (
+        dto.status === ApplicationMessageStatus.Sent &&
+        existing.telegramMessageId === dto.telegramMessageId
+      ) {
+        return this.toAdminMessage(existing);
+      }
+      throw new ConflictException('Application message delivery is terminal');
+    }
+    if (existing.status === ApplicationMessageStatus.Failed) {
+      if (
+        dto.status === ApplicationMessageStatus.Failed &&
+        existing.deliveryErrorCode === dto.errorCode
+      ) {
+        return this.toAdminMessage(existing);
+      }
+      throw new ConflictException('Application message delivery is terminal');
+    }
     if (
-      [
-        ApplicationMessageStatus.Sent,
-        ApplicationMessageStatus.Failed,
-        ApplicationMessageStatus.Unknown,
-      ].includes(existing.status)
+      existing.status === ApplicationMessageStatus.Unknown &&
+      dto.status === ApplicationMessageStatus.Unknown
     ) {
       return this.toAdminMessage(existing);
     }
-    if (existing.status !== ApplicationMessageStatus.Sending) {
+    if (
+      existing.status !== ApplicationMessageStatus.Sending &&
+      existing.status !== ApplicationMessageStatus.Unknown
+    ) {
       throw new ConflictException('Application message is not being delivered');
     }
 
@@ -330,20 +380,35 @@ export class ApplicationMessagesService {
       set.deliveryErrorCode = dto.errorCode;
     }
 
+    const unset: Record<string, 1> = {};
+    if (dto.status === ApplicationMessageStatus.Sent) {
+      unset.deliveryErrorCode = 1;
+    } else {
+      unset.telegramMessageId = 1;
+      unset.sentAt = 1;
+    }
     const updated = await this.messageModel
       .findOneAndUpdate(
-        { _id: messageId, status: ApplicationMessageStatus.Sending },
-        { $set: set },
+        {
+          _id: messageId,
+          status: { $in: [existing.status] },
+        },
+        { $set: set, $unset: unset },
         { new: true },
       )
       .exec();
-    return this.toAdminMessage(updated || existing);
+    if (!updated) {
+      if (retryOnRace) {
+        return this.reportDeliveryAttempt(dto, false);
+      }
+      throw new ConflictException('Application message report raced');
+    }
+    return this.toAdminMessage(updated);
   }
 
   async listThreads(dto: ListApplicationMessageThreadsDto) {
-    this.assertTrustedBot(dto.apiClient);
     const page = dto.page ?? 0;
-    if (!this.enabled) {
+    if (!this.messagingPolicy.enabled) {
       return { enabled: false, threads: [], page, hasMore: false };
     }
 
@@ -470,7 +535,6 @@ export class ApplicationMessagesService {
   }
 
   async receiveReply(dto: ReceiveApplicationReplyDto) {
-    this.assertTrustedBot(dto.apiClient);
     this.assertEnabled();
     if (Boolean(dto.replyToTelegramMessageId) === Boolean(dto.applicationId)) {
       return { accepted: false };
@@ -489,6 +553,7 @@ export class ApplicationMessagesService {
     const outboundQuery = this.messageModel.findOne({
       telegramIdentityId: identity._id,
       direction: ApplicationMessageDirection.Outbound,
+      status: ApplicationMessageStatus.Sent,
       ...(dto.replyToTelegramMessageId
         ? { telegramMessageId: dto.replyToTelegramMessageId }
         : { applicationId: validApplicationId }),
@@ -602,8 +667,10 @@ export class ApplicationMessagesService {
     senderUserId: string,
     text: string,
   ): void {
+    const normalizedApplicationId = validateObjectId(applicationId);
     if (
-      message.applicationId.toString() !== applicationId ||
+      !normalizedApplicationId ||
+      message.applicationId.toString() !== normalizedApplicationId ||
       message.senderUserId?.toString() !== senderUserId ||
       message.text !== text
     ) {
@@ -614,16 +681,10 @@ export class ApplicationMessagesService {
   }
 
   private assertEnabled(): void {
-    if (!this.enabled) {
+    if (!this.messagingPolicy.enabled) {
       throw new ServiceUnavailableException(
         'Application Telegram messaging is disabled',
       );
-    }
-  }
-
-  private assertTrustedBot(apiClient: ClaimApplicationMessageDto['apiClient']) {
-    if (!isTrustedApiClient(apiClient, 'BOT')) {
-      throw new UnauthorizedException('Invalid API client');
     }
   }
 

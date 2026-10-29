@@ -23,6 +23,7 @@ import { createApplicationSchema } from './schemas/joi.create-application.schema
 import { createPublicApplicationSchema } from './schemas/joi.create-public-application.schema';
 import { updateApplicationSchema } from './schemas/joi.update-application.schema';
 import { ApplicationQueryParams } from './types/query-params.interface';
+import { ApiClient } from '@/api-clients/decorators/api-client.decorator';
 
 @Controller('applications')
 export class ApplicationsController {
@@ -41,6 +42,7 @@ export class ApplicationsController {
 
   @Post('public')
   @Public()
+  @ApiClient('WEB')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   createFromPublicWeb(

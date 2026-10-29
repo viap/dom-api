@@ -2,6 +2,7 @@ import * as Joi from 'joi';
 import { joiApiClientSchema } from '@/api-clients/schemas/joi.api-client.schema';
 import { joiTelegramUserSchema } from '@/auth/schemas/joi.telegram-user.schema';
 import {
+  CancelTelegramLinkDto,
   ConfirmTelegramLinkDto,
   CreateTelegramLinkDto,
   ExchangeTelegramLinkDto,
@@ -9,7 +10,7 @@ import {
 } from '@/telegram-contact/dto/telegram-contact.dto';
 
 const secretSchema = Joi.string()
-  .pattern(/^[A-Za-z0-9_-]{32,128}$/)
+  .pattern(/^[A-Za-z0-9_-]{43}$/)
   .required();
 
 export const createTelegramLinkSchema = Joi.object<CreateTelegramLinkDto>({
@@ -33,6 +34,11 @@ export const confirmTelegramLinkSchema = Joi.object<ConfirmTelegramLinkDto>({
         .optional(),
     })
     .required(),
+});
+
+export const cancelTelegramLinkSchema = Joi.object<CancelTelegramLinkDto>({
+  apiClient: joiApiClientSchema.required(),
+  startToken: secretSchema,
 });
 
 export const exchangeTelegramLinkSchema = Joi.object<ExchangeTelegramLinkDto>({

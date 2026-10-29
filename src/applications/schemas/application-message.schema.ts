@@ -4,6 +4,7 @@ import {
   ApplicationMessageDirection,
   ApplicationMessageStatus,
 } from '../enums/application-message.enum';
+import { APPLICATION_MESSAGE_MAX_LENGTH } from '@/common/application-messaging/application-messaging-policy.service';
 
 export type ApplicationMessageDocument = ApplicationMessage &
   Document & { createdAt: Date; updatedAt: Date };
@@ -27,7 +28,11 @@ export class ApplicationMessage {
   @Prop({ required: true, enum: Object.values(ApplicationMessageDirection) })
   direction: ApplicationMessageDirection;
 
-  @Prop({ required: true, trim: true, maxlength: 3500 })
+  @Prop({
+    required: true,
+    trim: true,
+    maxlength: APPLICATION_MESSAGE_MAX_LENGTH,
+  })
   text: string;
 
   @Prop({ required: true, enum: Object.values(ApplicationMessageStatus) })
@@ -66,6 +71,11 @@ export const applicationMessageSchema =
 
 applicationMessageSchema.index({ applicationId: 1, createdAt: 1 });
 applicationMessageSchema.index({ status: 1, createdAt: 1 });
+applicationMessageSchema.index({
+  telegramIdentityId: 1,
+  applicationId: 1,
+  createdAt: -1,
+});
 applicationMessageSchema.index(
   { clientMessageId: 1 },
   {

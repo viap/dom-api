@@ -3,4 +3,5 @@ export interface TelegramContactSummary {
   username?: string;
   displayName?: string;
   verifiedAt: string;
+  soleContactAllowed: boolean;
 }
