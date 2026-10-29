@@ -352,6 +352,7 @@ const applicationFormBlockSchema = Joi.object({
   applicationType: Joi.string()
     .valid(...Object.values(ApplicationFormType))
     .required(),
+  supervisionBothFormatsAvailable: Joi.boolean().optional(),
   successMessage: Joi.string().trim().max(500).optional(),
   buttonLabel: Joi.string().trim().min(1).max(150).optional(),
 });

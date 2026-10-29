@@ -4,5 +4,6 @@ export enum ApplicationFormType {
   EventRegistration = 'event_registration',
   CorporateTraining = 'corporate_training',
   SpecialistRequest = 'specialist_request',
+  Supervision = 'supervision',
   General = 'general',
 }

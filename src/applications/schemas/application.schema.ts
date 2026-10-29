@@ -4,9 +4,43 @@ import { Contact, contactSchema } from '@/common/schemas/contact.schema';
 import { UserDocument } from '@/users/schemas/user.schema';
 import { ApplicationFormType } from '../enums/application-form-type.enum';
 import { ApplicationStatus } from '../enums/application-status.enum';
+import {
+  PreferredContact,
+  PreferredContactType,
+} from '../types/preferred-contact.type';
 
 export type ApplicationDocument = Application &
   Document & { createdAt: Date; updatedAt: Date };
+
+const preferredContactSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      required: true,
+      enum: Object.values(PreferredContactType),
+    },
+    username: { type: String },
+    verification: { type: String, enum: ['unverified'] },
+    identityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TelegramIdentity',
+    },
+    usernameSnapshot: { type: String },
+    verifiedAt: { type: String },
+    phoneE164: { type: String },
+    whatsappAvailable: { type: Boolean },
+  },
+  { _id: false, strict: true },
+);
+
+const applicationApplicantSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    contacts: { type: [contactSchema], required: true, default: [] },
+    preferredContact: { type: preferredContactSchema },
+  },
+  { _id: false, strict: true },
+);
 
 @Schema({ timestamps: true })
 export class Application {
@@ -32,13 +66,13 @@ export class Application {
 
   @Prop({
     required: true,
-    type: {
-      name: { type: String, required: true },
-      contacts: { type: [contactSchema], required: true, default: [] },
-    },
-    _id: false,
+    type: applicationApplicantSchema,
   })
-  applicant: { name: string; contacts: Array<Contact> };
+  applicant: {
+    name: string;
+    contacts: Array<Contact>;
+    preferredContact?: PreferredContact;
+  };
 
   @Prop({ type: Object, default: {} })
   payload: Record<string, unknown>;

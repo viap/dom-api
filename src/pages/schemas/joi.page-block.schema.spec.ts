@@ -14,6 +14,46 @@ describe('createPageSchema', () => {
     expect(error).toBeUndefined();
   });
 
+  it('should accept supervision form availability configuration', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Supervision',
+      slug: 'supervision',
+      blocks: [
+        {
+          id: 'supervision-form',
+          type: 'applicationForm',
+          applicationType: 'supervision',
+          supervisionBothFormatsAvailable: true,
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0]).toEqual(
+      expect.objectContaining({
+        applicationType: 'supervision',
+        supervisionBothFormatsAvailable: true,
+      }),
+    );
+  });
+
+  it('should reject a non-boolean supervision availability flag', () => {
+    const { error } = createPageSchema.validate({
+      title: 'Supervision',
+      slug: 'supervision',
+      blocks: [
+        {
+          id: 'supervision-form',
+          type: 'applicationForm',
+          applicationType: 'supervision',
+          supervisionBothFormatsAvailable: 'yes',
+        },
+      ],
+    });
+
+    expect(error).toBeDefined();
+  });
+
   it('should reject more than 20 blocks', () => {
     const { error } = createPageSchema.validate({
       title: 'About',

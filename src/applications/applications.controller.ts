@@ -16,9 +16,11 @@ import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreatePublicApplicationDto } from './dto/create-public-application.dto';
 import { UpdateApplicationDto } from './dto/update-application.dto';
 import { applicationQuerySchema } from './schemas/joi.application-query.schema';
 import { createApplicationSchema } from './schemas/joi.create-application.schema';
+import { createPublicApplicationSchema } from './schemas/joi.create-public-application.schema';
 import { updateApplicationSchema } from './schemas/joi.update-application.schema';
 import { ApplicationQueryParams } from './types/query-params.interface';
 
@@ -35,6 +37,17 @@ export class ApplicationsController {
     createApplicationDto: CreateApplicationDto,
   ) {
     return this.applicationsService.create(createApplicationDto);
+  }
+
+  @Post('public')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.CREATED)
+  createFromPublicWeb(
+    @Body(new JoiValidationPipe(createPublicApplicationSchema))
+    dto: CreatePublicApplicationDto,
+  ) {
+    return this.applicationsService.createFromPublicWeb(dto);
   }
 
   @Get()

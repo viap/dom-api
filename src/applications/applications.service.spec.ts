@@ -11,8 +11,10 @@ import { ProgramsService } from '@/programs/programs.service';
 import { UsersService } from '@/users/users.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
+import { TelegramContactService } from '@/telegram-contact/telegram-contact.service';
 import { Role } from '@/roles/enums/roles.enum';
 import { ApplicationFormType } from './enums/application-form-type.enum';
+import { CreateApplicationDto } from './dto/create-application.dto';
 import * as ApplicationNotification from './application-notification';
 import { Application } from './schemas/application.schema';
 import { ApplicationsService } from './applications.service';
@@ -66,6 +68,10 @@ describe('ApplicationsService', () => {
     getAllByRole: jest.fn().mockResolvedValue([{ _id: 'admin-1' }]),
   };
   const mockNotificationsService = { create: jest.fn() };
+  const mockTelegramContactService = {
+    assertTrustedWebClient: jest.fn(),
+    resolveSession: jest.fn(),
+  };
   const mockConfigService = { get: jest.fn() };
 
   const createServiceWithConfig = (configService: { get: jest.Mock }) =>
@@ -78,8 +84,64 @@ describe('ApplicationsService', () => {
       mockPeopleService as any,
       mockUsersService as any,
       mockNotificationsService as any,
+      mockTelegramContactService as any,
       configService as any,
     );
+
+  const buildCreateDto = (
+    formType: ApplicationFormType,
+  ): CreateApplicationDto => {
+    const base = {
+      domainId: mockApplication.domainId,
+      applicant: mockApplication.applicant as any,
+    };
+
+    switch (formType) {
+      case ApplicationFormType.Partnership:
+        return {
+          ...base,
+          formType,
+          payload: { organizationName: 'DOM partner' },
+        };
+      case ApplicationFormType.ProgramEnrollment:
+        return {
+          ...base,
+          formType,
+          payload: { programId: '507f1f77bcf86cd799439033' },
+        };
+      case ApplicationFormType.EventRegistration:
+        return {
+          ...base,
+          formType,
+          payload: { eventId: '507f1f77bcf86cd799439033' },
+        };
+      case ApplicationFormType.CorporateTraining:
+        return {
+          ...base,
+          formType,
+          payload: { companyName: 'DOM' },
+        };
+      case ApplicationFormType.SpecialistRequest:
+        return {
+          ...base,
+          formType,
+          payload: { specialization: 'Family therapy' },
+        };
+      case ApplicationFormType.Supervision:
+        return {
+          ...base,
+          schemaVersion: 2,
+          formType,
+          payload: { requestText: 'I need supervision support' },
+        };
+      case ApplicationFormType.General:
+        return {
+          ...base,
+          formType,
+          payload: { message: 'private message' },
+        };
+    }
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -99,6 +161,10 @@ describe('ApplicationsService', () => {
         { provide: PeopleService, useValue: mockPeopleService },
         { provide: UsersService, useValue: mockUsersService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        {
+          provide: TelegramContactService,
+          useValue: mockTelegramContactService,
+        },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
@@ -138,12 +204,8 @@ describe('ApplicationsService', () => {
   it.each(Object.values(ApplicationFormType))(
     'creates one administrator message after saving %s',
     async (formType) => {
-      const payload =
-        formType === ApplicationFormType.ProgramEnrollment
-          ? { programId: '507f1f77bcf86cd799439033' }
-          : formType === ApplicationFormType.EventRegistration
-          ? { eventId: '507f1f77bcf86cd799439033' }
-          : { message: 'private message' };
+      const createDto = buildCreateDto(formType);
+      const payload = createDto.payload;
       const saved = {
         ...mockApplication,
         formType,
@@ -156,10 +218,8 @@ describe('ApplicationsService', () => {
       mockSave.mockResolvedValueOnce(saved);
 
       const result = await service.create({
-        domainId: mockApplication.domainId,
-        formType,
+        ...createDto,
         applicant: saved.applicant as any,
-        payload,
       });
 
       expect(result).toBe(saved);
@@ -192,6 +252,7 @@ describe('ApplicationsService', () => {
       expect(notificationMessage).not.toContain('telegram');
       expect(notificationMessage).not.toContain('john');
       expect(notificationMessage).not.toContain('private message');
+      expect(notificationMessage).not.toContain('I need supervision support');
     },
   );
 
@@ -223,6 +284,7 @@ describe('ApplicationsService', () => {
         domainId: mockApplication.domainId,
         formType: ApplicationFormType.General,
         applicant: mockApplication.applicant as any,
+        payload: { message: 'General request' },
       }),
     ).rejects.toThrow('save failed');
 
@@ -419,6 +481,209 @@ describe('ApplicationsService', () => {
     expect(result.domainId).toBe(mockApplication.domainId);
   });
 
+  it('should resolve supervision applications to PsychCenter', async () => {
+    await service.create({
+      schemaVersion: 2,
+      formType: ApplicationFormType.Supervision,
+      applicant: mockApplication.applicant as any,
+      payload: { requestText: 'I need supervision support' },
+    });
+
+    expect(mockDomainsService.getActiveByCode).toHaveBeenCalledWith(
+      DomainCode.PsychCenter,
+    );
+    expect(mockApplicationModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 2,
+        formType: ApplicationFormType.Supervision,
+        domainId: mockApplication.domainId,
+      }),
+    );
+  });
+
+  it('should persist the explicit V2 schema version', async () => {
+    await service.create({
+      schemaVersion: 2,
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.Partnership,
+      applicant: mockApplication.applicant as any,
+      payload: { message: 'Partnership request' },
+    });
+
+    expect(mockApplicationModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 2,
+        formType: ApplicationFormType.Partnership,
+        payload: { message: 'Partnership request' },
+      }),
+    );
+  });
+
+  it('projects a V3 manual Telegram contact once for legacy readers', async () => {
+    await service.create({
+      schemaVersion: 3,
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.General,
+      applicant: {
+        name: 'Jane',
+        preferredContact: {
+          type: 'telegram_username' as any,
+          username: 'jane_doe',
+          verification: 'unverified',
+        },
+      },
+      payload: { message: 'General request' },
+    });
+
+    expect(mockApplicationModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 3,
+        applicant: {
+          name: 'Jane',
+          preferredContact: {
+            type: 'telegram_username',
+            username: 'jane_doe',
+            verification: 'unverified',
+          },
+          contacts: [
+            {
+              network: 'telegram',
+              username: '@jane_doe',
+              hidden: false,
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('projects one V3 phone contact without a duplicate WhatsApp contact', async () => {
+    await service.create({
+      schemaVersion: 3,
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.General,
+      applicant: {
+        name: 'Jane',
+        preferredContact: {
+          type: 'phone' as any,
+          phoneE164: '+995555123456',
+          whatsappAvailable: true,
+        },
+      },
+      payload: { message: 'General request' },
+    });
+
+    expect(mockApplicationModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 3,
+        applicant: {
+          name: 'Jane',
+          preferredContact: {
+            type: 'phone',
+            phoneE164: '+995555123456',
+            whatsappAvailable: true,
+          },
+          contacts: [
+            {
+              network: 'phone',
+              username: '+995555123456',
+              hidden: false,
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('rejects a browser-supplied verified Telegram contact on the legacy public route', async () => {
+    await expect(
+      service.create({
+        schemaVersion: 3,
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.General,
+        applicant: {
+          name: 'Jane',
+          preferredContact: { type: 'telegram_identity' as any },
+        },
+        payload: { message: 'General request' },
+      }),
+    ).rejects.toThrow('requires a remembered session');
+  });
+
+  it('builds a verified Telegram contact only from a server session', async () => {
+    mockTelegramContactService.resolveSession.mockResolvedValueOnce({
+      identity: { _id: { toString: () => '507f1f77bcf86cd799439077' } },
+      summary: {
+        identityId: '507f1f77bcf86cd799439077',
+        username: 'jane_doe',
+        verifiedAt: '2026-10-28T08:00:00.000Z',
+      },
+    });
+
+    await service.createFromPublicWeb({
+      apiClient: { name: 'web', password: 'secret' },
+      contactSessionToken: 's'.repeat(43),
+      application: {
+        schemaVersion: 3,
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.General,
+        applicant: {
+          name: 'Jane',
+          preferredContact: { type: 'telegram_identity' as any },
+        },
+        payload: { message: 'General request' },
+      },
+    });
+
+    expect(mockApplicationModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicant: {
+          name: 'Jane',
+          preferredContact: {
+            type: 'telegram_identity',
+            identityId: '507f1f77bcf86cd799439077',
+            usernameSnapshot: 'jane_doe',
+            verifiedAt: '2026-10-28T08:00:00.000Z',
+          },
+          contacts: [
+            {
+              network: 'telegram',
+              username: '@jane_doe',
+              hidden: false,
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('does not allow a username-less identity as the sole Stage 4 contact', async () => {
+    mockTelegramContactService.resolveSession.mockResolvedValueOnce({
+      identity: { _id: { toString: () => '507f1f77bcf86cd799439077' } },
+      summary: {
+        identityId: '507f1f77bcf86cd799439077',
+        verifiedAt: '2026-10-28T08:00:00.000Z',
+      },
+    });
+
+    await expect(
+      service.createFromPublicWeb({
+        apiClient: { name: 'web', password: 'secret' },
+        contactSessionToken: 's'.repeat(43),
+        application: {
+          schemaVersion: 3,
+          domainId: mockApplication.domainId,
+          formType: ApplicationFormType.General,
+          applicant: {
+            name: 'Jane',
+            preferredContact: { type: 'telegram_identity' as any },
+          },
+          payload: { message: 'General request' },
+        },
+      }),
+    ).rejects.toThrow('cannot be the sole contact');
+  });
+
   it('should keep explicit domainId on create when provided', async () => {
     const result = await service.create({
       domainId: mockApplication.domainId,
@@ -446,6 +711,7 @@ describe('ApplicationsService', () => {
         formType: 'general' as any,
         applicant: mockApplication.applicant as any,
         source: { entityType: 'weird', entityId: '507f1f77bcf86cd799439099' },
+        payload: { message: 'General request' },
       }),
     ).rejects.toThrow(BadRequestException);
   });

@@ -27,10 +27,18 @@ import { NotificationTypes } from '@/notifications/enums/notification-types.enum
 import { Role } from '@/roles/enums/roles.enum';
 import { parsePublicWebUrl } from '@/common/utils/web-origin';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreatePublicApplicationDto } from './dto/create-public-application.dto';
 import { UpdateApplicationDto } from './dto/update-application.dto';
 import { ApplicationFormType } from './enums/application-form-type.enum';
 import { ApplicationQueryParams } from './types/query-params.interface';
 import { Application, ApplicationDocument } from './schemas/application.schema';
+import {
+  PreferredContact,
+  PreferredContactInput,
+  PreferredContactType,
+} from './types/preferred-contact.type';
+import { TelegramContactService } from '@/telegram-contact/telegram-contact.service';
+import { SocialNetworks } from '@/common/enums/social-networks.enum';
 import {
   buildApplicationAdminUrl,
   formatApplicationNotification,
@@ -43,6 +51,7 @@ const FORM_TYPE_DOMAIN_CODE_MAP: Record<ApplicationFormType, DomainCode> = {
   [ApplicationFormType.EventRegistration]: DomainCode.PsychCenter,
   [ApplicationFormType.CorporateTraining]: DomainCode.PsychCenter,
   [ApplicationFormType.SpecialistRequest]: DomainCode.PsychCenter,
+  [ApplicationFormType.Supervision]: DomainCode.PsychCenter,
   [ApplicationFormType.General]: DomainCode.PsychCenter,
 };
 
@@ -61,6 +70,7 @@ export class ApplicationsService {
     private peopleService: PeopleService,
     private usersService: UsersService,
     private notificationsService: NotificationsService,
+    private telegramContactService: TelegramContactService,
     configService: ConfigService,
   ) {
     this.publicWebOrigin = parsePublicWebUrl(
@@ -71,19 +81,135 @@ export class ApplicationsService {
   async create(
     createApplicationDto: CreateApplicationDto,
   ): Promise<ApplicationDocument> {
+    if (
+      createApplicationDto.schemaVersion === 3 &&
+      createApplicationDto.applicant.preferredContact.type ===
+        PreferredContactType.TelegramIdentity
+    ) {
+      throw new BadRequestException(
+        'Verified Telegram contact requires a remembered session',
+      );
+    }
+
+    return this.createResolved(createApplicationDto);
+  }
+
+  async createFromPublicWeb(
+    dto: CreatePublicApplicationDto,
+  ): Promise<ApplicationDocument> {
+    this.telegramContactService.assertTrustedWebClient(dto.apiClient);
+    const { application } = dto;
+
+    if (
+      application.schemaVersion !== 3 ||
+      application.applicant.preferredContact.type !==
+        PreferredContactType.TelegramIdentity
+    ) {
+      return this.createResolved(application);
+    }
+
+    if (!dto.contactSessionToken) {
+      throw new BadRequestException('Telegram contact session is required');
+    }
+
+    const { identity, summary } =
+      await this.telegramContactService.resolveSession(dto.contactSessionToken);
+    if (!summary.username) {
+      throw new BadRequestException(
+        'A Telegram account without a username cannot be the sole contact',
+      );
+    }
+
+    const preferredContact: PreferredContact = {
+      type: PreferredContactType.TelegramIdentity,
+      identityId: identity._id.toString(),
+      usernameSnapshot: summary.username,
+      verifiedAt: summary.verifiedAt,
+    };
+
+    return this.createResolved({
+      ...application,
+      applicant: {
+        ...application.applicant,
+        preferredContact,
+      },
+    });
+  }
+
+  private async createResolved(
+    createApplicationDto: CreateApplicationDto,
+  ): Promise<ApplicationDocument> {
     const domainId = await this.resolveEffectiveDomainId({
       domainId: createApplicationDto.domainId,
       formType: createApplicationDto.formType,
     });
     await this.validateDomainAndRefs({ ...createApplicationDto, domainId });
 
+    const applicant =
+      createApplicationDto.schemaVersion === 3
+        ? this.buildV3Applicant(createApplicationDto.applicant)
+        : createApplicationDto.applicant;
+
     const application = new this.applicationModel({
       ...createApplicationDto,
+      applicant,
       domainId,
     });
     const savedApplication = await application.save();
     await this.createAdminNotification(savedApplication);
     return savedApplication;
+  }
+
+  private buildV3Applicant(applicant: {
+    name: string;
+    preferredContact: PreferredContactInput;
+  }): Application['applicant'] {
+    const { preferredContact } = applicant;
+    const contacts = (() => {
+      if (preferredContact.type === PreferredContactType.TelegramUsername) {
+        return [
+          {
+            network: SocialNetworks.Telegram,
+            username: `@${preferredContact.username}`,
+            hidden: false,
+          },
+        ];
+      }
+
+      if (preferredContact.type === PreferredContactType.TelegramIdentity) {
+        if (!('identityId' in preferredContact)) {
+          throw new BadRequestException(
+            'Verified Telegram contact requires a remembered session',
+          );
+        }
+        const identityContact = preferredContact as PreferredContact & {
+          type: PreferredContactType.TelegramIdentity;
+        };
+        return identityContact.usernameSnapshot
+          ? [
+              {
+                network: SocialNetworks.Telegram,
+                username: `@${identityContact.usernameSnapshot}`,
+                hidden: false,
+              },
+            ]
+          : [];
+      }
+
+      return [
+        {
+          network: SocialNetworks.Phone,
+          username: preferredContact.phoneE164,
+          hidden: false,
+        },
+      ];
+    })();
+
+    return {
+      name: applicant.name,
+      preferredContact: preferredContact as PreferredContact,
+      contacts,
+    };
   }
 
   private async createAdminNotification(
@@ -309,7 +435,7 @@ export class ApplicationsService {
   private async validateDomainAndRefs(data: {
     domainId: string;
     source?: { entityType?: string; entityId?: string };
-    payload?: Record<string, unknown>;
+    payload?: object;
   }): Promise<void> {
     await this.domainsService.getActiveById(data.domainId);
     await this.validateEntityReference(
@@ -319,28 +445,26 @@ export class ApplicationsService {
     await this.validatePayloadReferences(data.payload);
   }
 
-  private async validatePayloadReferences(
-    payload?: Record<string, unknown>,
-  ): Promise<void> {
+  private async validatePayloadReferences(payload?: object): Promise<void> {
     if (!payload) {
       return;
     }
 
-    if (typeof payload.programId === 'string') {
+    if ('programId' in payload && typeof payload.programId === 'string') {
       const exists = await this.programsService.exists(payload.programId);
       if (!exists) {
         throw new BadRequestException('Referenced program not found');
       }
     }
 
-    if (typeof payload.eventId === 'string') {
+    if ('eventId' in payload && typeof payload.eventId === 'string') {
       const exists = await this.eventsService.exists(payload.eventId);
       if (!exists) {
         throw new BadRequestException('Referenced event not found');
       }
     }
 
-    if (typeof payload.personId === 'string') {
+    if ('personId' in payload && typeof payload.personId === 'string') {
       const exists = await this.peopleService.exists(payload.personId);
       if (!exists) {
         throw new BadRequestException('Referenced person not found');

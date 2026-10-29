@@ -37,6 +37,28 @@ const baseEvent = {
 };
 
 describe('Page group block persistence (Mongoose)', () => {
+  it('persists supervision application form availability configuration', () => {
+    const doc = new PageModel({
+      ...basePage,
+      blocks: [
+        {
+          id: 'supervision-form',
+          type: 'applicationForm',
+          applicationType: 'supervision',
+          supervisionBothFormatsAvailable: true,
+        },
+      ],
+    });
+
+    expect(doc.validateSync()).toBeUndefined();
+    expect(doc.toObject().blocks[0]).toEqual(
+      expect.objectContaining({
+        applicationType: 'supervision',
+        supervisionBothFormatsAvailable: true,
+      }),
+    );
+  });
+
   it('persists strict typed HTML button snippets without subdocument ids', () => {
     const doc = new PageModel({
       ...basePage,
