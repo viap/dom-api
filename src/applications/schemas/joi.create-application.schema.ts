@@ -10,6 +10,18 @@ const optionalMessageSchema = Joi.string()
   .allow('')
   .optional();
 const requiredMessageSchema = Joi.string().trim().min(1).max(1000).required();
+const legacySpecialistRequestPayloadSchema = Joi.object({
+  specialization: Joi.string().trim().min(1).max(150).required(),
+  personId: joiObjectId.optional(),
+  message: optionalMessageSchema,
+}).required();
+const specialistRequestPayloadSchema = Joi.object({
+  consultationFormat: Joi.string()
+    .valid('online', 'in_person_tbilisi')
+    .required(),
+  personId: joiObjectId.optional(),
+  message: optionalMessageSchema,
+}).required();
 
 const legacyPayloadSchema = Joi.when('formType', {
   switch: [
@@ -43,11 +55,7 @@ const legacyPayloadSchema = Joi.when('formType', {
     },
     {
       is: ApplicationFormType.SpecialistRequest,
-      then: Joi.object({
-        specialization: Joi.string().trim().min(1).max(150).required(),
-        personId: joiObjectId.optional(),
-        message: optionalMessageSchema,
-      }).required(),
+      then: legacySpecialistRequestPayloadSchema,
     },
     {
       is: ApplicationFormType.General,
@@ -91,15 +99,7 @@ const v2PayloadSchema = Joi.when('formType', {
     },
     {
       is: ApplicationFormType.SpecialistRequest,
-      then: Joi.object({
-        personId: joiObjectId.optional(),
-        specialization: Joi.when('personId', {
-          is: Joi.exist(),
-          then: Joi.forbidden(),
-          otherwise: Joi.string().trim().min(1).max(150).required(),
-        }),
-        message: optionalMessageSchema,
-      }).required(),
+      then: specialistRequestPayloadSchema,
     },
     {
       is: ApplicationFormType.Supervision,

@@ -930,6 +930,10 @@ Public intake forms with admin/editor processing.
 
 The `payload` object depends on `formType`.
 `notes` is update-only and is not accepted in `POST /applications` payloads.
+For `specialist_request`, V1 requires legacy `specialization` (with optional
+`personId` and `message`); V2 and V3 instead require `consultationFormat`
+(`online` or `in_person_tbilisi`) with optional `personId` and `message`.
+V2/V3 reject `specialization` and other unknown payload fields.
 `domainId` is optional in `POST /applications`.
 When omitted, backend resolves it from `formType`:
 
@@ -1023,7 +1027,7 @@ If mapped domain is missing or inactive, request fails with `Active domain not f
     "contacts": [{ "network": "telegram", "username": "jane", "hidden": false }]
   },
   "payload": {
-    "specialization": "Family therapy",
+    "consultationFormat": "online",
     "message": "Looking for a specialist"
   }
 }

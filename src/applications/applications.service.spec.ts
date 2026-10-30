@@ -169,8 +169,9 @@ describe('ApplicationsService', () => {
       case ApplicationFormType.SpecialistRequest:
         return {
           ...base,
+          schemaVersion: 2,
           formType,
-          payload: { specialization: 'Family therapy' },
+          payload: { consultationFormat: 'online' },
         };
       case ApplicationFormType.Supervision:
         return {
@@ -535,11 +536,12 @@ describe('ApplicationsService', () => {
     await expect(
       service.create({
         domainId: mockApplication.domainId,
+        schemaVersion: 2,
         formType: ApplicationFormType.SpecialistRequest,
         applicant: mockApplication.applicant as any,
         payload: {
-          specialization: 'Family therapy',
           personId: '507f1f77bcf86cd799439099',
+          consultationFormat: 'online',
         },
       }),
     ).rejects.toThrow(BadRequestException);
@@ -626,6 +628,7 @@ describe('ApplicationsService', () => {
       source: { utm: { medium: 'profile' } },
       payload: {
         personId: '507f1f77bcf86cd799439099',
+        consultationFormat: 'online',
       },
     });
 
@@ -640,6 +643,10 @@ describe('ApplicationsService', () => {
           entityType: 'person',
           entityId: '507f1f77bcf86cd799439099',
           utm: { medium: 'profile' },
+        },
+        payload: {
+          personId: '507f1f77bcf86cd799439099',
+          consultationFormat: 'online',
         },
       }),
     );
