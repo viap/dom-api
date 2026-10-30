@@ -25,6 +25,7 @@ export interface BlockButton {
   label: string;
   type: BlockButtonType;
   targetId?: string;
+  targetPageId?: string;
   applicationProgramId?: string;
   applicationEventId?: string;
   url?: string;

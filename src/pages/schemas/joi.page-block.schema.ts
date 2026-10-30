@@ -41,12 +41,13 @@ const blockButtonCustomValidator: Joi.CustomValidator = (value, helpers) => {
     if (
       value.url ||
       value.targetId ||
+      value.targetPageId ||
       value.applicationProgramId ||
       value.applicationEventId
     ) {
       return helpers.error('any.custom', {
         message:
-          'Block buttons must not include url, targetId, or application fields',
+          'Block buttons must not include url, target IDs, or application fields',
       });
     }
     return value;
@@ -183,6 +184,11 @@ const blockButtonBaseFields = {
   isVisible: Joi.boolean().optional(),
   label: Joi.string().trim().min(1).max(150).required(),
   targetId: Joi.string().trim().max(120).optional(),
+  targetPageId: Joi.when('type', {
+    is: BlockButtonType.Anchor,
+    then: joiObjectId.optional(),
+    otherwise: Joi.any().strip(),
+  }),
   applicationProgramId: joiObjectId.optional(),
   applicationEventId: joiObjectId.optional(),
   url: Joi.string().trim().uri().optional(),

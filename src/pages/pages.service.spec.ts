@@ -72,6 +72,7 @@ describe('PagesService', () => {
   const mockDomainsService = {
     getActiveById: jest.fn(),
     getActiveBySlug: jest.fn(),
+    findManyByIds: jest.fn(),
   };
   const mockPeopleService = {
     exists: jest.fn(),
@@ -162,6 +163,7 @@ describe('PagesService', () => {
       _id: mockPage.domainId,
       slug: 'academy',
     });
+    mockDomainsService.findManyByIds.mockResolvedValue({ items: [] });
     mockPeopleService.exists.mockResolvedValue(true);
     mockPeopleService.findOne.mockImplementation(async (id: string) => ({
       _id: id,
@@ -1190,6 +1192,95 @@ describe('PagesService', () => {
       }),
       { new: true },
     );
+  });
+
+  it('revalidates all anchor targets when publishing a draft without replacing blocks', async () => {
+    const targetPageId = '507f1f77bcf86cd799439281';
+    mockPageModel.findById.mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          ...mockPage,
+          status: PageStatus.Draft,
+          blocks: [
+            {
+              id: 'cta',
+              type: PageBlockType.Cta,
+              buttons: [
+                {
+                  label: 'Jump',
+                  type: BlockButtonType.Anchor,
+                  targetId: 'missing-target',
+                  targetPageId,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    });
+    mockPageModel.findOne.mockResolvedValue(null);
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest
+          .fn()
+          .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
+      }),
+    });
+
+    await expect(
+      service.update(mockPage._id, { status: PageStatus.Published }),
+    ).rejects.toThrow('Anchor target page is unavailable');
+    expect(mockPageModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('batch-loads active domains for published anchor target pages', async () => {
+    const globalPageId = '507f1f77bcf86cd799439282';
+    const activePageId = '507f1f77bcf86cd799439283';
+    const inactivePageId = '507f1f77bcf86cd799439284';
+    const activeDomainId = '507f1f77bcf86cd799439285';
+    const inactiveDomainId = '507f1f77bcf86cd799439286';
+    mockPageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([
+            { _id: globalPageId, blocks: [] },
+            { _id: activePageId, domainId: activeDomainId, blocks: [] },
+            { _id: inactivePageId, domainId: inactiveDomainId, blocks: [] },
+          ]),
+        }),
+      }),
+    });
+    mockDomainsService.findManyByIds.mockResolvedValue({
+      items: [{ _id: activeDomainId }],
+    });
+
+    const result = await (
+      service as unknown as {
+        findPublishedAnchorTargetPages: (
+          ids: string[],
+        ) => Promise<Array<{ id: string; blocks: unknown[] }>>;
+      }
+    ).findPublishedAnchorTargetPages([
+      globalPageId,
+      activePageId,
+      inactivePageId,
+      'not-an-object-id',
+      activePageId,
+    ]);
+
+    expect(mockPageModel.find).toHaveBeenCalledWith({
+      _id: { $in: [globalPageId, activePageId, inactivePageId] },
+      status: PageStatus.Published,
+    });
+    expect(mockDomainsService.findManyByIds).toHaveBeenCalledWith([
+      activeDomainId,
+      inactiveDomainId,
+    ]);
+    expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      { id: globalPageId, blocks: [] },
+      { id: activePageId, blocks: [] },
+    ]);
   });
 
   it('should patch isTitleVisible when explicitly provided', async () => {

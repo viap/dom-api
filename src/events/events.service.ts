@@ -104,6 +104,7 @@ export class EventsService {
       ? await prepareBlocksForWrite(
           createData.blocks,
           this.getBlockValidationServices(),
+          { kind: 'event' },
         )
       : createData.blocks;
 
@@ -350,6 +351,7 @@ export class EventsService {
               Array.isArray(existingEvent.blocks) ? existingEvent.blocks : [],
             ),
             this.getBlockValidationServices(),
+            { kind: 'event' },
           )
         : undefined;
 
