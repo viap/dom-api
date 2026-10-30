@@ -38,7 +38,7 @@ export const blockButtonSchema = new mongoose.Schema(
     applicationProgramId: { type: String },
     applicationEventId: { type: String },
     url: { type: String, trim: true },
-    openInNewTab: { type: Boolean, default: false },
+    openInNewTab: { type: Boolean },
     style: { type: String, enum: buttonStyleValues },
     size: { type: String, enum: Object.values(ComponentSize) },
     // Embedded block for type === 'block'. Structure is owned/validated by Joi

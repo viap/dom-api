@@ -37,6 +37,44 @@ const baseEvent = {
 };
 
 describe('Page group block persistence (Mongoose)', () => {
+  it('does not materialize a new-tab flag on non-external buttons', () => {
+    const buttons = [
+      { label: 'Page', type: 'page', targetId: 'page-1' },
+      { label: 'Domain', type: 'domain', targetId: 'domain-1' },
+      { label: 'Application', type: 'application', targetId: 'general' },
+      {
+        label: 'Block',
+        type: 'block',
+        block: { id: 'embedded', type: 'richText', content: '<p>More</p>' },
+      },
+      {
+        label: 'External',
+        type: 'external',
+        url: 'https://example.com',
+        openInNewTab: true,
+      },
+    ];
+
+    for (const doc of [
+      new PageModel({
+        ...basePage,
+        blocks: [{ id: 'cta', type: 'cta', buttons }],
+      }),
+      new EventModel({
+        ...baseEvent,
+        blocks: [{ id: 'cta', type: 'cta', buttons }],
+      }),
+    ]) {
+      expect(doc.validateSync()).toBeUndefined();
+      const storedButtons = doc.toObject().blocks[0].buttons;
+
+      for (const button of storedButtons.slice(0, 4)) {
+        expect(button.openInNewTab).toBeUndefined();
+      }
+      expect(storedButtons[4].openInNewTab).toBe(true);
+    }
+  });
+
   it('persists supervision application form availability configuration', () => {
     const doc = new PageModel({
       ...basePage,

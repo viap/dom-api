@@ -1105,6 +1105,37 @@ describe('block button action', () => {
     blocks: [{ id: 'cta', type: 'cta', buttons: [button] }],
   });
 
+  it('strips new-tab flags from non-external buttons while preserving external flags', () => {
+    const nonExternalButtons = [
+      { label: 'Page', type: 'page', targetId: objectId },
+      { label: 'Domain', type: 'domain', targetId: objectId },
+      { label: 'Application', type: 'application', targetId: 'partnership' },
+      {
+        label: 'Block',
+        type: 'block',
+        block: { id: 'modal-1', type: 'richText', title: 'Hello' },
+      },
+    ];
+    const external = createPageSchema.validate(
+      ctaWithButton({
+        label: 'External',
+        type: 'external',
+        url: 'https://example.com',
+        openInNewTab: true,
+      }),
+    );
+
+    for (const button of nonExternalButtons) {
+      const result = createPageSchema.validate(
+        ctaWithButton({ ...button, openInNewTab: true }),
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.value.blocks[0].buttons[0].openInNewTab).toBeUndefined();
+    }
+    expect(external.error).toBeUndefined();
+    expect(external.value.blocks[0].buttons[0].openInNewTab).toBe(true);
+  });
+
   it('should accept a block button carrying an embedded richText block', () => {
     const { error } = createPageSchema.validate(
       ctaWithButton({
