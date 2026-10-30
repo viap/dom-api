@@ -59,23 +59,19 @@ export interface CorporateTrainingV2ApplicationPayload {
   message: string;
 }
 
+export type SpecialistConsultationFormat = 'online' | 'in_person_tbilisi';
+
 export interface SpecialistRequestV1ApplicationPayload {
-  specialization: string;
   personId?: string;
+  specialization: string;
   message?: string;
 }
 
-export type SpecialistRequestV2ApplicationPayload =
-  | {
-      personId: string;
-      specialization?: never;
-      message?: string;
-    }
-  | {
-      personId?: never;
-      specialization: string;
-      message?: string;
-    };
+export interface SpecialistRequestApplicationPayload {
+  personId?: string;
+  consultationFormat: SpecialistConsultationFormat;
+  message?: string;
+}
 
 export type SupervisionFormatPreference =
   | 'individual'
@@ -137,7 +133,7 @@ type CreateApplicationV2Variant =
     }
   | {
       formType: ApplicationFormType.SpecialistRequest;
-      payload: SpecialistRequestV2ApplicationPayload;
+      payload: SpecialistRequestApplicationPayload;
     }
   | {
       formType: ApplicationFormType.Supervision;

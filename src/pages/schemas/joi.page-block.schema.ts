@@ -186,7 +186,11 @@ const blockButtonBaseFields = {
   applicationProgramId: joiObjectId.optional(),
   applicationEventId: joiObjectId.optional(),
   url: Joi.string().trim().uri().optional(),
-  openInNewTab: Joi.boolean().default(false).optional(),
+  openInNewTab: Joi.when('type', {
+    is: BlockButtonType.External,
+    then: Joi.boolean().optional(),
+    otherwise: Joi.any().strip(),
+  }),
   style: Joi.string()
     .valid('primary', 'secondary', 'ghost', 'outline', 'link')
     .optional(),

@@ -25,8 +25,9 @@ describe('createApplicationSchema domainId behavior', () => {
     expect(error).toBeUndefined();
   });
 
-  it('accepts specialist request personId and person source', () => {
+  it('accepts specialist request consultation format with an optional person target', () => {
     const { error } = createApplicationSchema.validate({
+      schemaVersion: 2,
       formType: 'specialist_request',
       source: {
         entityType: 'person',
@@ -34,21 +35,22 @@ describe('createApplicationSchema domainId behavior', () => {
       },
       applicant: validBasePayload.applicant,
       payload: {
-        specialization: 'Family therapy',
         personId: '660900000000000000000099',
+        consultationFormat: 'online',
       },
     });
 
     expect(error).toBeUndefined();
   });
 
-  it('rejects invalid specialist request personId', () => {
+  it('rejects an invalid specialist request personId', () => {
     const { error } = createApplicationSchema.validate({
+      schemaVersion: 2,
       formType: 'specialist_request',
       applicant: validBasePayload.applicant,
       payload: {
-        specialization: 'Family therapy',
         personId: 'not-an-id',
+        consultationFormat: 'online',
       },
     });
 
@@ -133,48 +135,65 @@ describe('createApplicationSchema versioned payloads', () => {
     expect(missingMessage.error).toBeDefined();
   });
 
-  it('accepts a targeted V2 specialist request without specialization', () => {
+  it.each(['online', 'in_person_tbilisi'])(
+    'accepts the %s specialist consultation format with optional fields',
+    (consultationFormat) => {
+      const { error } = createApplicationSchema.validate({
+        schemaVersion: 3,
+        formType: 'specialist_request',
+        applicant: {
+          name: 'Jane Doe',
+          preferredContact: {
+            type: 'telegram_username',
+            username: 'jane_doe',
+            verification: 'unverified',
+          },
+        },
+        payload: {
+          consultationFormat,
+          personId: '660900000000000000000099',
+          message: 'Please contact me',
+        },
+      });
+
+      expect(error).toBeUndefined();
+    },
+  );
+
+  it('preserves the V1 specialist specialization contract', () => {
     const { error } = createApplicationSchema.validate({
-      schemaVersion: 2,
+      schemaVersion: 1,
       formType: 'specialist_request',
       applicant,
-      payload: { personId: '660900000000000000000099' },
+      payload: {
+        specialization: 'Family therapy',
+        personId: '660900000000000000000099',
+      },
     });
 
     expect(error).toBeUndefined();
   });
 
-  it('rejects specialization on a targeted V2 specialist request', () => {
-    const { error } = createApplicationSchema.validate({
-      schemaVersion: 2,
-      formType: 'specialist_request',
-      applicant,
-      payload: {
-        personId: '660900000000000000000099',
-        specialization: 'Family therapy',
-      },
-    });
+  it.each([2, 3])(
+    'rejects a specialist payload outside the V%s contract',
+    (schemaVersion) => {
+      for (const payload of [
+        {},
+        { personId: '660900000000000000000099' },
+        { consultationFormat: 'hybrid' },
+        { consultationFormat: 'online', specialization: 'Family therapy' },
+      ]) {
+        const { error } = createApplicationSchema.validate({
+          schemaVersion,
+          formType: 'specialist_request',
+          applicant,
+          payload,
+        });
 
-    expect(error).toBeDefined();
-  });
-
-  it('requires specialization on an untargeted V2 specialist request', () => {
-    const accepted = createApplicationSchema.validate({
-      schemaVersion: 2,
-      formType: 'specialist_request',
-      applicant,
-      payload: { specialization: 'Family therapy' },
-    });
-    const rejected = createApplicationSchema.validate({
-      schemaVersion: 2,
-      formType: 'specialist_request',
-      applicant,
-      payload: {},
-    });
-
-    expect(accepted.error).toBeUndefined();
-    expect(rejected.error).toBeDefined();
-  });
+        expect(error).toBeDefined();
+      }
+    },
+  );
 
   it.each([
     ['general', { message: 'General request' }],
