@@ -38,7 +38,7 @@ import { UpdatePageDto } from './dto/update-page.dto';
 import { PageStatus } from './enums/page-status.enum';
 import { PageQueryParams } from './types/query-params.interface';
 import { Page, PageDocument } from './schemas/page.schema';
-import { PageBlock } from './types/page-block.interface';
+import { PageBlock, PageRootBlock } from './types/page-block.interface';
 import { EntityCollectionEntityType } from './enums/entity-collection-entity-type.enum';
 import { PeopleEntityCollectionFilters } from '@/people/types/entity-collection-filters.interface';
 import { PartnerEntityCollectionFilters } from '@/partners/types/entity-collection-filters.interface';
@@ -124,6 +124,7 @@ export class PagesService {
     const normalizedBlocks = await prepareBlocksForWrite(
       createPageDto.blocks || [],
       this.getBlockValidationServices(),
+      { kind: 'page', nextStatus: status },
     );
 
     const page = new this.pageModel({
@@ -468,14 +469,33 @@ export class PagesService {
     if (isHomepage) {
       await this.ensureUniqueHomepage(domainId, validId);
     }
-    const normalizedBlocks =
+    const shouldRevalidateBlocksForPublication =
+      updatePageDto.blocks === undefined &&
+      existingPage.status !== PageStatus.Published &&
+      status === PageStatus.Published;
+    const blocksForWrite =
       updatePageDto.blocks !== undefined
+        ? preserveOmittedHtmlSnippets(
+            updatePageDto.blocks,
+            Array.isArray(existingPage.blocks) ? existingPage.blocks : [],
+          )
+        : shouldRevalidateBlocksForPublication
+        ? ((existingPage.blocks || []) as PageRootBlock[])
+        : undefined;
+    const normalizedBlocks =
+      blocksForWrite !== undefined
         ? await prepareBlocksForWrite(
-            preserveOmittedHtmlSnippets(
-              updatePageDto.blocks,
-              Array.isArray(existingPage.blocks) ? existingPage.blocks : [],
-            ),
+            blocksForWrite,
             this.getBlockValidationServices(),
+            {
+              kind: 'page',
+              currentPageId: validId.toString(),
+              previousBlocks: Array.isArray(existingPage.blocks)
+                ? (existingPage.blocks as PageRootBlock[])
+                : [],
+              previousStatus: existingPage.status,
+              nextStatus: status,
+            },
           )
         : undefined;
 
@@ -503,7 +523,7 @@ export class PagesService {
     } else if (hasDomainIdField) {
       updateData.$unset = { domainId: 1 };
     }
-    if (normalizedBlocks !== undefined) {
+    if (updatePageDto.blocks !== undefined && normalizedBlocks !== undefined) {
       updateData.blocks = normalizedBlocks;
     }
 
@@ -512,12 +532,14 @@ export class PagesService {
       page = await this.pageModel
         .findByIdAndUpdate(validId, updateData, {
           new: true,
-          ...(normalizedBlocks !== undefined ? { runValidators: true } : {}),
+          ...(updatePageDto.blocks !== undefined
+            ? { runValidators: true }
+            : {}),
         })
         .lean()
         .exec();
     } catch (error) {
-      if (normalizedBlocks !== undefined) {
+      if (updatePageDto.blocks !== undefined) {
         const message = formatMongooseUpdateValidationError(error);
         if (message) {
           throw new BadRequestException(message);
@@ -613,7 +635,47 @@ export class PagesService {
         this.mediaService.existingPublishedIds(ids),
       pagesExistingIds: (ids) => this.existingIds(ids),
       domainsGetActiveById: (id) => this.domainsService.getActiveById(id),
+      anchorPagesByIds: (ids) => this.findPublishedAnchorTargetPages(ids),
     };
+  }
+
+  private async findPublishedAnchorTargetPages(
+    ids: string[],
+  ): Promise<Array<{ id: string; blocks: PageRootBlock[] }>> {
+    const { validIds } = prepareBulkIds(ids);
+    if (!validIds.length) return [];
+
+    const pages = await this.pageModel
+      .find({ _id: { $in: validIds }, status: PageStatus.Published })
+      .select({ _id: 1, domainId: 1, blocks: 1 })
+      .lean()
+      .exec();
+    const domainIds = Array.from(
+      new Set(
+        pages
+          .map((page) => page.domainId?.toString())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const activeDomainIds = new Set(
+      domainIds.length
+        ? (await this.domainsService.findManyByIds(domainIds)).items.map(
+            (domain) => domain._id.toString(),
+          )
+        : [],
+    );
+
+    return pages
+      .filter(
+        (page) =>
+          !page.domainId || activeDomainIds.has(page.domainId.toString()),
+      )
+      .map((page) => ({
+        id: page._id.toString(),
+        blocks: Array.isArray(page.blocks)
+          ? (page.blocks as PageRootBlock[])
+          : [],
+      }));
   }
 
   async existingIds(ids: string[]): Promise<Set<string>> {

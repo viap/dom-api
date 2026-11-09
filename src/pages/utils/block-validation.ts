@@ -21,6 +21,7 @@ import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-
 import { EventCollectionContext } from '@/events/types/entity-collection-filters.interface';
 import { ApplicationFormType } from '@/applications/enums/application-form-type.enum';
 import { BlockButtonType } from '../enums/block-button-type.enum';
+import { PageStatus } from '../enums/page-status.enum';
 import { EntityCollectionEntityType } from '../enums/entity-collection-entity-type.enum';
 import { PageBlockType } from '../enums/page-block-type.enum';
 import { RelatedPeopleDisplay } from '../enums/related-people-display.enum';
@@ -57,6 +58,28 @@ export type ValidationRefs = {
   mediaIds: Set<string>;
   pageIds: Set<string>;
   domainIds: Set<string>;
+  anchorRefs: AnchorReference[];
+};
+
+type AnchorReference = {
+  sourceBlockId: string;
+  targetId: string;
+  targetPageId?: string;
+};
+
+export type BlockValidationContext =
+  | {
+      kind: 'page';
+      currentPageId?: string;
+      previousBlocks?: PageRootBlock[];
+      previousStatus?: PageStatus;
+      nextStatus?: PageStatus;
+    }
+  | { kind: 'event' };
+
+type AnchorTargetPage = {
+  id: string;
+  blocks: PageRootBlock[];
 };
 
 export interface BlockValidationServices {
@@ -66,6 +89,7 @@ export interface BlockValidationServices {
   mediaExistingPublishedIds: (ids: string[]) => Promise<Set<string>>;
   pagesExistingIds: (ids: string[]) => Promise<Set<string>>;
   domainsGetActiveById: (id: string) => Promise<unknown>;
+  anchorPagesByIds?: (ids: string[]) => Promise<AnchorTargetPage[]>;
 }
 
 export interface PublicBlockServices {
@@ -97,6 +121,7 @@ function createValidationRefs(): ValidationRefs {
     mediaIds: new Set<string>(),
     pageIds: new Set<string>(),
     domainIds: new Set<string>(),
+    anchorRefs: [],
   };
 }
 
@@ -129,11 +154,13 @@ function collectButtonRefs(
   buttons: Array<{
     type: BlockButtonType;
     targetId?: string;
+    targetPageId?: string;
     url?: string;
     block?: PageBlock;
   }> = [],
   refs: ValidationRefs,
   depth: number,
+  sourceBlockId: string,
 ): void {
   for (const button of buttons || []) {
     switch (button.type) {
@@ -167,6 +194,21 @@ function collectButtonRefs(
           throw new BadRequestException('Page buttons must not include url');
         }
         refs.pageIds.add(button.targetId);
+        break;
+      case BlockButtonType.Anchor:
+        if (!button.targetId) {
+          throw new BadRequestException('Anchor button target is required');
+        }
+        if (button.url) {
+          throw new BadRequestException('Anchor buttons must not include url');
+        }
+        refs.anchorRefs.push({
+          sourceBlockId,
+          targetId: button.targetId,
+          ...(button.targetPageId
+            ? { targetPageId: button.targetPageId }
+            : {}),
+        });
         break;
       case BlockButtonType.Domain:
         if (!button.targetId) {
@@ -207,7 +249,7 @@ function validateRichTextBlock(
     refs.mediaIds.add(block.media.mediaId);
   }
 
-  collectButtonRefs(block.buttons, refs, depth);
+  collectButtonRefs(block.buttons, refs, depth, block.id);
 
   if (block.relatedPeople) {
     if (!block.relatedPeople.title) {
@@ -251,7 +293,7 @@ function validateEntityCollectionBlock(
         refs.mediaIds.add(item.mediaId);
       }
       if (item.button) {
-        collectButtonRefs([item.button], refs, depth);
+        collectButtonRefs([item.button], refs, depth, block.id);
       }
     }
     return;
@@ -300,7 +342,7 @@ function validateHeroBlock(
   }
 
   for (const item of block.items || []) {
-    collectButtonRefs(getHeroItemButtons(item), refs, depth);
+    collectButtonRefs(getHeroItemButtons(item), refs, depth, block.id);
   }
 }
 
@@ -313,7 +355,7 @@ function validateCtaBlock(
     block.buttons,
     'cta.buttons must contain at least one button',
   );
-  collectButtonRefs(block.buttons, refs, depth);
+  collectButtonRefs(block.buttons, refs, depth, block.id);
 }
 
 function validateGalleryBlock(block: GalleryBlock, refs: ValidationRefs): void {
@@ -356,6 +398,7 @@ function validateOneBlock(
         (block.snippets || []).map((snippet) => snippet.button),
         refs,
         depth,
+        block.id,
       );
       break;
     case PageBlockType.Group:
@@ -419,9 +462,162 @@ async function validateCollectedRefs(
   ]);
 }
 
+function collectEffectiveVisibleBlockIds(
+  blocks: PageRootBlock[],
+): Set<string> {
+  const visibleIds = new Set<string>();
+
+  const visit = (block: PageRootBlock, parentVisible: boolean): void => {
+    const isVisible = parentVisible && block.isVisible !== false;
+    if (!isVisible) return;
+
+    visibleIds.add(block.id);
+    if (block.type === PageBlockType.Group) {
+      for (const child of block.blocks || []) {
+        visit(child, isVisible);
+      }
+    }
+  };
+
+  for (const block of blocks) {
+    visit(block, true);
+  }
+
+  return visibleIds;
+}
+
+function anchorReferenceKey(reference: AnchorReference): string {
+  return [
+    reference.sourceBlockId,
+    reference.targetPageId || '',
+    reference.targetId,
+  ].join('\u0000');
+}
+
+function collectAnchorReferences(blocks: PageRootBlock[]): AnchorReference[] {
+  const refs: AnchorReference[] = [];
+  const collectButtons = (buttons: BlockButton[] | undefined, sourceBlockId: string) => {
+    for (const button of buttons || []) {
+      if (button.type === BlockButtonType.Anchor && button.targetId) {
+        refs.push({
+          sourceBlockId,
+          targetId: button.targetId,
+          ...(button.targetPageId ? { targetPageId: button.targetPageId } : {}),
+        });
+      }
+      if (button.block) visit(button.block);
+    }
+  };
+  const visit = (block: PageRootBlock): void => {
+    if (block.type === PageBlockType.Group) {
+      for (const child of block.blocks || []) visit(child);
+      return;
+    }
+    switch (block.type) {
+      case PageBlockType.RichText:
+      case PageBlockType.Cta:
+        collectButtons(block.buttons, block.id);
+        break;
+      case PageBlockType.Hero:
+        for (const item of block.items || []) {
+          collectButtons(getHeroItemButtons(item), block.id);
+        }
+        break;
+      case PageBlockType.EntityCollection:
+        if (block.entityType === EntityCollectionEntityType.Custom) {
+          for (const item of block.customItems) {
+            collectButtons(item.button ? [item.button] : [], block.id);
+          }
+        }
+        break;
+      case PageBlockType.Html:
+        collectButtons(
+          (block.snippets || []).map((snippet) => snippet.button),
+          block.id,
+        );
+        break;
+    }
+  };
+  for (const block of blocks) visit(block);
+  return refs;
+}
+
+async function validateAnchorReferences(
+  refs: AnchorReference[],
+  blocks: PageRootBlock[],
+  services: BlockValidationServices,
+  context: BlockValidationContext | undefined,
+): Promise<void> {
+  if (!refs.length) return;
+  if (!context || context.kind !== 'page') {
+    throw new BadRequestException('Anchor buttons are only allowed in pages');
+  }
+
+  const currentTargetIds = collectEffectiveVisibleBlockIds(blocks);
+  for (const reference of refs) {
+    if (!reference.targetPageId && !currentTargetIds.has(reference.targetId)) {
+      throw new BadRequestException(
+        'Anchor button target must reference a visible block on the current page',
+      );
+    }
+    if (
+      reference.targetPageId &&
+      context.currentPageId &&
+      reference.targetPageId === context.currentPageId
+    ) {
+      throw new BadRequestException(
+        'Anchor buttons targeting the current page must omit targetPageId',
+      );
+    }
+  }
+
+  const crossPageRefs = refs.filter((reference) => reference.targetPageId);
+  if (!crossPageRefs.length) return;
+
+  const previousCounts = new Map<string, number>();
+  for (const reference of collectAnchorReferences(context.previousBlocks || [])) {
+    if (!reference.targetPageId) continue;
+    const key = anchorReferenceKey(reference);
+    previousCounts.set(key, (previousCounts.get(key) || 0) + 1);
+  }
+  const validateAll =
+    !context.previousBlocks ||
+    (context.nextStatus === PageStatus.Published &&
+      context.previousStatus !== PageStatus.Published);
+  const strictRefs = validateAll
+    ? crossPageRefs
+    : crossPageRefs.filter((reference) => {
+        const key = anchorReferenceKey(reference);
+        const count = previousCounts.get(key) || 0;
+        if (!count) return true;
+        previousCounts.set(key, count - 1);
+        return false;
+      });
+  if (!strictRefs.length) return;
+  if (!services.anchorPagesByIds) {
+    throw new BadRequestException('Anchor target resolution is unavailable');
+  }
+
+  const targetIds = [...new Set(strictRefs.map((reference) => reference.targetPageId!))];
+  const pages = await services.anchorPagesByIds(targetIds);
+  const visibleIdsByPage = new Map(
+    pages.map((page) => [page.id, collectEffectiveVisibleBlockIds(page.blocks)]),
+  );
+  for (const reference of strictRefs) {
+    const targetIdsForPage = visibleIdsByPage.get(reference.targetPageId!);
+    if (!targetIdsForPage) {
+      throw new BadRequestException('Anchor target page is unavailable');
+    }
+    if (!targetIdsForPage.has(reference.targetId)) {
+      throw new BadRequestException('Anchor target block is unavailable');
+    }
+  }
+}
+
 async function validateBlocks(
   blocks: PageRootBlock[],
   services: BlockValidationServices,
+  context?: BlockValidationContext,
 ): Promise<void> {
   const seenIds = new Set<string>();
   const refs = createValidationRefs();
@@ -451,7 +647,10 @@ async function validateBlocks(
     visit(block);
   }
 
-  await validateCollectedRefs(refs, services);
+  await Promise.all([
+    validateCollectedRefs(refs, services),
+    validateAnchorReferences(refs.anchorRefs, blocks, services, context),
+  ]);
 }
 
 function sanitizeEmbeddedButtonBlocks(
@@ -597,9 +796,10 @@ function sanitizeOneBlock(block: PageRootBlock, depth: number): PageRootBlock {
 export async function prepareBlocksForWrite(
   blocks: PageRootBlock[],
   services: BlockValidationServices,
+  context?: BlockValidationContext,
 ): Promise<PageRootBlock[]> {
   const sanitizedBlocks = blocks.map((block) => sanitizeOneBlock(block, 0));
-  await validateBlocks(sanitizedBlocks, services);
+  await validateBlocks(sanitizedBlocks, services, context);
   return sanitizedBlocks;
 }
 

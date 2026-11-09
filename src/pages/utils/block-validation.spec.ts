@@ -1067,3 +1067,76 @@ describe('withHeroItemButtons', () => {
     },
   );
 });
+
+describe('anchor target validation', () => {
+  const services = {
+    peopleExistingIds: async (ids: string[]) => new Set(ids),
+    partnersExistingIds: async (ids: string[]) => new Set(ids),
+    eventsExistingIds: async (ids: string[]) => new Set(ids),
+    mediaExistingPublishedIds: async (ids: string[]) => new Set(ids),
+    pagesExistingIds: async (ids: string[]) => new Set(ids),
+    domainsGetActiveById: async () => ({}),
+  };
+
+  it('requires a visible current-page block target', async () => {
+    const blocks = [
+      {
+        id: 'cta',
+        type: PageBlockType.Cta,
+        buttons: [{ label: 'Jump', type: 'anchor', targetId: 'intro' }],
+      },
+      { id: 'intro', type: PageBlockType.RichText, buttons: [] },
+    ] as PageRootBlock[];
+
+    await expect(
+      prepareBlocksForWrite(blocks, services, { kind: 'page' }),
+    ).resolves.toHaveLength(2);
+    blocks[1].isVisible = false;
+    await expect(
+      prepareBlocksForWrite(blocks, services, { kind: 'page' }),
+    ).rejects.toThrow('visible block');
+  });
+
+  it('validates new cross-page targets but preserves unchanged stale references', async () => {
+    const targetPageId = '507f1f77bcf86cd799439281';
+    const anchor = {
+      label: 'Jump',
+      type: 'anchor' as const,
+      targetId: 'target',
+      targetPageId,
+    };
+    const next = [
+      { id: 'cta', type: PageBlockType.Cta, buttons: [anchor] },
+    ] as PageRootBlock[];
+    const staleServices = { ...services, anchorPagesByIds: async () => [] };
+    const previousBlocks = [
+      { id: 'cta', type: PageBlockType.Cta, buttons: [anchor] },
+    ] as PageRootBlock[];
+
+    await expect(
+      prepareBlocksForWrite(next, staleServices, {
+        kind: 'page',
+        previousBlocks,
+      }),
+    ).resolves.toHaveLength(1);
+    await expect(
+      prepareBlocksForWrite(next, staleServices, { kind: 'page' }),
+    ).rejects.toThrow('Anchor target page is unavailable');
+  });
+
+  it('rejects anchor actions for event-owned blocks', async () => {
+    await expect(
+      prepareBlocksForWrite(
+        [
+          {
+            id: 'cta',
+            type: PageBlockType.Cta,
+            buttons: [{ label: 'Jump', type: 'anchor', targetId: 'cta' }],
+          },
+        ] as PageRootBlock[],
+        services,
+        { kind: 'event' },
+      ),
+    ).rejects.toThrow('only allowed in pages');
+  });
+});

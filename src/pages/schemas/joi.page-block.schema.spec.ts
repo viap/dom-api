@@ -1905,3 +1905,71 @@ describe('Hero button arrays and shared visibility', () => {
     ).toBeDefined();
   });
 });
+
+describe('anchor block buttons', () => {
+  const anchorButton = {
+    label: 'Jump',
+    type: 'anchor',
+    targetId: 'details',
+  };
+
+  it('accepts current-page and cross-page anchor targets', () => {
+    const current = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [{ id: 'cta', type: 'cta', buttons: [anchorButton] }],
+    });
+    const crossPage = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [{ ...anchorButton, targetPageId: objectId }],
+        },
+      ],
+    });
+
+    expect(current.error).toBeUndefined();
+    expect(crossPage.error).toBeUndefined();
+  });
+
+  it('rejects invalid anchor page ids and modal-owned anchors', () => {
+    const invalidPageId = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [{ ...anchorButton, targetPageId: 'not-an-object-id' }],
+        },
+      ],
+    });
+    const modalAnchor = createPageSchema.validate({
+      title: 'About',
+      slug: 'about',
+      blocks: [
+        {
+          id: 'cta',
+          type: 'cta',
+          buttons: [
+            {
+              label: 'Open',
+              type: 'block',
+              block: {
+                id: 'modal',
+                type: 'cta',
+                buttons: [anchorButton],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(invalidPageId.error).toBeDefined();
+    expect(modalAnchor.error).toBeDefined();
+  });
+});
