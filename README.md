@@ -220,6 +220,7 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - Deployment scripts create `REMOTE_UPLOADS_PATH` (and `media`/`thumbnails` subdirectories) automatically when missing.
 - If `${REMOTE_TARGET}/uploads` exists as a real non-empty directory, deployment fails and requires manual cleanup/move before re-run (no migration/backfill in workflow).
 - No migration/backfill is performed by the deployment workflow.
+- The server nginx config (not in this repo) must set `client_max_body_size` above the upload limit (currently `11m` for the 10 MB limit in `media.controller.ts` and `MAX_UPLOAD_SIZE_BYTES` in dom-web). nginx's default `1m` rejects larger uploads with 413 and no CORS headers, so the browser reports "Network Error". Raise all three values together.
 - Clients must still use media API endpoints (`/media/:id/content`, `/media/:id/thumbnail`) and must not use raw `/uploads/...` URLs.
 
 ### Deployment Workflow Requirements
