@@ -5,6 +5,7 @@ import { UsersService } from './users.service';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from './schemas/user.schema';
+import { Role } from '@/roles/enums/roles.enum';
 
 const mockUser = {
   name: 'User #1',
@@ -59,6 +60,56 @@ describe('UsersService', () => {
     } as any);
     const users = await service.getAll();
     expect(users).toEqual(usersArray);
+  });
+
+  describe('getByRolesOrIds', () => {
+    it('queries staff plus explicit ids with a minimal projection', async () => {
+      const exec = jest.fn().mockResolvedValue([
+        {
+          _id: 'admin-id',
+          name: 'Admin',
+          roles: [Role.Admin],
+          telegramId: '42',
+        },
+        {
+          _id: 'demoted-id',
+          name: 'Demoted',
+          roles: [Role.User],
+        },
+      ]);
+      const lean = jest.fn().mockReturnValue({ exec });
+      const select = jest.fn().mockReturnValue({ lean });
+      const find = jest.spyOn(model, 'find').mockReturnValue({ select } as any);
+
+      await expect(
+        service.getByRolesOrIds(
+          [Role.Admin, Role.Editor],
+          ['507f1f77bcf86cd799439011'],
+        ),
+      ).resolves.toHaveLength(2);
+
+      expect(find).toHaveBeenCalledWith({
+        $or: [
+          { roles: { $in: [Role.Admin, Role.Editor] } },
+          { _id: { $in: ['507f1f77bcf86cd799439011'] } },
+        ],
+      });
+      expect(select).toHaveBeenCalledWith('_id name roles telegramId');
+      expect(lean).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses only the staff filter when no explicit ids are supplied', async () => {
+      const exec = jest.fn().mockResolvedValue([]);
+      const lean = jest.fn().mockReturnValue({ exec });
+      const select = jest.fn().mockReturnValue({ lean });
+      const find = jest.spyOn(model, 'find').mockReturnValue({ select } as any);
+
+      await service.getByRolesOrIds([Role.Admin, Role.Editor]);
+
+      expect(find).toHaveBeenCalledWith({
+        roles: { $in: [Role.Admin, Role.Editor] },
+      });
+    });
   });
 
   it('should insert a new user', async () => {

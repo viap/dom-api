@@ -18,12 +18,22 @@ import { ApplicationMessagesService } from './application-messages.service';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
 import { ApplicationContextResolver } from './application-context-resolver.service';
+import {
+  ApplicationNotificationRoute,
+  applicationNotificationRouteSchema,
+} from './notification-routing/schemas/application-notification-route.schema';
+import { ApplicationNotificationRoutesController } from './notification-routing/application-notification-routes.controller';
+import { ApplicationNotificationRoutesService } from './notification-routing/application-notification-routes.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Application.name, schema: applicationSchema },
       { name: ApplicationMessage.name, schema: applicationMessageSchema },
+      {
+        name: ApplicationNotificationRoute.name,
+        schema: applicationNotificationRouteSchema,
+      },
     ]),
     DomainsModule,
     ProgramsModule,
@@ -34,11 +44,16 @@ import { ApplicationContextResolver } from './application-context-resolver.servi
     NotificationsModule,
     TelegramContactModule,
   ],
-  controllers: [ApplicationsController, ApplicationMessagesController],
+  controllers: [
+    ApplicationsController,
+    ApplicationMessagesController,
+    ApplicationNotificationRoutesController,
+  ],
   providers: [
     ApplicationContextResolver,
     ApplicationsService,
     ApplicationMessagesService,
+    ApplicationNotificationRoutesService,
   ],
   exports: [ApplicationsService],
 })

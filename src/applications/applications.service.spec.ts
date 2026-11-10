@@ -25,6 +25,7 @@ import { ApplicationsService } from './applications.service';
 import { ApplicationMessagingPolicyService } from '@/common/application-messaging/application-messaging-policy.service';
 import { ApplicationContextResolver } from './application-context-resolver.service';
 import { Types } from 'mongoose';
+import { ApplicationNotificationRoutesService } from './notification-routing/application-notification-routes.service';
 
 describe('ApplicationsService', () => {
   let service: ApplicationsService;
@@ -90,6 +91,9 @@ describe('ApplicationsService', () => {
     getById: jest.fn(),
     getAllByRole: jest.fn().mockResolvedValue([{ _id: 'admin-1' }]),
   };
+  const mockNotificationRoutesService = {
+    resolveAudience: jest.fn(),
+  };
   const mockNotificationsService = { create: jest.fn() };
   const mockTelegramContactService = {
     assertTrustedWebClient: jest.fn(),
@@ -111,6 +115,7 @@ describe('ApplicationsService', () => {
       createContextResolver(),
       mockDomainsService as any,
       mockUsersService as any,
+      mockNotificationRoutesService as any,
       mockNotificationsService as any,
       mockTelegramContactService as any,
       configService as any,
@@ -206,6 +211,7 @@ describe('ApplicationsService', () => {
     mockPeopleService.exists.mockReset();
     mockUsersService.getById.mockReset();
     mockUsersService.getAllByRole.mockReset();
+    mockNotificationRoutesService.resolveAudience.mockReset();
     mockNotificationsService.create.mockReset();
     mockTelegramContactService.assertTrustedWebClient.mockReset();
     mockTelegramContactService.resolveSession.mockReset();
@@ -233,6 +239,10 @@ describe('ApplicationsService', () => {
         { provide: PartnersService, useValue: mockPartnersService },
         { provide: PeopleService, useValue: mockPeopleService },
         { provide: UsersService, useValue: mockUsersService },
+        {
+          provide: ApplicationNotificationRoutesService,
+          useValue: mockNotificationRoutesService,
+        },
         { provide: NotificationsService, useValue: mockNotificationsService },
         {
           provide: TelegramContactService,
@@ -276,6 +286,12 @@ describe('ApplicationsService', () => {
     mockPeopleService.exists.mockResolvedValue(true);
     mockUsersService.getById.mockResolvedValue({ _id: 'user-id' });
     mockUsersService.getAllByRole.mockResolvedValue([{ _id: 'admin-1' }]);
+    mockNotificationRoutesService.resolveAudience.mockResolvedValue({
+      mode: 'admin_fallback',
+      roles: [Role.Admin],
+      recipientIds: ['admin-1'],
+      reason: 'route_missing',
+    });
     mockNotificationsService.create.mockResolvedValue({ _id: 'notification' });
     mockSave.mockResolvedValue(mockApplication);
   });
@@ -349,6 +365,103 @@ describe('ApplicationsService', () => {
     },
   );
 
+  it.each(Object.values(ApplicationFormType))(
+    'uses the configured recipient snapshot for %s',
+    async (formType) => {
+      const logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
+      (service as unknown as { logger: typeof logger }).logger = logger;
+      const createDto = buildCreateDto(formType);
+      const saved = {
+        ...mockApplication,
+        formType,
+        payload: createDto.payload,
+      };
+      mockSave.mockResolvedValueOnce(saved);
+      mockNotificationRoutesService.resolveAudience.mockResolvedValueOnce({
+        mode: 'configured',
+        roles: [Role.Admin, Role.Editor],
+        recipientIds: ['admin-1', 'editor-1'],
+        routeRevision: 7,
+      });
+
+      await service.create(createDto);
+
+      expect(
+        mockNotificationRoutesService.resolveAudience,
+      ).toHaveBeenCalledWith(formType);
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roles: [Role.Admin, Role.Editor],
+          recipients: ['admin-1', 'editor-1'],
+        }),
+      );
+      expect(logger.log).toHaveBeenCalledWith(
+        JSON.stringify({
+          event: 'application.notification.configured',
+          applicationId: mockApplication._id,
+          formType,
+          routeRevision: 7,
+        }),
+      );
+      expect(logger.log.mock.calls[0][0]).not.toContain('John');
+      expect(logger.log.mock.calls[0][0]).not.toContain('private message');
+    },
+  );
+
+  it('preserves the saved application and skips notification creation when fallback is unavailable', async () => {
+    const logger = { error: jest.fn(), warn: jest.fn() };
+    (service as unknown as { logger: typeof logger }).logger = logger;
+    mockNotificationRoutesService.resolveAudience.mockResolvedValueOnce({
+      mode: 'unavailable',
+      reason: 'no_linked_admin_fallback',
+    });
+
+    await expect(
+      service.create({
+        domainId: mockApplication.domainId,
+        formType: ApplicationFormType.General,
+        applicant: mockApplication.applicant as any,
+        payload: { message: 'private payload' },
+      }),
+    ).resolves.toBe(mockApplication);
+
+    expect(mockNotificationsService.create).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: 'application.notification.unavailable',
+        applicationId: mockApplication._id,
+        formType: mockApplication.formType,
+        reason: 'no_linked_admin_fallback',
+      }),
+    );
+    expect(logger.error.mock.calls[0][0]).not.toContain('private payload');
+    expect(logger.error.mock.calls[0][0]).not.toContain('John');
+  });
+
+  it('never passes an empty recipient snapshot from application creation', async () => {
+    mockNotificationRoutesService.resolveAudience.mockResolvedValueOnce({
+      mode: 'admin_fallback',
+      roles: [Role.Admin],
+      recipientIds: ['admin-1'],
+      reason: 'route_empty',
+    });
+
+    await service.create({
+      domainId: mockApplication.domainId,
+      formType: ApplicationFormType.General,
+      applicant: mockApplication.applicant as any,
+      payload: { message: 'General request' },
+    });
+
+    expect(mockNotificationsService.create).toHaveBeenCalledTimes(1);
+    expect(mockNotificationsService.create.mock.calls[0][0].recipients).toEqual(
+      ['admin-1'],
+    );
+    expect(
+      mockNotificationsService.create.mock.calls[0][0].recipients,
+    ).not.toEqual([]);
+  });
+
   it('rejects source context that conflicts with the event payload', async () => {
     await expect(
       service.create({
@@ -381,6 +494,9 @@ describe('ApplicationsService', () => {
     ).rejects.toThrow('save failed');
 
     expect(mockNotificationsService.create).not.toHaveBeenCalled();
+    expect(
+      mockNotificationRoutesService.resolveAudience,
+    ).not.toHaveBeenCalled();
   });
 
   it('returns the saved application when notification formatting throws', async () => {
@@ -1067,6 +1183,10 @@ describe('ApplicationsService', () => {
       },
       { new: true },
     );
+    expect(
+      mockNotificationRoutesService.resolveAudience,
+    ).not.toHaveBeenCalled();
+    expect(mockNotificationsService.create).not.toHaveBeenCalled();
   });
 
   it('should keep existing domainId on patch when domainId is omitted', async () => {

@@ -10,7 +10,7 @@ import { Role } from '@/roles/enums/roles.enum';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
-import { Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { SocialNetworks } from '../common/enums/social-networks.enum';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -22,6 +22,13 @@ type MongoDuplicateLoginError = {
   keyPattern?: {
     login?: unknown;
   };
+};
+
+export type UserRoleIdentityProjection = {
+  _id: Types.ObjectId;
+  name: string;
+  roles: Array<Role>;
+  telegramId?: string;
 };
 
 @Injectable()
@@ -53,6 +60,38 @@ export class UsersService {
       return [];
     }
     return this.userModel.find({ roles: { $in: validRoles } }).exec();
+  }
+
+  async getByRolesOrIds(
+    roles: Array<Role>,
+    ids: Array<string> = [],
+  ): Promise<Array<UserRoleIdentityProjection>> {
+    const validRoles = validateRoles(roles);
+    const validIds = [
+      ...new Set(
+        ids
+          .map((id) => validateObjectId(id))
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const filters: Array<FilterQuery<User>> = [];
+
+    if (validRoles.length > 0) {
+      filters.push({ roles: { $in: validRoles } });
+    }
+    if (validIds.length > 0) {
+      filters.push({ _id: { $in: validIds } });
+    }
+    if (filters.length === 0) {
+      return [];
+    }
+
+    const query = filters.length === 1 ? filters[0] : { $or: filters };
+    return (await this.userModel
+      .find(query)
+      .select('_id name roles telegramId')
+      .lean()
+      .exec()) as Array<UserRoleIdentityProjection>;
   }
 
   async getById(id: string): Promise<UserDocument> {

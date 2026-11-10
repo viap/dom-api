@@ -20,7 +20,6 @@ import { UsersService } from '@/users/users.service';
 import { DomainsService } from '@/domains/domains.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
-import { Role } from '@/roles/enums/roles.enum';
 import { parsePublicWebUrl } from '@/common/utils/web-origin';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreatePublicApplicationDto } from './dto/create-public-application.dto';
@@ -46,6 +45,7 @@ import {
   PAYLOAD_TARGET_KEY,
   toApplicationIdString,
 } from './application-context-resolver.service';
+import { ApplicationNotificationRoutesService } from './notification-routing/application-notification-routes.service';
 
 @Injectable()
 export class ApplicationsService {
@@ -58,6 +58,7 @@ export class ApplicationsService {
     private readonly contextResolver: ApplicationContextResolver,
     private readonly domainsService: DomainsService,
     private usersService: UsersService,
+    private readonly notificationRoutesService: ApplicationNotificationRoutesService,
     private notificationsService: NotificationsService,
     private telegramContactService: TelegramContactService,
     configService: ConfigService,
@@ -170,7 +171,10 @@ export class ApplicationsService {
       ...(context.source ? { source: context.source } : {}),
     });
     const savedApplication = await application.save();
-    await this.createAdminNotification(savedApplication, context.targetTitle);
+    await this.createApplicationNotification(
+      savedApplication,
+      context.targetTitle,
+    );
     return savedApplication;
   }
 
@@ -226,14 +230,50 @@ export class ApplicationsService {
     };
   }
 
-  private async createAdminNotification(
+  private async createApplicationNotification(
     application: ApplicationDocument,
     targetTitle: string | null,
   ): Promise<void> {
     const applicationId = application._id.toString();
-    let stage = 'format';
+    let stage = 'audience';
 
     try {
+      const audience = await this.notificationRoutesService.resolveAudience(
+        application.formType,
+      );
+      if (audience.mode === 'unavailable') {
+        this.logger.error(
+          JSON.stringify({
+            event: 'application.notification.unavailable',
+            applicationId,
+            formType: application.formType,
+            reason: audience.reason,
+          }),
+        );
+        return;
+      }
+      if (audience.mode === 'admin_fallback') {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'application.notification.fallback',
+            applicationId,
+            formType: application.formType,
+            reason: audience.reason,
+          }),
+        );
+      }
+      if (audience.mode === 'configured') {
+        this.logger.log(
+          JSON.stringify({
+            event: 'application.notification.configured',
+            applicationId,
+            formType: application.formType,
+            routeRevision: audience.routeRevision,
+          }),
+        );
+      }
+
+      stage = 'format';
       const applicationUrl = buildApplicationAdminUrl(
         this.publicWebOrigin,
         applicationId,
@@ -248,15 +288,12 @@ export class ApplicationsService {
       });
 
       stage = 'create';
-      // Explicit recipients let the notification deactivate once every admin
-      // got it, instead of staying active for its whole lifetime.
-      const admins = await this.usersService.getAllByRole(Role.Admin);
       const notification = await this.notificationsService.create({
         type: NotificationTypes.MESSAGE,
         message,
         messageEntities,
-        roles: [Role.Admin],
-        recipients: admins.map((admin) => admin._id.toString()),
+        roles: audience.roles,
+        recipients: audience.recipientIds,
       });
 
       if (!notification) {

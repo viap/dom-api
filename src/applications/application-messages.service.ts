@@ -17,7 +17,6 @@ import { validateObjectId } from '@/common/utils/mongo-sanitizer';
 import { parsePublicWebUrl } from '@/common/utils/web-origin';
 import { NotificationTypes } from '@/notifications/enums/notification-types.enum';
 import { NotificationsService } from '@/notifications/notifications.service';
-import { Role } from '@/roles/enums/roles.enum';
 import { TelegramContactService } from '@/telegram-contact/telegram-contact.service';
 import { UsersService } from '@/users/users.service';
 import {
@@ -41,6 +40,7 @@ import {
 } from './schemas/application-message.schema';
 import { Application, ApplicationDocument } from './schemas/application.schema';
 import { PreferredContactType } from './types/preferred-contact.type';
+import { ApplicationNotificationRoutesService } from './notification-routing/application-notification-routes.service';
 
 const DELIVERY_LEASE_MS = 2 * 60 * 1000;
 const MAX_CLAIM_SKIPS = 5;
@@ -127,6 +127,7 @@ export class ApplicationMessagesService implements OnModuleInit {
     private readonly applicationModel: Model<ApplicationDocument>,
     private readonly telegramContactService: TelegramContactService,
     private readonly usersService: UsersService,
+    private readonly notificationRoutesService: ApplicationNotificationRoutesService,
     private readonly notificationsService: NotificationsService,
     configService: ConfigService,
     private readonly messagingPolicy: ApplicationMessagingPolicyService,
@@ -621,7 +622,40 @@ export class ApplicationMessagesService implements OnModuleInit {
   private async createReplyNotification(applicationId: string): Promise<void> {
     try {
       const application = await this.getApplication(applicationId);
-      const admins = await this.usersService.getAllByRole(Role.Admin);
+      const audience = await this.notificationRoutesService.resolveAudience(
+        application.formType,
+      );
+      if (audience.mode === 'unavailable') {
+        this.logger.error(
+          JSON.stringify({
+            event: 'application.reply_notification.unavailable',
+            applicationId,
+            formType: application.formType,
+            reason: audience.reason,
+          }),
+        );
+        return;
+      }
+      if (audience.mode === 'admin_fallback') {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'application.reply_notification.fallback',
+            applicationId,
+            formType: application.formType,
+            reason: audience.reason,
+          }),
+        );
+      }
+      if (audience.mode === 'configured') {
+        this.logger.log(
+          JSON.stringify({
+            event: 'application.reply_notification.configured',
+            applicationId,
+            formType: application.formType,
+            routeRevision: audience.routeRevision,
+          }),
+        );
+      }
       const applicationUrl = buildApplicationAdminUrl(
         this.publicWebOrigin,
         applicationId,
@@ -634,8 +668,8 @@ export class ApplicationMessagesService implements OnModuleInit {
         type: NotificationTypes.MESSAGE,
         message,
         messageEntities,
-        roles: [Role.Admin],
-        recipients: admins.map((admin) => admin._id.toString()),
+        roles: audience.roles,
+        recipients: audience.recipientIds,
       });
     } catch (error) {
       this.logger.error(
