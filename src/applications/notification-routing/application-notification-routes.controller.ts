@@ -12,7 +12,7 @@ import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { ApplicationNotificationRoutesService } from './application-notification-routes.service';
 
 @Controller('application-notification-routes')
-@Roles(Role.Admin)
+@Roles(Role.Admin, Role.Editor)
 export class ApplicationNotificationRoutesController {
   constructor(
     private readonly routesService: ApplicationNotificationRoutesService,
@@ -29,6 +29,7 @@ export class ApplicationNotificationRoutesController {
   }
 
   @Put(':formType')
+  @Roles(Role.Admin)
   replace(
     @Param('formType') formType: ApplicationFormType,
     @Body(new JoiValidationPipe(updateApplicationNotificationRouteSchema))
