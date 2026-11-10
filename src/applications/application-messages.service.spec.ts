@@ -4,6 +4,7 @@ import {
   ApplicationMessageDirection,
   ApplicationMessageStatus,
 } from './enums/application-message.enum';
+import { ApplicationFormType } from './enums/application-form-type.enum';
 
 describe('ApplicationMessagesService', () => {
   const originalBotName = process.env.BOT_CLIENT_NAME;
@@ -16,6 +17,7 @@ describe('ApplicationMessagesService', () => {
 
   const application = {
     _id: applicationId,
+    formType: ApplicationFormType.General,
     applicant: {
       name: 'Applicant',
       preferredContact: {
@@ -47,6 +49,7 @@ describe('ApplicationMessagesService', () => {
   let applicationModel: Record<string, jest.Mock>;
   let telegramContactService: Record<string, jest.Mock>;
   let usersService: Record<string, jest.Mock>;
+  let notificationRoutesService: { resolveAudience: jest.Mock };
   let notificationsService: Record<string, jest.Mock>;
   let messagingPolicy: { enabled: boolean; canUseAsSoleContact: jest.Mock };
   let service: ApplicationMessagesService;
@@ -71,8 +74,8 @@ describe('ApplicationMessagesService', () => {
     };
     usersService = {
       getById: jest.fn(),
-      getAllByRole: jest.fn(),
     };
+    notificationRoutesService = { resolveAudience: jest.fn() };
     notificationsService = { create: jest.fn() };
     messagingPolicy = {
       enabled: true,
@@ -83,6 +86,7 @@ describe('ApplicationMessagesService', () => {
       applicationModel as any,
       telegramContactService as any,
       usersService as any,
+      notificationRoutesService as any,
       notificationsService as any,
       {
         get: jest.fn((key: string) =>
@@ -93,6 +97,12 @@ describe('ApplicationMessagesService', () => {
       } as any,
       messagingPolicy as any,
     );
+    notificationRoutesService.resolveAudience.mockResolvedValue({
+      mode: 'admin_fallback',
+      roles: ['admin'],
+      recipientIds: [senderId],
+      reason: 'route_missing',
+    });
   });
 
   afterAll(() => {
@@ -593,16 +603,19 @@ describe('ApplicationMessagesService', () => {
     expect(result.applicantDisplayName).toBe('Telegram Name');
   });
 
-  it('stores a reply once and notifies only current admins without reply text', async () => {
+  it('stores a reply once and notifies current configured recipients without reply text', async () => {
     telegramContactService.findIdentityForReply.mockResolvedValue(identity);
     messageModel.findOne
       .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(outbound) })
       .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) });
     messageModel.create.mockResolvedValue({});
     mockApplicationLookup();
-    usersService.getAllByRole.mockResolvedValue([
-      { _id: { toString: () => senderId } },
-    ]);
+    notificationRoutesService.resolveAudience.mockResolvedValue({
+      mode: 'configured',
+      roles: ['admin', 'editor'],
+      recipientIds: [senderId, '507f1f77bcf86cd799439098'],
+      routeRevision: 4,
+    });
     notificationsService.create.mockResolvedValue({ _id: 'notification' });
 
     const result = await service.receiveReply({
@@ -629,8 +642,8 @@ describe('ApplicationMessagesService', () => {
     );
     expect(notificationsService.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        roles: ['admin'],
-        recipients: [senderId],
+        roles: ['admin', 'editor'],
+        recipients: [senderId, '507f1f77bcf86cd799439098'],
       }),
     );
     expect(
@@ -649,7 +662,6 @@ describe('ApplicationMessagesService', () => {
       .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) });
     messageModel.create.mockResolvedValue({});
     mockApplicationLookup();
-    usersService.getAllByRole.mockResolvedValue([]);
     notificationsService.create.mockResolvedValue({ _id: 'notification' });
 
     const result = await service.receiveReply({
@@ -676,6 +688,78 @@ describe('ApplicationMessagesService', () => {
     expect(messageModel.create.mock.calls[0][0]).not.toHaveProperty(
       'replyToTelegramMessageId',
     );
+  });
+
+  it('stores a reply but skips notification creation when routing is unavailable', async () => {
+    telegramContactService.findIdentityForReply.mockResolvedValue(identity);
+    messageModel.findOne
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(outbound) })
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) });
+    messageModel.create.mockResolvedValue({});
+    mockApplicationLookup();
+    notificationRoutesService.resolveAudience.mockResolvedValue({
+      mode: 'unavailable',
+      reason: 'no_linked_admin_fallback',
+    });
+
+    await expect(
+      service.receiveReply({
+        apiClient: { name: 'domBot', password: 'bot-secret' },
+        privateChatId: '42',
+        telegramUserId: '42',
+        telegramMessageId: 105,
+        replyToTelegramMessageId: 100,
+        text: 'Stored without a notification',
+      }),
+    ).resolves.toEqual({
+      accepted: true,
+      stored: true,
+      applicationId,
+    });
+
+    expect(notificationsService.create).not.toHaveBeenCalled();
+  });
+
+  it('resolves current routing settings independently for each reply notification', async () => {
+    mockApplicationLookup();
+    notificationRoutesService.resolveAudience
+      .mockResolvedValueOnce({
+        mode: 'configured',
+        roles: ['admin', 'editor'],
+        recipientIds: ['first-recipient'],
+        routeRevision: 2,
+      })
+      .mockResolvedValueOnce({
+        mode: 'configured',
+        roles: ['admin', 'editor'],
+        recipientIds: ['second-recipient'],
+        routeRevision: 3,
+      });
+    notificationsService.create.mockResolvedValue({ _id: 'notification' });
+
+    const target = service as unknown as {
+      createReplyNotification: (id: string) => Promise<void>;
+    };
+    await target.createReplyNotification(applicationId);
+    await target.createReplyNotification(applicationId);
+
+    expect(notificationRoutesService.resolveAudience).toHaveBeenNthCalledWith(
+      1,
+      ApplicationFormType.General,
+    );
+    expect(notificationRoutesService.resolveAudience).toHaveBeenNthCalledWith(
+      2,
+      ApplicationFormType.General,
+    );
+    expect(notificationsService.create.mock.calls[0][0].recipients).toEqual([
+      'first-recipient',
+    ]);
+    expect(notificationsService.create.mock.calls[1][0].recipients).toEqual([
+      'second-recipient',
+    ]);
+    expect(notificationsService.create.mock.calls).not.toContainEqual([
+      expect.objectContaining({ recipients: [] }),
+    ]);
   });
 
   it('rejects a selected thread that has no official outbound message', async () => {

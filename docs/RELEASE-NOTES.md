@@ -1,5 +1,18 @@
 # Release Notes
 
+## 2026-11-10
+
+- New-application and applicant-reply notifications use the current
+  per-application-type recipient settings, with linked Admin fallback when no
+  effective configured recipients exist.
+- Generic bot notifications now use only canonical private Telegram sessions
+  for message, new-therapy-request, and transferred-therapy-request delivery.
+  Group-only, channel, and malformed sessions no longer receive these
+  notifications; affected staff must use the bot privately.
+- The private-session restriction closes the previous possibility that a
+  stored group session could be selected and notification content sent into
+  that group.
+
 ## 2026-10-29
 
 - `PATCH /applications/:id` keeps sparse top-level updates, while a supplied
