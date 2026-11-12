@@ -110,6 +110,7 @@ export interface PublicBlockServices {
     filters: EventEntityCollectionFilters,
     limit: number,
     context: EventCollectionContext,
+    signal?: AbortSignal,
   ) => Promise<Array<{ id: string; label: string }>>;
 }
 
@@ -1259,6 +1260,7 @@ async function toPublicDynamicEntityCollectionBlock(
             domainId: context.domainId,
             ordering,
           },
+          ordering ? undefined : context.signal,
         );
         break;
       default:

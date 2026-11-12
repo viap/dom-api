@@ -2,7 +2,7 @@ import { Price } from '@/common/schemas/price.schema';
 import { PageBlock } from '@/pages/types/page-block.interface';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
-import { EventSchedule } from '../types/event-schedule.interface';
+import { EventScheduleWrite } from '../types/event-schedule.interface';
 
 export interface CreateEventDto {
   domainId: string;
@@ -13,7 +13,7 @@ export interface CreateEventDto {
   slug: string;
   startAt?: string;
   endAt?: string;
-  schedule?: EventSchedule;
+  schedule?: EventScheduleWrite;
   locationId?: string;
   mediaId?: string;
   speakerIds?: string[];

@@ -9,11 +9,15 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
 import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
+import { withRequestCancellation } from '@/common/utils/with-request-cancellation';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
@@ -32,11 +36,15 @@ export class EventsController {
 
   @Get()
   @Public()
-  findAll(
+  async findAll(
     @Query(new JoiValidationPipe(eventQuerySchema))
     query: EventQueryParams,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.eventsService.findAll(query);
+    return withRequestCancellation(request, response, (signal) =>
+      this.eventsService.findAll(query, signal),
+    );
   }
 
   @Post('admin/bulk')
@@ -49,30 +57,47 @@ export class EventsController {
 
   @Get('domain/:domainSlug/:eventSlug')
   @Public()
-  findOneByDomainSlugAndEventSlug(
+  async findOneByDomainSlugAndEventSlug(
     @Param(new JoiValidationPipe(eventDomainEventParamsSchema))
     params: {
       domainSlug: string;
       eventSlug: string;
     },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.eventsService.findOneByDomainSlugAndEventSlug(
-      params.domainSlug,
-      params.eventSlug,
+    return withRequestCancellation(request, response, (signal) =>
+      this.eventsService.findOneByDomainSlugAndEventSlug(
+        params.domainSlug,
+        params.eventSlug,
+        signal,
+      ),
     );
   }
 
   @Get(':id([0-9a-fA-F]{24})')
   @Public()
-  findOne(@Param('id') id: string) {
-    return this.eventsService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.eventsService.findOne(id, signal),
+    );
   }
 
   @Post('bulk')
   @Public()
   @Throttle({ default: { limit: 120, ttl: 60000 } })
-  findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
-    return this.eventsService.findManyByIds(body.ids);
+  async findMany(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.eventsService.findManyByIds(body.ids, signal),
+    );
   }
 
   @Post()

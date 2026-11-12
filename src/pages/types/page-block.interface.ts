@@ -161,6 +161,7 @@ export type DynamicEntityCollectionResolutionContext = {
   ordering?: RandomOrdering;
   domainId?: string;
   now: Date;
+  signal?: AbortSignal;
 };
 
 export interface HeroBlockItem {

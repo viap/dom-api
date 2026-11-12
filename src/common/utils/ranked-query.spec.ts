@@ -5,12 +5,13 @@ import {
   processRandomScans,
   previewRandomScans,
   selectRandomDocuments,
+  findRanked,
   permuteItems,
 } from './ranked-query';
 
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
-function cursor(rows: Array<{ _id: string }>) {
+function cursor<T extends { _id: string }>(rows: T[]) {
   return {
     async *[Symbol.asyncIterator]() {
       yield* rows;
@@ -27,6 +28,105 @@ describe('bounded Random query execution', () => {
       permuteItems(rows, 's', (row) => row._id).slice(0, 4),
     );
     expect(source.close).toHaveBeenCalledTimes(1);
+  });
+  it('filters exact candidates before Random ranking and top-K', async () => {
+    const rows = [
+      { _id: 'a', matches: false },
+      { _id: 'b', matches: true },
+      { _id: 'c', matches: true },
+      { _id: 'd', matches: false },
+    ];
+    const result = await selectRandomDocuments(
+      () => cursor(rows),
+      2,
+      { seed: 'exact' },
+      new ScanSemaphore(1),
+      1000,
+      undefined,
+      (row) => row.matches,
+    );
+    expect(result).toEqual(
+      permuteItems(
+        rows.filter((row) => row.matches),
+        'exact',
+        (row) => row._id,
+      ),
+    );
+  });
+
+  it('continues Default scanning until the requested exact-match limit', async () => {
+    const rows = [
+      { _id: 'a', title: 'A', matches: false },
+      { _id: 'b', title: 'B', matches: true },
+      { _id: 'c', title: 'C', matches: false },
+      { _id: 'd', title: 'D', matches: true },
+      { _id: 'e', title: 'E', matches: true },
+    ];
+    const source = cursor(rows);
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      batchSize: jest.fn().mockReturnThis(),
+      maxTimeMS: jest.fn().mockReturnThis(),
+      cursor: jest.fn(() => source),
+    };
+    const model = { find: jest.fn(() => query) } as never;
+    await expect(
+      findRanked(
+        model,
+        {},
+        { _id: 1, title: 1 },
+        { title: 1 },
+        2,
+        undefined,
+        'public',
+        undefined,
+        (row: (typeof rows)[number]) => row.matches,
+      ),
+    ).resolves.toEqual([rows[1], rows[3]]);
+    expect(source.close).toHaveBeenCalledTimes(1);
+  });
+  it('aborts a stalled Default cursor read and closes the cursor once', async () => {
+    const close = jest.fn(async () => undefined);
+    const source = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: () =>
+            new Promise<IteratorResult<{ _id: string; matches: boolean }>>(
+              () => undefined,
+            ),
+        };
+      },
+      close,
+    };
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      batchSize: jest.fn().mockReturnThis(),
+      maxTimeMS: jest.fn().mockReturnThis(),
+      cursor: jest.fn(() => source),
+    };
+    const controller = new AbortController();
+    const reason = new Error('request closed');
+    const pending = findRanked(
+      { find: jest.fn(() => query) } as never,
+      {},
+      { _id: 1 },
+      { _id: 1 },
+      1,
+      undefined,
+      'public',
+      controller.signal,
+      (row: { matches: boolean }) => row.matches,
+    );
+
+    await Promise.resolve();
+    controller.abort(reason);
+
+    await expect(pending).rejects.toBe(reason);
+    expect(close).toHaveBeenCalledTimes(1);
   });
   it('bounds process concurrency across independent callers', async () => {
     const budget = new ScanSemaphore(2, 64, 1000);

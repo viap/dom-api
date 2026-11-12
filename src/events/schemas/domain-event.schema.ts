@@ -19,7 +19,7 @@ import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import {
   EVENT_SCHEDULE_TIMEZONE,
-  EventSchedule,
+  EventScheduleStored,
 } from '../types/event-schedule.interface';
 
 export type DomainEventDocument = DomainEvent &
@@ -63,6 +63,10 @@ export class DomainEvent {
         required: true,
         default: EVENT_SCHEDULE_TIMEZONE,
       },
+      mode: {
+        type: String,
+        enum: ['manual', 'recurring'],
+      },
       days: {
         type: [
           {
@@ -73,12 +77,39 @@ export class DomainEvent {
             _id: false,
           },
         ],
-        required: true,
+      },
+      recurrence: {
+        type: {
+          unit: { type: String, enum: ['week'], required: true },
+          interval: { type: Number, enum: [1, 2], required: true },
+          anchorDate: { type: String, required: true, trim: true },
+          startTime: { type: String, required: true, trim: true },
+          endTime: { type: String, required: true, trim: true },
+          endDate: { type: String, trim: true },
+        },
+        _id: false,
+      },
+      cancelledDates: {
+        type: [String],
+      },
+      overrides: {
+        type: [
+          {
+            date: { type: String, required: true, trim: true },
+            startTime: { type: String, trim: true },
+            endTime: { type: String, trim: true },
+            description: { type: String, trim: true },
+            _id: false,
+          },
+        ],
+      },
+      hasActiveOccurrences: {
+        type: Boolean,
       },
     },
     _id: false,
   })
-  schedule?: EventSchedule;
+  schedule?: EventScheduleStored;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Location' })
   locationId?: mongoose.Schema.Types.ObjectId;
