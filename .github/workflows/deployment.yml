@@ -11,6 +11,18 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MONGO_TEST_URL: mongodb://127.0.0.1:27017/dom_recurring_event_race_test
     steps:
       - name: Get the project code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
