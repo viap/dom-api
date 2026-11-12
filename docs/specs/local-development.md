@@ -71,7 +71,15 @@ npm run lint
 npm run test
 npm run test:e2e
 npm run test:cov
+
+# Mongo-backed e2e with the standard authenticated local dom-db
+MONGO_TEST_URL='mongodb://root:example@127.0.0.1:27017/dom_recurring_event_race_test?authSource=admin' npm run test:e2e
 ```
+
+Replace `root:example` with the local `MONGO_INITDB_ROOT_USERNAME` and
+`MONGO_INITDB_ROOT_PASSWORD` values when they differ from the baseline above.
+`MONGO_TEST_URL` must target a loopback MongoDB server and an explicitly named
+test database; the Mongo-backed suite drops that database after the run.
 
 ## Common local pitfalls and quick checks
 

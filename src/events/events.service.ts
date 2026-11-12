@@ -51,9 +51,14 @@ import {
   DomainEventDocument,
 } from './schemas/domain-event.schema';
 import {
+  addEventCalendarDays,
   EventScheduleValidationError,
   eventDateToUtcStartIsoString,
+  eventDateTimeToLocalKey,
+  hasActiveOccurrenceInRange,
+  isRecurringSchedule,
   normalizeEventSchedule,
+  projectEventScheduleForRead,
 } from './utils/event-schedule';
 import { EventCollectionContext } from '@/events/types/entity-collection-filters.interface';
 import { EventEntityCollectionFilters } from './types/entity-collection-filters.interface';
@@ -112,11 +117,15 @@ export class EventsService {
       ...createData,
       blocks: normalizedBlocks ?? [],
     });
-    return event.save();
+    const saved = await event.save();
+    const savedObject =
+      typeof saved.toObject === 'function' ? saved.toObject() : saved;
+    return this.toReadEvent(savedObject as DomainEventDocument);
   }
 
   async findAll(
     queryParams: EventQueryParams = {},
+    signal?: AbortSignal,
   ): Promise<DomainEventDocument[]> {
     const safeParams = safeFindParams(queryParams);
     const domainId =
@@ -171,12 +180,16 @@ export class EventsService {
           mediaById,
           locationById,
           { dynamicRandom: 'default' },
+          signal,
         );
       }),
     );
   }
 
-  async findOne(id: string): Promise<DomainEventDocument> {
+  async findOne(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<DomainEventDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
       throw new NotFoundException('Invalid event ID format');
@@ -202,12 +215,15 @@ export class EventsService {
       undefined,
       mediaById,
       locationById,
+      undefined,
+      signal,
     );
   }
 
   async findOneByDomainSlugAndEventSlug(
     domainSlug: string,
     eventSlug: string,
+    signal?: AbortSignal,
   ): Promise<DomainEventDocument> {
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
 
@@ -235,11 +251,14 @@ export class EventsService {
       undefined,
       mediaById,
       locationById,
+      undefined,
+      signal,
     );
   }
 
   async findManyByIds(
     ids: string[],
+    signal?: AbortSignal,
   ): Promise<BulkResolveResponse<DomainEventDocument>> {
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
@@ -273,6 +292,7 @@ export class EventsService {
           mediaById,
           locationById,
           { dynamicRandom: 'default' },
+          signal,
         ),
       ),
     );
@@ -303,7 +323,9 @@ export class EventsService {
 
     return toBulkResolveResponse({
       preparedIds,
-      items: events as DomainEventDocument[],
+      items: (events as DomainEventDocument[]).map((event) =>
+        this.toReadEvent(event),
+      ),
       getId: (event) => event._id.toString(),
     });
   }
@@ -366,10 +388,14 @@ export class EventsService {
     let event: unknown;
     try {
       event = await this.eventModel
-        .findByIdAndUpdate(validId, updateData, {
-          new: true,
-          runValidators: true,
-        })
+        .findOneAndUpdate(
+          { _id: validId, __v: existingEvent.__v ?? 0 },
+          { $set: updateData, $inc: { __v: 1 } },
+          {
+            new: true,
+            runValidators: true,
+          },
+        )
         .lean()
         .exec();
     } catch (error) {
@@ -380,7 +406,13 @@ export class EventsService {
       throw error;
     }
 
-    return event as DomainEventDocument;
+    if (!event) {
+      throw new ConflictException(
+        'Event changed while it was being edited; reload and try again',
+      );
+    }
+
+    return this.toReadEvent(event as DomainEventDocument);
   }
 
   async remove(id: string): Promise<boolean> {
@@ -430,37 +462,58 @@ export class EventsService {
     filters: EventEntityCollectionFilters,
     limit: number,
     context: EventCollectionContext,
+    signal?: AbortSignal,
   ): Promise<Array<{ id: string; label: string }>> {
+    signal?.throwIfAborted();
     const domainIds = context.domainId
       ? [context.domainId]
       : (await this.domainsService.findAll()).map((domain) =>
           domain._id.toString(),
         );
+    signal?.throwIfAborted();
     if (!domainIds.length) return [];
 
     const query = this.buildDynamicSummaryQuery(filters, domainIds);
-    const now = context.now.toISOString();
     const temporal = filters.temporal;
     this.applyTemporalFilter(query, filters, context.now);
+    const exactPredicate = this.getExactTemporalPredicate(filters);
     if (context.ordering || temporal) {
       return this.findDynamicSummaryQuery(
         query,
         { startAt: temporal?.mode === 'past' ? -1 : 1, title: 1, _id: 1 },
         limit,
         context.ordering,
+        signal,
+        exactPredicate,
       );
     }
 
+    const upcomingQuery = { ...query };
+    this.applyTemporalFilter(
+      upcomingQuery,
+      { ...filters, temporal: { mode: 'upcoming' } },
+      context.now,
+    );
     const upcoming = await this.findDynamicSummaryQuery(
-      { ...query, endAt: { $gte: now } },
+      upcomingQuery,
       { startAt: 1, title: 1, _id: 1 },
       limit,
+      undefined,
+      signal,
     );
     if (upcoming.length >= limit) return upcoming;
+    const pastQuery = { ...query };
+    this.applyTemporalFilter(
+      pastQuery,
+      { ...filters, temporal: { mode: 'past' } },
+      context.now,
+    );
     const past = await this.findDynamicSummaryQuery(
-      { ...query, endAt: { $lt: now } },
+      pastQuery,
       { startAt: -1, title: 1, _id: 1 },
       limit - upcoming.length,
+      undefined,
+      signal,
     );
     return [...upcoming, ...past];
   }
@@ -481,10 +534,10 @@ export class EventsService {
     if (!domainIds.length) return [];
 
     const query = this.buildDynamicSummaryQuery(filters, domainIds);
-    const now = context.now.toISOString();
     const temporal = filters.temporal;
     let events;
     this.applyTemporalFilter(query, filters, context.now);
+    const exactPredicate = this.getExactTemporalPredicate(filters);
     if (context.ordering || temporal) {
       events = await this.findDynamicPreviewQuery(
         query,
@@ -492,10 +545,17 @@ export class EventsService {
         limit,
         context.ordering,
         signal,
+        exactPredicate,
       );
     } else {
+      const upcomingQuery = { ...query };
+      this.applyTemporalFilter(
+        upcomingQuery,
+        { ...filters, temporal: { mode: 'upcoming' } },
+        context.now,
+      );
       const upcoming = await this.findDynamicPreviewQuery(
-        { ...query, endAt: { $gte: now } },
+        upcomingQuery,
         { startAt: 1, title: 1, _id: 1 },
         limit,
         undefined,
@@ -506,13 +566,21 @@ export class EventsService {
           ? upcoming
           : [
               ...upcoming,
-              ...(await this.findDynamicPreviewQuery(
-                { ...query, endAt: { $lt: now } },
-                { startAt: -1, title: 1, _id: 1 },
-                limit - upcoming.length,
-                undefined,
-                signal,
-              )),
+              ...(await (() => {
+                const pastQuery = { ...query };
+                this.applyTemporalFilter(
+                  pastQuery,
+                  { ...filters, temporal: { mode: 'past' } },
+                  context.now,
+                );
+                return this.findDynamicPreviewQuery(
+                  pastQuery,
+                  { startAt: -1, title: 1, _id: 1 },
+                  limit - upcoming.length,
+                  undefined,
+                  signal,
+                );
+              })()),
             ];
     }
 
@@ -532,7 +600,15 @@ export class EventsService {
           eventType: event.type,
           startAt: event.startAt,
           endAt: event.endAt,
-          ...(event.schedule ? { schedule: event.schedule } : {}),
+          ...(event.schedule
+            ? {
+                schedule: projectEventScheduleForRead(
+                  event.schedule,
+                  event.status,
+                  context.now,
+                ),
+              }
+            : {}),
           ...(locationTitle ? { locationTitle } : {}),
         },
       };
@@ -545,21 +621,107 @@ export class EventsService {
     now: Date,
   ): void {
     const temporal = filters.temporal;
-    if (temporal?.mode === 'upcoming')
-      query.endAt = { $gte: now.toISOString() };
-    else if (temporal?.mode === 'past')
-      query.endAt = { $lt: now.toISOString() };
-    else if (temporal?.mode === 'custom') {
-      if (temporal.from)
-        query.endAt = { $gte: eventDateToUtcStartIsoString(temporal.from) };
-      if (temporal.to) {
-        const next = new Date(`${temporal.to}T12:00:00.000Z`);
-        next.setUTCDate(next.getUTCDate() + 1);
-        query.startAt = {
-          $lt: eventDateToUtcStartIsoString(next.toISOString().slice(0, 10)),
+    if (temporal?.mode === 'upcoming') {
+      this.appendQueryAnd(query, {
+        $or: [
+          {
+            'schedule.mode': { $ne: 'recurring' },
+            endAt: { $gte: now.toISOString() },
+          },
+          {
+            'schedule.mode': 'recurring',
+            status: { $in: ACTIVE_EVENT_STATUSES },
+            'schedule.hasActiveOccurrences': true,
+            $or: [
+              { 'schedule.recurrence.endDate': { $exists: false } },
+              {
+                'schedule.recurrence.endDate': { $exists: true },
+                endAt: { $gte: now.toISOString() },
+              },
+            ],
+          },
+        ],
+      });
+    } else if (temporal?.mode === 'past') {
+      const today = eventDateTimeToLocalKey(now).date;
+      this.appendQueryAnd(query, {
+        $or: [
+          {
+            'schedule.mode': { $ne: 'recurring' },
+            endAt: { $lt: now.toISOString() },
+          },
+          {
+            'schedule.mode': 'recurring',
+            status: EventStatus.Completed,
+          },
+          {
+            'schedule.mode': 'recurring',
+            'schedule.hasActiveOccurrences': true,
+            'schedule.recurrence.endDate': { $exists: true },
+            endAt: { $lt: now.toISOString() },
+          },
+          {
+            'schedule.mode': 'recurring',
+            'schedule.hasActiveOccurrences': false,
+            'schedule.recurrence.endDate': { $lt: today },
+          },
+        ],
+      });
+    } else if (temporal?.mode === 'custom') {
+      const manualRange: FilterQuery<DomainEventDocument> = {
+        'schedule.mode': { $ne: 'recurring' },
+      };
+      if (temporal.from) {
+        manualRange.endAt = {
+          $gte: eventDateToUtcStartIsoString(temporal.from),
         };
       }
+      if (temporal.to) {
+        const nextDate = addEventCalendarDays(temporal.to, 1);
+        manualRange.startAt = {
+          $lt: eventDateToUtcStartIsoString(nextDate),
+        };
+      }
+      const recurringRange: FilterQuery<DomainEventDocument> = {
+        'schedule.mode': 'recurring',
+        status: { $in: ACTIVE_EVENT_STATUSES },
+        'schedule.hasActiveOccurrences': true,
+      };
+      if (temporal.to) {
+        recurringRange['schedule.recurrence.anchorDate'] = {
+          $lte: temporal.to,
+        };
+      }
+      if (temporal.from) {
+        recurringRange.$or = [
+          { 'schedule.recurrence.endDate': { $exists: false } },
+          { 'schedule.recurrence.endDate': { $gte: temporal.from } },
+        ];
+      }
+      this.appendQueryAnd(query, { $or: [manualRange, recurringRange] });
     }
+  }
+
+  private appendQueryAnd(
+    query: FilterQuery<DomainEventDocument>,
+    condition: FilterQuery<DomainEventDocument>,
+  ): void {
+    const existing = Array.isArray(query.$and) ? query.$and : [];
+    query.$and = [...existing, condition];
+  }
+
+  private getExactTemporalPredicate(
+    filters: EventEntityCollectionFilters,
+  ): ((event: DomainEventDocument) => boolean) | undefined {
+    const temporal = filters.temporal;
+    if (temporal?.mode !== 'custom') return undefined;
+    return (event) =>
+      hasActiveOccurrenceInRange(
+        event.schedule,
+        event.status,
+        temporal.from,
+        temporal.to,
+      );
   }
 
   private buildDynamicSummaryQuery(
@@ -592,14 +754,26 @@ export class EventsService {
     sort: Record<string, 1 | -1>,
     limit: number,
     ordering?: RandomOrdering,
+    signal?: AbortSignal,
+    predicate?: (event: DomainEventDocument) => boolean,
   ): Promise<Array<{ id: string; label: string }>> {
     const events = await findRanked(
       this.eventModel,
       query,
-      { _id: 1, title: 1 },
+      {
+        _id: 1,
+        title: 1,
+        status: 1,
+        startAt: 1,
+        endAt: 1,
+        schedule: 1,
+      },
       sort,
       limit,
       ordering,
+      'public',
+      signal,
+      predicate,
     );
     return events.map((event) => ({
       id: event._id.toString(),
@@ -613,6 +787,7 @@ export class EventsService {
     limit: number,
     ordering?: RandomOrdering,
     signal?: AbortSignal,
+    predicate?: (event: DomainEventDocument) => boolean,
   ) {
     return findRanked(
       this.eventModel,
@@ -623,6 +798,7 @@ export class EventsService {
         type: 1,
         startAt: 1,
         endAt: 1,
+        status: 1,
         schedule: 1,
         locationId: 1,
       },
@@ -631,6 +807,7 @@ export class EventsService {
       ordering,
       'preview',
       signal,
+      predicate,
     );
   }
 
@@ -666,6 +843,7 @@ export class EventsService {
     mediaById: Map<string, MediaDocument> = new Map(),
     locationById: Map<string, PublicEventLocation> = new Map(),
     policy: PublicBlockConversionPolicy = { dynamicRandom: 'enabled' },
+    signal?: AbortSignal,
   ): Promise<DomainEventDocument> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
@@ -678,6 +856,7 @@ export class EventsService {
         owner: { kind: 'event', eventId: String(eventObj._id) },
         domainId: this.toIdString(eventObj.domainId),
         now: new Date(),
+        signal,
       },
       policy,
     );
@@ -697,13 +876,25 @@ export class EventsService {
     const locationId = this.toIdString(eventObj.locationId);
     const location = locationId ? locationById.get(locationId) : undefined;
 
-    return {
+    return this.toReadEvent({
       ...eventObj,
       ...(media ? { mediaId: media } : {}),
       ...(location ? { locationId: location } : {}),
       ...(domainSlug ? { domainSlug } : {}),
       blocks: publicBlocks,
       registeredCount: count,
+    } as unknown as DomainEventDocument);
+  }
+
+  private toReadEvent(event: DomainEventDocument): DomainEventDocument {
+    const value = event as unknown as Record<string, unknown>;
+    const schedule = projectEventScheduleForRead(
+      value.schedule as DomainEventDocument['schedule'],
+      value.status as EventStatus,
+    );
+    return {
+      ...value,
+      ...(schedule ? { schedule } : {}),
     } as unknown as DomainEventDocument;
   }
 
@@ -888,8 +1079,8 @@ export class EventsService {
         this.peopleService.findDynamicSummaries(filters, limit, ordering),
       findDynamicPartnerSummaries: (filters, limit, ordering) =>
         this.partnersService.findDynamicSummaries(filters, limit, ordering),
-      findDynamicEventSummaries: (filters, limit, context) =>
-        this.findDynamicSummaries(filters, limit, context),
+      findDynamicEventSummaries: (filters, limit, context, signal) =>
+        this.findDynamicSummaries(filters, limit, context, signal),
     };
   }
 
@@ -917,6 +1108,11 @@ export class EventsService {
     }
 
     const envelope = this.normalizeScheduleForWrite(createEventDto.schedule);
+    this.assertRecurringMergedInvariants(
+      undefined,
+      createEventDto.status ?? EventStatus.Draft,
+      envelope.schedule,
+    );
     this.assertRegistrationDeadlineBeforeStart(
       createEventDto.registration?.deadline,
       envelope.startAt,
@@ -946,6 +1142,19 @@ export class EventsService {
         );
       }
 
+      const requestedMode = (
+        updateEventDto.schedule as unknown as Record<string, unknown>
+      )?.mode;
+      if (
+        isRecurringSchedule(existingEvent.schedule) &&
+        requestedMode !== 'recurring' &&
+        requestedMode !== 'manual'
+      ) {
+        throw new BadRequestException(
+          'Recurring events require an explicit recurring update or manual conversion',
+        );
+      }
+
       const envelope = this.normalizeScheduleForWrite(updateEventDto.schedule);
       updateData.schedule = envelope.schedule;
       updateData.startAt = envelope.startAt;
@@ -959,6 +1168,15 @@ export class EventsService {
         'scheduled events must be updated with schedule timing',
       );
     }
+
+    const mergedStatus = updateEventDto.status ?? existingEvent.status;
+    const mergedSchedule = (updateData.schedule ??
+      existingEvent.schedule) as DomainEventDocument['schedule'];
+    this.assertRecurringMergedInvariants(
+      existingEvent,
+      mergedStatus,
+      mergedSchedule,
+    );
 
     if (
       hasSchedule ||
@@ -978,6 +1196,71 @@ export class EventsService {
     }
 
     return updateData;
+  }
+
+  private assertRecurringMergedInvariants(
+    existingEvent: DomainEventDocument | undefined,
+    mergedStatus: EventStatus,
+    mergedSchedule: DomainEventDocument['schedule'] | undefined,
+  ): void {
+    const existingRecurringSchedule = isRecurringSchedule(
+      existingEvent?.schedule,
+    )
+      ? existingEvent.schedule
+      : undefined;
+    const mergedRecurringSchedule = isRecurringSchedule(mergedSchedule)
+      ? mergedSchedule
+      : undefined;
+
+    if (
+      existingEvent?.status === EventStatus.Completed &&
+      existingRecurringSchedule &&
+      mergedStatus !== EventStatus.Completed
+    ) {
+      throw new BadRequestException('Completed events cannot be resumed');
+    }
+
+    if (mergedStatus === EventStatus.Completed && mergedRecurringSchedule) {
+      if (!mergedRecurringSchedule.recurrence.endDate) {
+        throw new BadRequestException(
+          'Completed recurring events require recurrence.endDate',
+        );
+      }
+    }
+
+    if (
+      existingEvent?.status === EventStatus.Completed &&
+      existingRecurringSchedule &&
+      !mergedRecurringSchedule
+    ) {
+      throw new BadRequestException(
+        'Completed recurring events cannot be converted to manual mode',
+      );
+    }
+
+    if (
+      existingEvent?.status === EventStatus.Completed &&
+      existingRecurringSchedule &&
+      mergedRecurringSchedule
+    ) {
+      const oldCutoff = existingRecurringSchedule.recurrence.endDate;
+      const nextCutoff = mergedRecurringSchedule.recurrence.endDate;
+      if (!oldCutoff || !nextCutoff || nextCutoff > oldCutoff) {
+        throw new BadRequestException(
+          'Completed recurring event cutoff cannot be removed or extended',
+        );
+      }
+    }
+
+    if (
+      existingRecurringSchedule &&
+      mergedSchedule?.mode === 'manual' &&
+      !existingRecurringSchedule.hasActiveOccurrences
+    ) {
+      throw new BadRequestException(
+        'A recurring event without active occurrences cannot be converted to manual mode',
+      );
+    }
   }
 
   private getEffectiveRegistrationDeadline(

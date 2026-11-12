@@ -110,6 +110,7 @@ export interface PublicBlockServices {
     filters: EventEntityCollectionFilters,
     limit: number,
     context: EventCollectionContext,
+    signal?: AbortSignal,
   ) => Promise<Array<{ id: string; label: string }>>;
 }
 
@@ -205,9 +206,7 @@ function collectButtonRefs(
         refs.anchorRefs.push({
           sourceBlockId,
           targetId: button.targetId,
-          ...(button.targetPageId
-            ? { targetPageId: button.targetPageId }
-            : {}),
+          ...(button.targetPageId ? { targetPageId: button.targetPageId } : {}),
         });
         break;
       case BlockButtonType.Domain:
@@ -462,9 +461,7 @@ async function validateCollectedRefs(
   ]);
 }
 
-function collectEffectiveVisibleBlockIds(
-  blocks: PageRootBlock[],
-): Set<string> {
+function collectEffectiveVisibleBlockIds(blocks: PageRootBlock[]): Set<string> {
   const visibleIds = new Set<string>();
 
   const visit = (block: PageRootBlock, parentVisible: boolean): void => {
@@ -496,7 +493,10 @@ function anchorReferenceKey(reference: AnchorReference): string {
 
 function collectAnchorReferences(blocks: PageRootBlock[]): AnchorReference[] {
   const refs: AnchorReference[] = [];
-  const collectButtons = (buttons: BlockButton[] | undefined, sourceBlockId: string) => {
+  const collectButtons = (
+    buttons: BlockButton[] | undefined,
+    sourceBlockId: string,
+  ) => {
     for (const button of buttons || []) {
       if (button.type === BlockButtonType.Anchor && button.targetId) {
         refs.push({
@@ -575,7 +575,9 @@ async function validateAnchorReferences(
   if (!crossPageRefs.length) return;
 
   const previousCounts = new Map<string, number>();
-  for (const reference of collectAnchorReferences(context.previousBlocks || [])) {
+  for (const reference of collectAnchorReferences(
+    context.previousBlocks || [],
+  )) {
     if (!reference.targetPageId) continue;
     const key = anchorReferenceKey(reference);
     previousCounts.set(key, (previousCounts.get(key) || 0) + 1);
@@ -598,10 +600,15 @@ async function validateAnchorReferences(
     throw new BadRequestException('Anchor target resolution is unavailable');
   }
 
-  const targetIds = [...new Set(strictRefs.map((reference) => reference.targetPageId!))];
+  const targetIds = [
+    ...new Set(strictRefs.map((reference) => reference.targetPageId!)),
+  ];
   const pages = await services.anchorPagesByIds(targetIds);
   const visibleIdsByPage = new Map(
-    pages.map((page) => [page.id, collectEffectiveVisibleBlockIds(page.blocks)]),
+    pages.map((page) => [
+      page.id,
+      collectEffectiveVisibleBlockIds(page.blocks),
+    ]),
   );
   for (const reference of strictRefs) {
     const targetIdsForPage = visibleIdsByPage.get(reference.targetPageId!);
@@ -1253,6 +1260,7 @@ async function toPublicDynamicEntityCollectionBlock(
             domainId: context.domainId,
             ordering,
           },
+          ordering ? undefined : context.signal,
         );
         break;
       default:

@@ -131,7 +131,18 @@ describe('Random Dynamic cursor integration', () => {
       expect(chain.limit).not.toHaveBeenCalled();
       expect(chain.sort).not.toHaveBeenCalled();
       expect(chain.select).toHaveBeenCalledWith(
-        type === 'people' ? { _id: 1, fullName: 1 } : { _id: 1, title: 1 },
+        type === 'people'
+          ? { _id: 1, fullName: 1 }
+          : type === 'events'
+          ? {
+              _id: 1,
+              title: 1,
+              status: 1,
+              startAt: 1,
+              endAt: 1,
+              schedule: 1,
+            }
+          : { _id: 1, title: 1 },
       );
       expect(close).toHaveBeenCalledTimes(1);
       const preview = await service.findDynamicPreviewItems({}, 4, context);
@@ -191,13 +202,86 @@ describe('Random Dynamic cursor integration', () => {
   });
 
   it.each([
-    [{ mode: 'upcoming' }, { endAt: { $gte: now.toISOString() } }],
-    [{ mode: 'past' }, { endAt: { $lt: now.toISOString() } }],
+    [
+      { mode: 'upcoming' },
+      {
+        $and: [
+          {
+            status: { $in: ['planned', 'registration_open', 'ongoing'] },
+            $or: [
+              {
+                'schedule.mode': { $ne: 'recurring' },
+                endAt: { $gte: now.toISOString() },
+              },
+              {
+                'schedule.mode': 'recurring',
+                'schedule.hasActiveOccurrences': true,
+                $or: [
+                  { 'schedule.recurrence.endDate': { $exists: false } },
+                  {
+                    'schedule.recurrence.endDate': { $exists: true },
+                    endAt: { $gte: now.toISOString() },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    [
+      { mode: 'past' },
+      {
+        $and: [
+          {
+            $or: [
+              {
+                'schedule.mode': { $ne: 'recurring' },
+                endAt: { $lt: now.toISOString() },
+              },
+              { status: 'completed' },
+              {
+                'schedule.mode': 'recurring',
+                'schedule.hasActiveOccurrences': true,
+                'schedule.recurrence.endDate': { $exists: true },
+                endAt: { $lt: now.toISOString() },
+              },
+              {
+                'schedule.mode': 'recurring',
+                'schedule.hasActiveOccurrences': false,
+                'schedule.recurrence.endDate': { $lt: '2026-10-15' },
+              },
+            ],
+          },
+        ],
+      },
+    ],
     [
       { mode: 'custom', from: '2026-10-01', to: '2026-10-31' },
       {
-        endAt: { $gte: '2026-09-30T20:00:00.000Z' },
-        startAt: { $lt: '2026-10-31T20:00:00.000Z' },
+        $and: [
+          {
+            $or: [
+              {
+                'schedule.mode': { $ne: 'recurring' },
+                endAt: { $gte: '2026-09-30T20:00:00.000Z' },
+                startAt: { $lt: '2026-10-31T20:00:00.000Z' },
+              },
+              {
+                'schedule.mode': 'recurring',
+                status: { $in: ['planned', 'registration_open', 'ongoing'] },
+                'schedule.hasActiveOccurrences': true,
+                'schedule.recurrence.anchorDate': { $lte: '2026-10-31' },
+                $or: [
+                  { 'schedule.recurrence.endDate': { $exists: false } },
+                  {
+                    'schedule.recurrence.endDate': { $gte: '2026-10-01' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
     ],
   ])(

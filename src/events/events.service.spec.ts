@@ -67,13 +67,21 @@ describe('EventsService', () => {
 
   const mockSave = jest.fn().mockResolvedValue(mockEvent);
   const mockInstance = { save: mockSave };
+  const mockEventUpdate = jest.fn();
   const mockEventModel = Object.assign(
     jest.fn().mockImplementation(() => mockInstance),
     {
       find: jest.fn(),
       findOne: jest.fn(),
       findById: jest.fn(),
-      findByIdAndUpdate: jest.fn(),
+      findByIdAndUpdate: mockEventUpdate,
+      findOneAndUpdate: jest.fn(
+        (
+          filter: { _id: string },
+          update: { $set: unknown },
+          options: unknown,
+        ) => mockEventUpdate(filter._id, update.$set, options),
+      ),
       findByIdAndDelete: jest.fn(),
       countDocuments: jest.fn(),
     },
@@ -253,7 +261,28 @@ describe('EventsService', () => {
         { speakerIds: { $in: ['507f1f77bcf86cd799439113'] } },
         { organizerIds: { $in: ['507f1f77bcf86cd799439113'] } },
       ],
-      endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+      $and: [
+        {
+          $or: [
+            {
+              'schedule.mode': { $ne: 'recurring' },
+              endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+            },
+            {
+              'schedule.mode': 'recurring',
+              status: { $in: ['planned', 'registration_open', 'ongoing'] },
+              'schedule.hasActiveOccurrences': true,
+              $or: [
+                { 'schedule.recurrence.endDate': { $exists: false } },
+                {
+                  'schedule.recurrence.endDate': { $exists: true },
+                  endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
     });
     expect(chain.sort).toHaveBeenCalledWith({ startAt: 1, title: 1, _id: 1 });
     expect(chain.limit).toHaveBeenCalledWith(6);
@@ -304,6 +333,7 @@ describe('EventsService', () => {
       type: 1,
       startAt: 1,
       endAt: 1,
+      status: 1,
       schedule: 1,
       locationId: 1,
     });
@@ -376,6 +406,77 @@ describe('EventsService', () => {
     });
     expect(past.sort).toHaveBeenCalledWith({ startAt: -1, title: 1, _id: 1 });
     expect(past.limit).toHaveBeenCalledWith(1);
+    expect(mockEventModel.find).toHaveBeenNthCalledWith(1, {
+      domainId: { $in: [mockEvent.domainId] },
+      status: {
+        $in: [
+          'planned',
+          'registration_open',
+          'ongoing',
+          'completed',
+          'cancelled',
+        ],
+      },
+      $and: [
+        {
+          $or: [
+            {
+              'schedule.mode': { $ne: 'recurring' },
+              endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+            },
+            {
+              'schedule.mode': 'recurring',
+              status: { $in: ['planned', 'registration_open', 'ongoing'] },
+              'schedule.hasActiveOccurrences': true,
+              $or: [
+                { 'schedule.recurrence.endDate': { $exists: false } },
+                {
+                  'schedule.recurrence.endDate': { $exists: true },
+                  endAt: { $gte: '2026-09-10T12:00:00.000Z' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(mockEventModel.find).toHaveBeenNthCalledWith(2, {
+      domainId: { $in: [mockEvent.domainId] },
+      status: {
+        $in: [
+          'planned',
+          'registration_open',
+          'ongoing',
+          'completed',
+          'cancelled',
+        ],
+      },
+      $and: [
+        {
+          $or: [
+            {
+              'schedule.mode': { $ne: 'recurring' },
+              endAt: { $lt: '2026-09-10T12:00:00.000Z' },
+            },
+            {
+              'schedule.mode': 'recurring',
+              status: 'completed',
+            },
+            {
+              'schedule.mode': 'recurring',
+              'schedule.hasActiveOccurrences': true,
+              'schedule.recurrence.endDate': { $exists: true },
+              endAt: { $lt: '2026-09-10T12:00:00.000Z' },
+            },
+            {
+              'schedule.mode': 'recurring',
+              'schedule.hasActiveOccurrences': false,
+              'schedule.recurrence.endDate': { $lt: '2026-09-10' },
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('returns events without domainId and does not validate domain', async () => {
@@ -1567,5 +1668,313 @@ describe('EventsService', () => {
   it('does not query for an invalid notification target id', async () => {
     await expect(service.getNotificationTitle('invalid')).resolves.toBeNull();
     expect(mockEventModel.findById).not.toHaveBeenCalled();
+  });
+
+  it('uses the validated revision in every successful Event update', async () => {
+    const existing = { ...mockEvent, __v: 7 };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findByIdAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, title: 'Updated', __v: 8 }),
+    );
+
+    await service.update(mockEvent._id, { title: 'Updated' });
+
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 7 },
+      { $set: { title: 'Updated' }, $inc: { __v: 1 } },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('returns 409 instead of replaying a stale Event update', async () => {
+    const existing = { ...mockEvent, __v: 3 };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findByIdAndUpdate.mockReturnValue(
+      createFindOneQueryMock(null),
+    );
+
+    await expect(
+      service.update(mockEvent._id, { title: 'Stale' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts an explicit edited manual subset when converting an open-ended recurring event', async () => {
+    const existing = {
+      ...mockEvent,
+      __v: 4,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-04-20',
+          startTime: '14:00',
+          endTime: '16:00',
+        },
+        cancelledDates: ['2026-04-27'],
+        overrides: [{ date: '2026-05-04', description: 'Original override' }],
+        hasActiveOccurrences: true,
+      },
+    };
+    const manualSchedule = {
+      timezone: 'Asia/Tbilisi' as const,
+      mode: 'manual' as const,
+      days: [
+        {
+          date: '2026-11-16',
+          startTime: '15:00',
+          endTime: '17:00',
+          description: 'Edited after conversion',
+        },
+        { date: '2026-11-30', startTime: '14:00', endTime: '16:00' },
+      ],
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findOneAndUpdate.mockReturnValue(
+      createFindOneQueryMock({
+        ...existing,
+        __v: 5,
+        schedule: manualSchedule,
+      }),
+    );
+
+    await expect(
+      service.update(mockEvent._id, { schedule: manualSchedule }),
+    ).resolves.toBeDefined();
+
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 4 },
+      expect.objectContaining({
+        $set: expect.objectContaining({ schedule: manualSchedule }),
+        $inc: { __v: 1 },
+      }),
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('still rejects implicit and zero-active recurring-to-manual conversions', async () => {
+    const recurringSchedule = {
+      timezone: 'Asia/Tbilisi' as const,
+      mode: 'recurring' as const,
+      recurrence: {
+        unit: 'week' as const,
+        interval: 1 as const,
+        anchorDate: '2026-04-20',
+        startTime: '14:00',
+        endTime: '16:00',
+        endDate: '2026-04-20',
+      },
+      cancelledDates: ['2026-04-20'],
+      overrides: [],
+      hasActiveOccurrences: false,
+    };
+    const existing = {
+      ...mockEvent,
+      __v: 2,
+      schedule: recurringSchedule,
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, {
+        schedule: {
+          timezone: 'Asia/Tbilisi',
+          days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
+        },
+      }),
+    ).rejects.toThrow('explicit recurring update or manual conversion');
+
+    await expect(
+      service.update(mockEvent._id, {
+        schedule: {
+          timezone: 'Asia/Tbilisi',
+          mode: 'manual',
+          days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
+        },
+      }),
+    ).rejects.toThrow('without active occurrences');
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects transitions away from persisted completed recurring status', async () => {
+    const existing = {
+      ...mockEvent,
+      status: 'completed',
+      __v: 1,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-04-20',
+          startTime: '14:00',
+          endTime: '16:00',
+          endDate: '2026-05-20',
+        },
+        cancelledDates: [],
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, { status: 'planned' as never }),
+    ).rejects.toThrow('cannot be resumed');
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('preserves status transitions for completed manual events', async () => {
+    const existing = {
+      ...mockEvent,
+      status: 'completed',
+      __v: 1,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'manual',
+        days: [{ date: '2026-04-20', startTime: '14:00', endTime: '16:00' }],
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findOneAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, status: 'planned', __v: 2 }),
+    );
+
+    await expect(
+      service.update(mockEvent._id, { status: 'planned' as never }),
+    ).resolves.toBeDefined();
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 1 },
+      { $set: { status: 'planned' }, $inc: { __v: 1 } },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('rejects completion with future exceptions after the cutoff', async () => {
+    const existing = {
+      ...mockEvent,
+      __v: 1,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-04-20',
+          startTime: '14:00',
+          endTime: '16:00',
+        },
+        cancelledDates: [],
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, {
+        status: 'completed' as never,
+        schedule: {
+          timezone: 'Asia/Tbilisi',
+          mode: 'recurring',
+          recurrence: {
+            unit: 'week',
+            interval: 1,
+            anchorDate: '2026-04-20',
+            startTime: '14:00',
+            endTime: '16:00',
+            endDate: '2026-05-04',
+          },
+          cancelledDates: ['2026-05-11'],
+          overrides: [],
+        },
+      }),
+    ).rejects.toThrow('endDate');
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('filters recurring custom-range occurrences before Default limit for summary and preview', async () => {
+    const recurringEvent = (
+      id: string,
+      title: string,
+      anchorDate: string,
+      cancelledDates: string[] = [],
+    ) => ({
+      ...mockEvent,
+      _id: id,
+      title,
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate,
+          startTime: '14:00',
+          endTime: '16:00',
+        },
+        cancelledDates,
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    });
+    const rows = [
+      recurringEvent(
+        '507f1f77bcf86cd799439071',
+        'False positive',
+        '2026-01-01',
+        ['2026-01-08'],
+      ),
+      recurringEvent('507f1f77bcf86cd799439072', 'Exact match', '2026-01-08'),
+    ];
+    const makeQuery = () => {
+      const source = {
+        async *[Symbol.asyncIterator]() {
+          yield* rows;
+        },
+        close: jest.fn(async () => undefined),
+      };
+      return {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        sort: jest.fn().mockReturnThis(),
+        batchSize: jest.fn().mockReturnThis(),
+        maxTimeMS: jest.fn().mockReturnThis(),
+        cursor: jest.fn(() => source),
+      };
+    };
+    mockEventModel.find.mockImplementation(() => makeQuery());
+    mockLocationsService.findManyByIds.mockResolvedValue({ items: [] });
+    const filters = {
+      temporal: {
+        mode: 'custom' as const,
+        from: '2026-01-08',
+        to: '2026-01-08',
+      },
+    };
+    const context = {
+      domainId: mockEvent.domainId,
+      now: new Date('2026-01-01T00:00:00.000Z'),
+    };
+
+    await expect(
+      service.findDynamicSummaries(filters, 1, context),
+    ).resolves.toEqual([
+      { id: '507f1f77bcf86cd799439072', label: 'Exact match' },
+    ]);
+    const preview = await service.findDynamicPreviewItems(filters, 1, context);
+    expect(preview.map((item) => item.id)).toEqual([
+      '507f1f77bcf86cd799439072',
+    ]);
   });
 });

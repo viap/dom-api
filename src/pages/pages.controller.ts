@@ -17,6 +17,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/auth/decorators/public.decorator';
 import { bulkIdsSchema } from '@/common/schemas/joi.bulk-ids.schema';
 import { BulkIdsRequest } from '@/common/types/bulk-resolve.types';
+import { withRequestCancellation } from '@/common/utils/with-request-cancellation';
 import { JoiValidationPipe } from '@/joi/joi.pipe';
 import { Roles } from '@/roles/decorators/role.docorator';
 import { Role } from '@/roles/enums/roles.enum';
@@ -43,11 +44,15 @@ export class PagesController {
 
   @Get()
   @Public()
-  findAll(
+  async findAll(
     @Query(new JoiValidationPipe(pageQuerySchema))
     query: PageQueryParams,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.findAll(query);
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findAll(query, signal),
+    );
   }
 
   @Get('admin/global')
@@ -109,95 +114,110 @@ export class PagesController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const cancellation = new AbortController();
-    const abort = () => cancellation.abort();
-    const close = () => {
-      if (!response.writableEnded) abort();
-    };
-    request.once('aborted', abort);
-    response.once('close', close);
-    if (request.aborted || response.destroyed) abort();
-    try {
-      return await this.pagesService.previewEntityCollection(
-        body,
-        cancellation.signal,
-      );
-    } catch (error) {
-      // The client has disconnected: cancellation is neither overload nor a 500.
-      if (cancellation.signal.aborted && error === cancellation.signal.reason)
-        return;
-      throw error;
-    } finally {
-      request.removeListener('aborted', abort);
-      response.removeListener('close', close);
-    }
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.previewEntityCollection(body, signal),
+    );
   }
 
   @Get('domain/:domainSlug')
   @Public()
-  findAllByDomainSlug(
+  async findAllByDomainSlug(
     @Param(new JoiValidationPipe(pageDomainParamsSchema))
     params: { domainSlug: string },
     @Query(new JoiValidationPipe(pageDomainQuerySchema))
     query: { limit?: string; offset?: string },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.findAllByDomainSlug(params.domainSlug, query);
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findAllByDomainSlug(params.domainSlug, query, signal),
+    );
   }
 
   @Get('global/home')
   @Public()
-  findGlobalHomepage() {
-    return this.pagesService.findGlobalHomepage();
+  async findGlobalHomepage(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findGlobalHomepage(signal),
+    );
   }
 
   @Get('global/:pageSlug')
   @Public()
-  findOneGlobalBySlug(
+  async findOneGlobalBySlug(
     @Param(new JoiValidationPipe(pageGlobalPageParamsSchema))
     params: {
       pageSlug: string;
     },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.findOneGlobalBySlug(params.pageSlug);
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findOneGlobalBySlug(params.pageSlug, signal),
+    );
   }
 
   @Get('domain/:domainSlug/home')
   @Public()
-  findDomainHomepage(
+  async findDomainHomepage(
     @Param(new JoiValidationPipe(pageDomainParamsSchema))
     params: {
       domainSlug: string;
     },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.findDomainHomepage(params.domainSlug);
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findDomainHomepage(params.domainSlug, signal),
+    );
   }
 
   @Get('domain/:domainSlug/:pageSlug')
   @Public()
-  findOneByDomainSlugAndPageSlug(
+  async findOneByDomainSlugAndPageSlug(
     @Param(new JoiValidationPipe(pageDomainPageParamsSchema))
     params: {
       domainSlug: string;
       pageSlug: string;
     },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.pagesService.findOneByDomainSlugAndPageSlug(
-      params.domainSlug,
-      params.pageSlug,
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findOneByDomainSlugAndPageSlug(
+        params.domainSlug,
+        params.pageSlug,
+        signal,
+      ),
     );
   }
 
   @Get(':id([0-9a-fA-F]{24})')
   @Public()
-  findOne(@Param('id') id: string) {
-    return this.pagesService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findOne(id, signal),
+    );
   }
 
   @Post('bulk')
   @Public()
   @Throttle({ default: { limit: 120, ttl: 60000 } })
-  findMany(@Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest) {
-    return this.pagesService.findManyByIds(body.ids);
+  async findMany(
+    @Body(new JoiValidationPipe(bulkIdsSchema)) body: BulkIdsRequest,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.findManyByIds(body.ids, signal),
+    );
   }
 
   @Post()

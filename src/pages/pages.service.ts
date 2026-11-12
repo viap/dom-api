@@ -135,7 +135,10 @@ export class PagesService {
     return page.save();
   }
 
-  async findAll(queryParams: PageQueryParams = {}): Promise<PageDocument[]> {
+  async findAll(
+    queryParams: PageQueryParams = {},
+    signal?: AbortSignal,
+  ): Promise<PageDocument[]> {
     const safeParams = safeFindParams(queryParams);
     const domainId =
       typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
@@ -159,12 +162,13 @@ export class PagesService {
       .lean()
       .exec();
 
-    return Promise.all(pages.map((page) => this.toPublicPage(page)));
+    return Promise.all(pages.map((page) => this.toPublicPage(page, signal)));
   }
 
   async findAllByDomainSlug(
     domainSlug: string,
     queryParams: { limit?: string; offset?: string } = {},
+    signal?: AbortSignal,
   ): Promise<PageDocument[]> {
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
     const safeParams = safeFindParams(queryParams);
@@ -182,10 +186,10 @@ export class PagesService {
       .lean()
       .exec();
 
-    return Promise.all(pages.map((page) => this.toPublicPage(page)));
+    return Promise.all(pages.map((page) => this.toPublicPage(page, signal)));
   }
 
-  async findOne(id: string): Promise<PageDocument> {
+  async findOne(id: string, signal?: AbortSignal): Promise<PageDocument> {
     const validId = validateObjectId(id);
     if (!validId) {
       throw new NotFoundException('Invalid page ID format');
@@ -199,11 +203,12 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, signal);
   }
 
   async findManyByIds(
     ids: string[],
+    signal?: AbortSignal,
   ): Promise<BulkResolveResponse<PageDocument>> {
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
@@ -221,7 +226,7 @@ export class PagesService {
       .exec();
 
     const publicPages = await Promise.all(
-      pages.map((page) => this.toPublicPage(page)),
+      pages.map((page) => this.toPublicPage(page, signal)),
     );
 
     return toBulkResolveResponse({
@@ -262,6 +267,7 @@ export class PagesService {
   async findOneByDomainSlugAndPageSlug(
     domainSlug: string,
     pageSlug: string,
+    signal?: AbortSignal,
   ): Promise<PageDocument> {
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
 
@@ -277,10 +283,13 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, signal);
   }
 
-  async findOneGlobalBySlug(pageSlug: string): Promise<PageDocument> {
+  async findOneGlobalBySlug(
+    pageSlug: string,
+    signal?: AbortSignal,
+  ): Promise<PageDocument> {
     const page = await this.pageModel
       .findOne({
         slug: pageSlug,
@@ -293,10 +302,10 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, signal);
   }
 
-  async findGlobalHomepage(): Promise<PageDocument> {
+  async findGlobalHomepage(signal?: AbortSignal): Promise<PageDocument> {
     const page = await this.pageModel
       .findOne({
         status: PageStatus.Published,
@@ -309,10 +318,13 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, signal);
   }
 
-  async findDomainHomepage(domainSlug: string): Promise<PageDocument> {
+  async findDomainHomepage(
+    domainSlug: string,
+    signal?: AbortSignal,
+  ): Promise<PageDocument> {
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
 
     const page = await this.pageModel
@@ -327,7 +339,7 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, signal);
   }
 
   async findAllGlobal(
@@ -776,7 +788,10 @@ export class PagesService {
     return page ? this.toPageReference(page) : null;
   }
 
-  private async toPublicPage(page: PublicPageSource): Promise<PageDocument> {
+  private async toPublicPage(
+    page: PublicPageSource,
+    signal?: AbortSignal,
+  ): Promise<PageDocument> {
     const blocks = Array.isArray(page.blocks) ? page.blocks : [];
     const publicBlocks = await toPublicBlocks(
       blocks,
@@ -787,13 +802,19 @@ export class PagesService {
           this.peopleService.findDynamicSummaries(filters, limit, ordering),
         findDynamicPartnerSummaries: (filters, limit, ordering) =>
           this.partnersService.findDynamicSummaries(filters, limit, ordering),
-        findDynamicEventSummaries: (filters, limit, context) =>
-          this.eventsService.findDynamicSummaries(filters, limit, context),
+        findDynamicEventSummaries: (filters, limit, context, signal) =>
+          this.eventsService.findDynamicSummaries(
+            filters,
+            limit,
+            context,
+            signal,
+          ),
       },
       {
         owner: { kind: 'page', pageId: String(page._id) },
         domainId: this.toIdString(page.domainId),
         now: new Date(),
+        signal,
       },
     );
 

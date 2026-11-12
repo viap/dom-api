@@ -114,6 +114,45 @@ describe('public Random selection cache', () => {
     await render({ ...block, itemOrder: undefined });
     expect(resolver).toHaveBeenCalledTimes(6);
   });
+  it('does not attach one request signal to a shared Random event scan', async () => {
+    const eventResolver = jest.fn<
+      Promise<Array<{ id: string; label: string }>>,
+      [unknown, number, { ordering?: unknown }, AbortSignal?]
+    >(async () => [{ id: 'event', label: 'Event' }]);
+    const services: PublicBlockServices = {
+      findPublishedPeopleSummariesByIds: async () => [],
+      findDynamicPeopleSummaries: async () => [],
+      findDynamicPartnerSummaries: async () => [],
+      findDynamicEventSummaries: eventResolver,
+    };
+    const cache = new RandomSelectionCache(() => beginning);
+    jest
+      .spyOn(publicRandomSelections, 'resolve')
+      .mockImplementation(cache.resolve.bind(cache));
+    const cancellation = new AbortController();
+    const context = {
+      now: new Date(beginning),
+      owner: { kind: 'page' as const, pageId: 'page-with-events' },
+      signal: cancellation.signal,
+    };
+    const block = {
+      id: 'events',
+      type: 'entityCollection',
+      entityType: 'events',
+      source: 'dynamic',
+      items: [],
+      filters: {},
+      limit: 12,
+      itemOrder: 'random',
+    };
+
+    await toPublicBlocks([block], services, context);
+    expect(eventResolver.mock.calls[0][3]).toBeUndefined();
+    await toPublicBlocks([block], services, context, {
+      dynamicRandom: 'default',
+    });
+    expect(eventResolver.mock.calls[1][3]).toBe(cancellation.signal);
+  });
   it('rejects missing seed owner/path at the runtime boundary', () => {
     for (const context of [
       { now: new Date(), blockPath: ['b'] },

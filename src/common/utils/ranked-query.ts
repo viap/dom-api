@@ -13,6 +13,9 @@ import {
 } from '@/common/constants/random-selection.constants';
 
 export { RANDOM_SCAN_TIMEOUT_MS } from '@/common/constants/random-selection.constants';
+const EXACT_SCAN_BATCH_SIZE = 256;
+const EXACT_SCAN_MAX_CANDIDATES = 10_000;
+const EXACT_SCAN_DEADLINE_MS = RANDOM_SCAN_TIMEOUT_MS;
 const logger = new Logger('RandomSelection');
 export interface RandomOrdering {
   seed: string;
@@ -22,6 +25,12 @@ export type RandomScanFailureReason =
   | 'queue_timeout'
   | 'scan_timeout'
   | 'mongo_timeout';
+
+export class ExactScanUnavailableException extends ServiceUnavailableException {
+  constructor() {
+    super('Exact event filtering exceeded its scan budget; retry the request');
+  }
+}
 
 /** Only this failure permits a public Dynamic block to retry with Default. */
 export class RandomScanUnavailableException extends ServiceUnavailableException {
@@ -194,6 +203,7 @@ export async function selectRandomDocuments<
   budget = processRandomScans,
   timeoutMs = RANDOM_SCAN_TIMEOUT_MS,
   signal?: AbortSignal,
+  predicate?: (document: T) => boolean,
 ): Promise<T[]> {
   return budget.run(async () => {
     const start = performance.now();
@@ -237,7 +247,9 @@ export async function selectRandomDocuments<
         const document = next.value;
         if (timedOut || performance.now() - start >= timeoutMs)
           throw unavailable('scan_timeout');
-        selected.add(document, document._id.toString());
+        if (predicate?.(document) ?? true) {
+          selected.add(document, document._id.toString());
+        }
         if (++count % 256 === 0)
           await new Promise<void>((resolve) => setImmediate(resolve));
       }
@@ -269,6 +281,72 @@ export async function selectRandomDocuments<
   }, signal);
 }
 
+async function selectDefaultDocuments<T>(
+  cursor: AsyncIterable<T> & { close?: () => Promise<void> },
+  limit: number,
+  predicate: (document: T) => boolean,
+  signal?: AbortSignal,
+): Promise<T[]> {
+  const startedAt = performance.now();
+  const result: T[] = [];
+  let scanned = 0;
+  let timedOut = false;
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= Promise.resolve().then(() => cursor.close?.()));
+  let rejectRead: ((error: unknown) => void) | undefined;
+  const abort = () => {
+    rejectRead?.(signal?.reason);
+    void close().catch(() => undefined);
+  };
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    rejectRead?.(new ExactScanUnavailableException());
+    void close().catch(() => undefined);
+  }, EXACT_SCAN_DEADLINE_MS);
+  try {
+    signal?.throwIfAborted();
+    const iterator = cursor[Symbol.asyncIterator]();
+    while (true) {
+      signal?.throwIfAborted();
+      if (timedOut || performance.now() - startedAt >= EXACT_SCAN_DEADLINE_MS) {
+        throw new ExactScanUnavailableException();
+      }
+      const next = await new Promise<IteratorResult<T>>((resolve, reject) => {
+        rejectRead = reject;
+        Promise.resolve()
+          .then(() => {
+            signal?.throwIfAborted();
+            return iterator.next();
+          })
+          .then(resolve, reject);
+      });
+      rejectRead = undefined;
+      signal?.throwIfAborted();
+      if (next.done) break;
+      const document = next.value;
+      if (++scanned > EXACT_SCAN_MAX_CANDIDATES || timedOut) {
+        throw new ExactScanUnavailableException();
+      }
+      if (predicate(document)) result.push(document);
+      if (result.length >= limit) break;
+    }
+    return result;
+  } catch (error) {
+    if (signal?.aborted && error === signal.reason) throw error;
+    if (timedOut) throw new ExactScanUnavailableException();
+    if ((error as { code?: number }).code === 50) {
+      throw new ExactScanUnavailableException();
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+    await close().catch(() => undefined);
+  }
+}
+
 /** One query path preserves projections and Default database ordering. */
 export async function findRanked<T>(
   model: Model<T>,
@@ -279,6 +357,7 @@ export async function findRanked<T>(
   ordering?: RandomOrdering,
   purpose: 'public' | 'preview' = 'public',
   signal?: AbortSignal,
+  predicate?: (document: T) => boolean,
 ) {
   signal?.throwIfAborted();
   const find = () => model.find(query).select(projection).lean();
@@ -289,6 +368,18 @@ export async function findRanked<T>(
         ordering,
         purpose === 'preview' ? previewRandomScans : processRandomScans,
         RANDOM_SCAN_TIMEOUT_MS,
+        signal,
+        predicate as ((document: any) => boolean) | undefined,
+      )
+    : predicate
+    ? await selectDefaultDocuments(
+        find()
+          .sort(sort)
+          .batchSize(EXACT_SCAN_BATCH_SIZE)
+          .maxTimeMS(EXACT_SCAN_DEADLINE_MS)
+          .cursor(),
+        limit,
+        predicate,
         signal,
       )
     : await find().sort(sort).limit(limit).exec();

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -917,14 +918,24 @@ export class MediaService {
     // Clean top-level mediaId references
     const topLevelEvents = await this.domainEventModel
       .find({ mediaId })
-      .select({ _id: 1 })
+      .select({ _id: 1, __v: 1 })
       .lean()
       .exec();
 
     if (topLevelEvents.length) {
-      await this.domainEventModel
-        .updateMany({ mediaId }, { $unset: { mediaId: '' } })
-        .exec();
+      for (const event of topLevelEvents) {
+        const result = await this.domainEventModel
+          .updateOne(
+            { _id: event._id, __v: event.__v ?? 0, mediaId },
+            { $unset: { mediaId: '' }, $inc: { __v: 1 } },
+          )
+          .exec();
+        if (result.modifiedCount !== 1) {
+          throw new ConflictException(
+            'Event changed during media cleanup; retry the operation',
+          );
+        }
+      }
 
       summary.events.count += topLevelEvents.length;
       for (const item of topLevelEvents) {
@@ -956,13 +967,14 @@ export class MediaService {
           { 'blocks.snippets.button.block.customItems.mediaId': mediaId },
         ],
       })
-      .select({ _id: 1, blocks: 1 })
+      .select({ _id: 1, blocks: 1, __v: 1 })
       .lean()
       .exec();
 
     for (const event of blockEvents as Array<{
       _id: unknown;
       blocks?: unknown[];
+      __v?: number;
     }>) {
       const blocks = Array.isArray(event.blocks) ? [...event.blocks] : [];
       const nextBlocks: unknown[] = [];
@@ -991,13 +1003,18 @@ export class MediaService {
         continue;
       }
 
-      await this.domainEventModel
+      const result = await this.domainEventModel
         .updateOne(
-          { _id: event._id },
-          { $set: { blocks: nextBlocks } },
+          { _id: event._id, __v: event.__v ?? 0 },
+          { $set: { blocks: nextBlocks }, $inc: { __v: 1 } },
           { runValidators: true },
         )
         .exec();
+      if (result.modifiedCount !== 1) {
+        throw new ConflictException(
+          'Event changed during media cleanup; retry the operation',
+        );
+      }
 
       summary.events.count += 1;
       summary.events.recordIds.push(String(event._id));

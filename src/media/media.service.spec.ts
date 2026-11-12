@@ -180,7 +180,7 @@ describe('MediaService', () => {
       exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     });
     mockDomainEventModel.updateOne.mockReturnValue({
-      exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+      exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
     });
     mockPersonModel.updateMany.mockReturnValue({
       exec: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
@@ -637,9 +637,13 @@ describe('MediaService', () => {
     const remainingGallery = updatedBlocks.find((block) => block.id === 'g2');
     expect(remainingGallery.items).toEqual([{ mediaId: 'other-media' }]);
 
-    expect(mockDomainEventModel.updateMany).toHaveBeenCalledWith(
-      { mediaId: uploadedMediaId },
-      { $unset: { mediaId: '' } },
+    expect(mockDomainEventModel.updateOne).toHaveBeenCalledWith(
+      {
+        _id: '507f1f77bcf86cd799439311',
+        __v: 0,
+        mediaId: uploadedMediaId,
+      },
+      { $unset: { mediaId: '' }, $inc: { __v: 1 } },
     );
     expect(mockPersonModel.updateMany).toHaveBeenCalledWith(
       { photoId: uploadedMediaId },
