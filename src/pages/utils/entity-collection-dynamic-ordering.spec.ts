@@ -207,7 +207,6 @@ describe('Random Dynamic cursor integration', () => {
       {
         $and: [
           {
-            status: { $in: ['planned', 'registration_open', 'ongoing'] },
             $or: [
               {
                 'schedule.mode': { $ne: 'recurring' },
@@ -215,6 +214,9 @@ describe('Random Dynamic cursor integration', () => {
               },
               {
                 'schedule.mode': 'recurring',
+                status: {
+                  $in: ['planned', 'registration_open', 'ongoing'],
+                },
                 'schedule.hasActiveOccurrences': true,
                 $or: [
                   { 'schedule.recurrence.endDate': { $exists: false } },
@@ -239,7 +241,10 @@ describe('Random Dynamic cursor integration', () => {
                 'schedule.mode': { $ne: 'recurring' },
                 endAt: { $lt: now.toISOString() },
               },
-              { status: 'completed' },
+              {
+                'schedule.mode': 'recurring',
+                status: 'completed',
+              },
               {
                 'schedule.mode': 'recurring',
                 'schedule.hasActiveOccurrences': true,
