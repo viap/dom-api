@@ -244,6 +244,7 @@ describe('recurring Event concurrent completion', () => {
           },
         }),
       }),
+      updateMany: model.updateMany.bind(model),
       findOne: model.findOne.bind(model),
       findOneAndUpdate: model.findOneAndUpdate.bind(model),
     } as unknown as Model<DomainEventDocument>;
