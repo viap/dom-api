@@ -533,7 +533,7 @@ function findNextActiveOccurrence(
   let date = firstLogicalOnOrAfter(schedule.recurrence, localNow.date);
   if (
     date === localNow.date &&
-    occurrenceForDate(schedule, date).endTime < localNow.time
+    occurrenceForDate(schedule, date).endTime <= localNow.time
   ) {
     date = addEventCalendarDays(date, schedule.recurrence.interval * 7);
   }
@@ -558,6 +558,7 @@ function buildPreview(
   status: EventStatus | undefined,
   now: Date,
   limit: number,
+  includeCancelled: boolean,
 ): RecurringOccurrenceRead[] {
   const rule = schedule.recurrence;
   const next = findNextActiveOccurrence(schedule, now);
@@ -567,6 +568,7 @@ function buildPreview(
     status === EventStatus.Completed ||
     Boolean(logicalBoundary && logicalBoundary < localNow.date) ||
     Boolean(!next && logicalBoundary);
+  if (!includeCancelled && status === EventStatus.Cancelled) return [];
   let first: string;
   if (useHistory) {
     const last = logicalBoundary ?? rule.anchorDate;
@@ -579,15 +581,29 @@ function buildPreview(
     first = firstLogicalOnOrAfter(rule, localNow.date);
     if (
       first === localNow.date &&
-      occurrenceForDate(schedule, first).endTime < localNow.time
+      occurrenceForDate(schedule, first).endTime <= localNow.time
     ) {
       first = addEventCalendarDays(first, rule.interval * 7);
     }
   }
   const result: RecurringOccurrenceRead[] = [];
+  if (useHistory && !includeCancelled) {
+    for (
+      let date = logicalBoundary ?? rule.anchorDate;
+      date >= rule.anchorDate && result.length < limit;
+      date = addEventCalendarDays(date, -rule.interval * 7)
+    ) {
+      const occurrence = occurrenceForDate(schedule, date);
+      if (occurrence.status === 'active') result.push(occurrence);
+    }
+    return result.reverse();
+  }
   for (let date = first; result.length < limit; ) {
     if (rule.endDate && date > rule.endDate) break;
-    result.push(occurrenceForDate(schedule, date));
+    const occurrence = occurrenceForDate(schedule, date);
+    if (includeCancelled || occurrence.status === 'active') {
+      result.push(occurrence);
+    }
     date = addEventCalendarDays(date, rule.interval * 7);
   }
   return result;
@@ -598,13 +614,20 @@ export function projectEventScheduleForRead(
   status?: EventStatus,
   now = new Date(),
   previewLimit = EVENT_SCHEDULE_PREVIEW_LIMIT,
+  includeCancelled = true,
 ): EventScheduleRead | undefined {
   if (!schedule || schedule.mode !== 'recurring') {
     return schedule as EventScheduleRead | undefined;
   }
   const normalized = normalizeEventSchedule(schedule)
     .schedule as RecurringEventScheduleStored;
-  const occurrencePreview = buildPreview(normalized, status, now, previewLimit);
+  const occurrencePreview = buildPreview(
+    normalized,
+    status,
+    now,
+    previewLimit,
+    includeCancelled,
+  );
   const nextActiveOccurrence =
     status === EventStatus.Completed || status === EventStatus.Cancelled
       ? null

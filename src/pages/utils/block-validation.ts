@@ -50,6 +50,7 @@ import {
   sanitizeRichTextHtml,
 } from './html-sanitizer';
 import { analyzeHtmlSnippets } from './html-snippets';
+import { assertUniqueEventCollectionIdentities } from './event-collection-identity';
 
 export type ValidationRefs = {
   peopleIds: Set<string>;
@@ -807,6 +808,12 @@ export async function prepareBlocksForWrite(
 ): Promise<PageRootBlock[]> {
   const sanitizedBlocks = blocks.map((block) => sanitizeOneBlock(block, 0));
   await validateBlocks(sanitizedBlocks, services, context);
+  if (context?.kind === 'page') {
+    assertUniqueEventCollectionIdentities(
+      context.currentPageId ?? 'draft',
+      sanitizedBlocks,
+    );
+  }
   return sanitizedBlocks;
 }
 
@@ -842,6 +849,7 @@ const MAX_EMBEDDED_BLOCK_DEPTH = 1;
 
 export interface PublicBlockConversionPolicy {
   dynamicRandom: 'enabled' | 'default';
+  eventCollections?: 'resolved' | 'descriptor';
 }
 
 type ResolveDynamicSelection = (
@@ -859,6 +867,7 @@ export async function toPublicBlocks(
   },
   policy: PublicBlockConversionPolicy = { dynamicRandom: 'enabled' },
 ): Promise<Array<PageBlock | Record<string, unknown>>> {
+  context = { ...context, eventCollections: policy.eventCollections };
   const selectionCache = publicRandomSelections;
   const resolveSelection: ResolveDynamicSelection = async (
     block,
@@ -1127,6 +1136,26 @@ async function toPublicOneBlock(
       }
     }
     delete typedBlock.itemOrder;
+  }
+  if (
+    context.eventCollections === 'descriptor' &&
+    typedBlock.type === PageBlockType.EntityCollection &&
+    typedBlock.entityType === EntityCollectionEntityType.Events &&
+    context.owner.kind === 'page'
+  ) {
+    const publicBlock = { ...typedBlock };
+    delete publicBlock.source;
+    delete publicBlock.filters;
+    delete publicBlock.limit;
+    if (typedBlock.source === 'dynamic') publicBlock.items = [];
+    publicBlock.eventSnapshot = {
+      resolver: 'event_snapshot',
+      identity: {
+        owner: { kind: 'page', pageId: context.owner.pageId },
+        blockPath,
+      },
+    };
+    return publicBlock;
   }
   if (typedBlock.type === PageBlockType.Group) {
     // Drop hidden children, resolve/strip each visible child (same rules as a

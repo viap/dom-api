@@ -67,6 +67,7 @@ describe('ApplicationsService', () => {
   };
   const mockEventsService = {
     findOne: jest.fn(),
+    assertRegistrationAvailable: jest.fn(),
     exists: jest.fn(),
   };
   const mockPartnersService = { exists: jest.fn() };
@@ -84,7 +85,7 @@ describe('ApplicationsService', () => {
       formType: ApplicationFormType.EventRegistration,
       targetKey: 'eventId' as const,
       entityType: 'event',
-      findTarget: mockEventsService.findOne,
+      findTarget: mockEventsService.assertRegistrationAvailable,
     },
   ];
   const mockUsersService = {
@@ -205,6 +206,7 @@ describe('ApplicationsService', () => {
     mockProgramsService.findOne.mockReset();
     mockProgramsService.exists.mockReset();
     mockEventsService.findOne.mockReset();
+    mockEventsService.assertRegistrationAvailable.mockReset();
     mockEventsService.exists.mockReset();
     mockPartnersService.exists.mockReset();
     mockPeopleService.findOne.mockReset();
@@ -272,7 +274,7 @@ describe('ApplicationsService', () => {
       title: 'Program',
     });
     mockProgramsService.exists.mockResolvedValue(true);
-    mockEventsService.findOne.mockResolvedValue({
+    mockEventsService.assertRegistrationAvailable.mockResolvedValue({
       _id: '507f1f77bcf86cd799439033',
       domainId: mockApplication.domainId,
       title: 'Event',
@@ -476,7 +478,9 @@ describe('ApplicationsService', () => {
       }),
     ).rejects.toThrow('source conflicts');
 
-    expect(mockEventsService.findOne).toHaveBeenCalledTimes(1);
+    expect(mockEventsService.assertRegistrationAvailable).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockApplicationModel).not.toHaveBeenCalled();
     expect(mockNotificationsService.create).not.toHaveBeenCalled();
   });
@@ -610,7 +614,7 @@ describe('ApplicationsService', () => {
   );
 
   it('rejects a missing or non-public event before saving', async () => {
-    mockEventsService.findOne.mockRejectedValueOnce(
+    mockEventsService.assertRegistrationAvailable.mockRejectedValueOnce(
       new NotFoundException('Event not found'),
     );
 
@@ -623,13 +627,15 @@ describe('ApplicationsService', () => {
       }),
     ).rejects.toThrow(BadRequestException);
 
-    expect(mockEventsService.findOne).toHaveBeenCalledTimes(1);
+    expect(mockEventsService.assertRegistrationAvailable).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockApplicationModel).not.toHaveBeenCalled();
     expect(mockNotificationsService.create).not.toHaveBeenCalled();
   });
 
   it('should reject invalid referenced event ids in payload', async () => {
-    mockEventsService.findOne.mockRejectedValueOnce(
+    mockEventsService.assertRegistrationAvailable.mockRejectedValueOnce(
       new NotFoundException('Event not found'),
     );
 
@@ -703,7 +709,9 @@ describe('ApplicationsService', () => {
       payload: { eventId: '507f1f77bcf86cd799439033' },
     });
 
-    expect(mockEventsService.findOne).toHaveBeenCalledTimes(1);
+    expect(mockEventsService.assertRegistrationAvailable).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockApplicationModel).toHaveBeenCalledWith(
       expect.objectContaining({
         domainId: mockApplication.domainId,
@@ -1204,7 +1212,9 @@ describe('ApplicationsService', () => {
     });
 
     expect(mockDomainsService.getActiveByCode).not.toHaveBeenCalled();
-    expect(mockEventsService.findOne).not.toHaveBeenCalled();
+    expect(
+      mockEventsService.assertRegistrationAvailable,
+    ).not.toHaveBeenCalled();
     expect(mockApplicationModel.findByIdAndUpdate).toHaveBeenCalledWith(
       mockApplication._id,
       {
@@ -1264,7 +1274,9 @@ describe('ApplicationsService', () => {
 
     expect(mockDomainsService.getActiveByCode).not.toHaveBeenCalled();
     expect(mockProgramsService.findOne).not.toHaveBeenCalled();
-    expect(mockEventsService.findOne).not.toHaveBeenCalled();
+    expect(
+      mockEventsService.assertRegistrationAvailable,
+    ).not.toHaveBeenCalled();
     expect(mockPeopleService.findOne).not.toHaveBeenCalled();
     expect(mockApplicationModel.findByIdAndUpdate).toHaveBeenCalledWith(
       mockApplication._id,
@@ -1763,7 +1775,9 @@ describe('ApplicationsService', () => {
       payload: { eventId: eventId.toString() },
     });
 
-    expect(mockEventsService.findOne).not.toHaveBeenCalled();
+    expect(
+      mockEventsService.assertRegistrationAvailable,
+    ).not.toHaveBeenCalled();
     expect(mockDomainsService.getActiveById).not.toHaveBeenCalled();
     expect(mockApplicationModel.findByIdAndUpdate).toHaveBeenCalledWith(
       mockApplication._id,
@@ -1866,7 +1880,9 @@ describe('ApplicationsService', () => {
       }),
     ).rejects.toThrow('source conflicts');
 
-    expect(mockEventsService.findOne).toHaveBeenCalledTimes(1);
+    expect(mockEventsService.assertRegistrationAvailable).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockApplicationModel.findByIdAndUpdate).not.toHaveBeenCalled();
   });
 

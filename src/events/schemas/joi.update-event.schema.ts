@@ -14,6 +14,7 @@ import {
 import { joiEventScheduleSchema } from './joi.event-schedule.schema';
 
 export const updateEventSchema = Joi.object({
+  expectedRevision: Joi.number().integer().min(0).allow(null).optional(),
   domainId: joiObjectId.optional(),
 
   type: Joi.string()
@@ -64,12 +65,44 @@ export const updateEventSchema = Joi.object({
     .optional(),
 
   priceGroups: Joi.array().items(joiPriceGroupSchema).optional(),
-  capacity: Joi.number().integer().min(1).optional(),
+  capacity: Joi.number().integer().min(1).allow(null).optional(),
+  capacityMutation: Joi.object({
+    action: Joi.string().valid('set', 'clear', 'use_legacy').required(),
+    value: Joi.when('action', {
+      is: 'set',
+      then: Joi.number().integer().min(1).required(),
+      otherwise: Joi.forbidden(),
+    }),
+    expectedConflict: Joi.object({
+      capacity: Joi.number().integer().min(1).optional(),
+      maxParticipants: Joi.number().integer().min(1).optional(),
+    })
+      .min(1)
+      .optional(),
+  })
+    .custom((value, helpers) => {
+      if (value.action === 'use_legacy' && !value.expectedConflict) {
+        return helpers.error('event.capacityMutationExpectedConflict');
+      }
+      return value;
+    })
+    .messages({
+      'event.capacityMutationExpectedConflict':
+        'capacityMutation.use_legacy requires expectedConflict',
+    })
+    .optional(),
 
   seo: joiSeoSchema.optional(),
   blocks: pageBlocksSchema.optional(),
 })
+  .oxor('capacity', 'capacityMutation')
   .custom((value, helpers) => {
+    if (
+      value.capacityMutation !== undefined &&
+      !Object.prototype.hasOwnProperty.call(value, 'expectedRevision')
+    ) {
+      return helpers.error('event.capacityMutationExpectedRevision');
+    }
     const hasSchedule = value.schedule !== undefined;
     const hasStartAt = value.startAt !== undefined;
     const hasEndAt = value.endAt !== undefined;
@@ -113,6 +146,8 @@ export const updateEventSchema = Joi.object({
     return value;
   }, 'event temporal ordering validation')
   .messages({
+    'event.capacityMutationExpectedRevision':
+      'capacityMutation requires expectedRevision',
     'any.invalid':
       'endAt must be after startAt and registration.deadline must be before or equal to startAt',
   })

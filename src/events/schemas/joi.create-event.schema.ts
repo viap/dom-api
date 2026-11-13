@@ -75,6 +75,19 @@ export const createEventSchema = Joi.object({
   blocks: pageBlocksSchema.optional(),
 })
   .custom((value, helpers) => {
+    if (
+      value.capacity !== undefined &&
+      value.registration?.maxParticipants !== undefined
+    ) {
+      if (value.capacity !== value.registration.maxParticipants) {
+        return helpers.error('event.capacityConflict');
+      }
+      // Compatibility clients may duplicate the same value in both fields.
+      // Canonicalize that unambiguous shape instead of persisting a legacy pair.
+      value.registration = { ...value.registration };
+      delete value.registration.maxParticipants;
+    }
+
     const hasSchedule = value.schedule !== undefined;
     const hasStartAt = value.startAt !== undefined;
     const hasEndAt = value.endAt !== undefined;
@@ -115,6 +128,8 @@ export const createEventSchema = Joi.object({
     return value;
   }, 'event temporal ordering validation')
   .messages({
+    'event.capacityConflict':
+      'capacity and registration.maxParticipants must match',
     'any.invalid':
       'endAt must be after startAt and registration.deadline must be before or equal to startAt',
   });

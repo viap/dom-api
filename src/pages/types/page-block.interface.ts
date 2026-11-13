@@ -104,6 +104,15 @@ export interface EntityCollectionBlockBase extends PageBlockBase {
   cardVariant?: string;
   itemOrder?: EntityCollectionItemOrder;
   columns?: EntityCollectionColumns;
+  eventSnapshot?: {
+    resolver: 'event_snapshot';
+    identity: PersistedCollectionIdentity;
+  };
+}
+
+export interface PersistedCollectionIdentity {
+  owner: { kind: 'page'; pageId: string };
+  blockPath: string[];
 }
 
 export interface ManualEntityCollectionBlock extends EntityCollectionBlockBase {
@@ -162,6 +171,7 @@ export type DynamicEntityCollectionResolutionContext = {
   domainId?: string;
   now: Date;
   signal?: AbortSignal;
+  eventCollections?: 'resolved' | 'descriptor';
 };
 
 export interface HeroBlockItem {

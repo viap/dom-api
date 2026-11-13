@@ -55,6 +55,14 @@ export class EventsController {
     return this.eventsService.findManyAdminByIds(body.ids);
   }
 
+  @Get('admin')
+  @Roles(Role.Admin, Role.Editor)
+  findAllAdmin(
+    @Query(new JoiValidationPipe(eventQuerySchema)) query: EventQueryParams,
+  ) {
+    return this.eventsService.findAllAdmin(query);
+  }
+
   @Get('domain/:domainSlug/:eventSlug')
   @Public()
   async findOneByDomainSlugAndEventSlug(
