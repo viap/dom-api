@@ -3,8 +3,10 @@ import { PageBlock } from '@/pages/types/page-block.interface';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventScheduleWrite } from '../types/event-schedule.interface';
+import { CapacityMutation } from '../types/capacity-mutation.interface';
 
 export interface UpdateEventDto {
+  expectedRevision?: number | null;
   domainId?: string;
   type?: EventType;
   status?: EventStatus;
@@ -29,7 +31,8 @@ export interface UpdateEventDto {
     deadline?: string;
     price: Price;
   }>;
-  capacity?: number;
+  capacity?: number | null;
+  capacityMutation?: CapacityMutation;
   seo?: Record<string, string>;
   blocks?: PageBlock[];
 }

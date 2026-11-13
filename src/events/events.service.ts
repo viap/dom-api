@@ -2,11 +2,17 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { findRanked, RandomOrdering } from '@/common/utils/ranked-query';
+import {
+  findRanked,
+  RandomOrdering,
+  RandomScanUnavailableException,
+} from '@/common/utils/ranked-query';
 import {
   parsePaginationLimit,
   parsePaginationOffset,
@@ -39,6 +45,12 @@ import {
   toPublicBlocks,
   PublicBlockConversionPolicy,
 } from '@/pages/utils/block-validation';
+import {
+  canonicalFilters,
+  publicRandomSelections,
+} from '@/pages/utils/random-selection-cache';
+import { orderBucket } from '@/pages/utils/entity-collection-ordering';
+import { PersistedCollectionIdentity } from '@/pages/types/page-block.interface';
 import { preserveOmittedHtmlSnippets } from '@/pages/utils/html-snippet-preservation';
 import { PartnersService } from '@/partners/partners.service';
 import { PeopleService } from '@/people/people.service';
@@ -60,10 +72,25 @@ import {
   normalizeEventSchedule,
   projectEventScheduleForRead,
 } from './utils/event-schedule';
+import { EVENT_SCHEDULE_ADMIN_PREVIEW_LIMIT } from './types/event-schedule.interface';
 import { EventCollectionContext } from '@/events/types/entity-collection-filters.interface';
 import { EventEntityCollectionFilters } from './types/entity-collection-filters.interface';
+import {
+  buildCapacityUpdate,
+  readCapacityDiagnostic,
+} from './utils/event-capacity';
+import {
+  isPublicEventLifecycle,
+  normalizeEffectiveLifecycle,
+} from './utils/event-lifecycle';
+import {
+  getEventNextTransitionAt,
+  getRegistrationAvailability,
+} from './utils/event-policy';
+import { PublicEventDto } from './types/public-event.interface';
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.Active,
   EventStatus.Planned,
   EventStatus.RegistrationOpen,
   EventStatus.Ongoing,
@@ -71,10 +98,12 @@ const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.Cancelled,
 ];
 const ACTIVE_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.Active,
   EventStatus.Planned,
   EventStatus.RegistrationOpen,
   EventStatus.Ongoing,
 ];
+const EVENT_SNAPSHOT_CANDIDATE_LIMIT = 1000;
 
 type PublicEventLocation = Pick<
   LocationDocument,
@@ -87,6 +116,8 @@ function hasOwnProperty(value: object, key: string): boolean {
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     @InjectModel(DomainEvent.name)
     private eventModel: Model<DomainEventDocument>,
@@ -126,7 +157,9 @@ export class EventsService {
   async findAll(
     queryParams: EventQueryParams = {},
     signal?: AbortSignal,
-  ): Promise<DomainEventDocument[]> {
+  ): Promise<PublicEventDto[]> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow);
     const safeParams = safeFindParams(queryParams);
     const domainId =
       typeof safeParams.domainId === 'string' ? safeParams.domainId : null;
@@ -181,15 +214,15 @@ export class EventsService {
           locationById,
           { dynamicRandom: 'default' },
           signal,
+          snapshotNow,
         );
       }),
     );
   }
 
-  async findOne(
-    id: string,
-    signal?: AbortSignal,
-  ): Promise<DomainEventDocument> {
+  async findOne(id: string, signal?: AbortSignal): Promise<PublicEventDto> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow, id);
     const validId = validateObjectId(id);
     if (!validId) {
       throw new NotFoundException('Invalid event ID format');
@@ -204,19 +237,23 @@ export class EventsService {
     }
 
     const eventDocuments = [event as DomainEventDocument];
-    const [mediaById, locationById] = await Promise.all([
+    const [count, mediaById, locationById] = await Promise.all([
+      this.countRegistrationsByEventIds([validId]).then(
+        (counts) => counts.get(validId) ?? 0,
+      ),
       this.resolveEventMediaById(eventDocuments),
       this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
       event as DomainEventDocument,
-      undefined,
+      count,
       undefined,
       mediaById,
       locationById,
       undefined,
       signal,
+      snapshotNow,
     );
   }
 
@@ -224,7 +261,9 @@ export class EventsService {
     domainSlug: string,
     eventSlug: string,
     signal?: AbortSignal,
-  ): Promise<DomainEventDocument> {
+  ): Promise<PublicEventDto> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow);
     const domain = await this.domainsService.getActiveBySlug(domainSlug);
 
     const event = await this.eventModel
@@ -240,26 +279,33 @@ export class EventsService {
     }
 
     const eventDocuments = [event as DomainEventDocument];
-    const [mediaById, locationById] = await Promise.all([
+    const eventId = (event as DomainEventDocument)._id.toString();
+    const [count, mediaById, locationById] = await Promise.all([
+      this.countRegistrationsByEventIds([eventId]).then(
+        (counts) => counts.get(eventId) ?? 0,
+      ),
       this.resolveEventMediaById(eventDocuments),
       this.resolveEventLocationsById(eventDocuments),
     ]);
 
     return this.toPublicEvent(
       event as DomainEventDocument,
-      undefined,
+      count,
       undefined,
       mediaById,
       locationById,
       undefined,
       signal,
+      snapshotNow,
     );
   }
 
   async findManyByIds(
     ids: string[],
     signal?: AbortSignal,
-  ): Promise<BulkResolveResponse<DomainEventDocument>> {
+  ): Promise<BulkResolveResponse<PublicEventDto>> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow);
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
       return {
@@ -293,6 +339,7 @@ export class EventsService {
           locationById,
           { dynamicRandom: 'default' },
           signal,
+          snapshotNow,
         ),
       ),
     );
@@ -307,6 +354,8 @@ export class EventsService {
   async findManyAdminByIds(
     ids: string[],
   ): Promise<BulkResolveResponse<DomainEventDocument>> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow);
     const preparedIds = prepareBulkIds(ids);
     if (!preparedIds.validIds.length) {
       return {
@@ -321,13 +370,138 @@ export class EventsService {
       .lean()
       .exec();
 
+    const counts = await this.countRegistrationsByEventIds(
+      (events as DomainEventDocument[]).map((event) => event._id.toString()),
+    );
     return toBulkResolveResponse({
       preparedIds,
       items: (events as DomainEventDocument[]).map((event) =>
-        this.toReadEvent(event),
+        this.toAdminEvent(
+          event,
+          counts.get(event._id.toString()) ?? 0,
+          snapshotNow,
+        ),
       ),
       getId: (event) => event._id.toString(),
     });
+  }
+
+  async findAllAdmin(
+    queryParams: EventQueryParams = {},
+  ): Promise<DomainEventDocument[]> {
+    const snapshotNow = new Date();
+    await this.reconcileExpiredNonRecurring(snapshotNow);
+    const safeParams = safeFindParams(queryParams);
+    const limit = parsePaginationLimit(safeParams.limit);
+    const offset = parsePaginationOffset(safeParams.offset);
+    const query: Record<string, unknown> = {};
+    if (typeof safeParams.domainId === 'string') {
+      await this.domainsService.getActiveById(safeParams.domainId);
+      query.domainId = safeParams.domainId;
+    }
+    const events = (await this.eventModel
+      .find(query)
+      .sort({ updatedAt: -1, title: 1 })
+      .skip(offset)
+      .limit(limit)
+      .lean()
+      .exec()) as DomainEventDocument[];
+    const counts = await this.countRegistrationsByEventIds(
+      events.map((event) => event._id.toString()),
+    );
+    return events.map((event) =>
+      this.toAdminEvent(
+        event,
+        counts.get(event._id.toString()) ?? 0,
+        snapshotNow,
+      ),
+    );
+  }
+
+  async assertRegistrationAvailable(id: string): Promise<DomainEventDocument> {
+    const now = new Date();
+    await this.reconcileExpiredNonRecurring(now, id);
+    const validId = validateObjectId(id);
+    if (!validId) throw new NotFoundException('Event not found');
+    const event = await this.eventModel.findById(validId).lean().exec();
+    if (!event || !isPublicEventLifecycle(event.status)) {
+      throw new NotFoundException('Event not found');
+    }
+    const counts = await this.countRegistrationsByEventIds([validId]);
+    const availability = getRegistrationAvailability({
+      event: event as DomainEventDocument,
+      registeredCount: counts.get(validId) ?? 0,
+      now,
+    });
+    if (availability === 'closed') {
+      throw new BadRequestException('Event registration is closed');
+    }
+    return event as DomainEventDocument;
+  }
+
+  async findManyPublicByIdsAt(
+    ids: string[],
+    snapshotNow: Date,
+    signal?: AbortSignal,
+  ): Promise<PublicEventDto[]> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) return [];
+    const events = (await this.eventModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+        status: { $in: PUBLIC_EVENT_STATUSES },
+      })
+      .lean()
+      .exec()) as DomainEventDocument[];
+    const counts = await this.countRegistrationsByEventIds(
+      events.map((event) => event._id.toString()),
+    );
+    const [mediaById, locationById] = await Promise.all([
+      this.resolveEventMediaById(events),
+      this.resolveEventLocationsById(events),
+    ]);
+    const byId = new Map(
+      await Promise.all(
+        events.map(
+          async (event) =>
+            [
+              event._id.toString(),
+              await this.toPublicEvent(
+                event,
+                counts.get(event._id.toString()) ?? 0,
+                undefined,
+                mediaById,
+                locationById,
+                { dynamicRandom: 'default' },
+                signal,
+                snapshotNow,
+              ),
+            ] as const,
+        ),
+      ),
+    );
+    return preparedIds.uniqueIds
+      .map((id) => byId.get(preparedIds.validIdByInput.get(id) ?? ''))
+      .filter((event): event is PublicEventDto => Boolean(event));
+  }
+
+  async findTransitionBoundariesByIdsAt(
+    ids: string[],
+    snapshotNow: Date,
+  ): Promise<string[]> {
+    const preparedIds = prepareBulkIds(ids);
+    if (!preparedIds.validIds.length) return [];
+    const events = (await this.eventModel
+      .find({
+        _id: { $in: preparedIds.validIds },
+        status: { $in: PUBLIC_EVENT_STATUSES },
+      })
+      .select({ status: 1, schedule: 1, startAt: 1, endAt: 1, registration: 1 })
+      .lean()
+      .exec()) as DomainEventDocument[];
+    return events
+      .map((event) => getEventNextTransitionAt(event, snapshotNow))
+      .filter((value): value is string => Boolean(value));
   }
 
   async update(
@@ -339,6 +513,8 @@ export class EventsService {
       throw new NotFoundException('Invalid event ID format');
     }
 
+    const now = new Date();
+    await this.reconcileExpiredNonRecurring(now, validId);
     const existingEvent = await this.eventModel.findById(validId).lean().exec();
     if (!existingEvent) {
       throw new NotFoundException('Event not found');
@@ -377,20 +553,83 @@ export class EventsService {
           )
         : undefined;
 
+    const directCapacityPresent = hasOwnProperty(updateEventDto, 'capacity');
+    const capacityUpdate = buildCapacityUpdate({
+      event: existingEvent,
+      mutation: updateEventDto.capacityMutation,
+      directCapacityPresent,
+      directCapacity: updateEventDto.capacity,
+    });
+    const timingDto = { ...updateEventDto };
+    delete timingDto.expectedRevision;
+    delete timingDto.capacityMutation;
+    delete timingDto.capacity;
+    if (timingDto.registration !== undefined) {
+      const incomingRegistration = { ...timingDto.registration };
+      if (hasOwnProperty(incomingRegistration, 'maxParticipants')) {
+        if (
+          incomingRegistration.maxParticipants !==
+          existingEvent.registration?.maxParticipants
+        ) {
+          throw new ConflictException('CAPACITY_CONFLICT');
+        }
+        delete incomingRegistration.maxParticipants;
+      }
+      timingDto.registration = {
+        ...incomingRegistration,
+        ...(capacityUpdate === null &&
+        existingEvent.registration?.maxParticipants !== undefined
+          ? {
+              maxParticipants: existingEvent.registration.maxParticipants,
+            }
+          : {}),
+      };
+    }
     const updateData: Record<string, unknown> = this.prepareUpdateTiming(
-      updateEventDto,
+      timingDto,
       existingEvent as DomainEventDocument,
     );
     if (normalizedBlocks !== undefined) {
       updateData.blocks = normalizedBlocks;
     }
 
+    const unsetData: Record<string, 1> = {};
+    if (capacityUpdate?.clear) {
+      unsetData.capacity = 1;
+      if (updateData.registration === undefined) {
+        unsetData['registration.maxParticipants'] = 1;
+      }
+    } else if (capacityUpdate?.set !== undefined) {
+      updateData.capacity = capacityUpdate.set;
+      if (updateData.registration === undefined) {
+        unsetData['registration.maxParticipants'] = 1;
+      }
+    }
+
+    const hasExpectedRevision = hasOwnProperty(
+      updateEventDto,
+      'expectedRevision',
+    );
+    if (updateEventDto.capacityMutation && !hasExpectedRevision) {
+      throw new ConflictException('CAPACITY_CONFLICT');
+    }
+    const revisionPredicate = hasExpectedRevision
+      ? updateEventDto.expectedRevision === null
+        ? { __v: { $exists: false } }
+        : { __v: updateEventDto.expectedRevision }
+      : existingEvent.__v === undefined
+      ? { __v: { $exists: false } }
+      : { __v: existingEvent.__v };
     let event: unknown;
     try {
       event = await this.eventModel
         .findOneAndUpdate(
-          { _id: validId, __v: existingEvent.__v ?? 0 },
-          { $set: updateData, $inc: { __v: 1 } },
+          { _id: validId, ...revisionPredicate },
+          {
+            $set: updateData,
+            ...(Object.keys(unsetData).length ? { $unset: unsetData } : {}),
+            $inc: { __v: 1 },
+          },
           {
             new: true,
             runValidators: true,
@@ -613,6 +852,122 @@ export class EventsService {
         },
       };
     });
+  }
+
+  async findDynamicSnapshotCandidateIds(
+    filters: EventEntityCollectionFilters,
+    limit: number,
+    context: EventCollectionContext,
+    signal?: AbortSignal,
+    identity?: PersistedCollectionIdentity,
+  ): Promise<{ selectedIds: string[]; candidateIds: string[] }> {
+    const loadSelected = async (ordering?: RandomOrdering) => {
+      const selectionContext =
+        ordering === context.ordering ? context : { ...context, ordering };
+      return (
+        await this.findDynamicSummaries(
+          filters,
+          limit,
+          selectionContext,
+          // Random work is shared by publicRandomSelections. Attaching one
+          // request's cancellation would reject the shared promise for every
+          // waiter. Direct/Default fallback work remains request-cancellable.
+          ordering ? undefined : signal,
+        )
+      ).map((item) => item.id);
+    };
+    let selectedIds: string[];
+    if (!context.ordering) {
+      selectedIds = await loadSelected();
+    } else {
+      try {
+        selectedIds = await publicRandomSelections.resolve(
+          JSON.stringify([
+            'id-rank-v2',
+            context.ordering.seed,
+            'events',
+            canonicalFilters(filters),
+            context.domainId?.toLowerCase() ?? null,
+            limit,
+          ]),
+          orderBucket(context.now),
+          (scanStarted) => {
+            scanStarted();
+            return loadSelected(context.ordering);
+          },
+        );
+      } catch (error) {
+        if (!(error instanceof RandomScanUnavailableException)) throw error;
+        this.logger.warn({
+          event: 'random_default_fallback',
+          reason: error.reason,
+          ...(identity
+            ? { owner: identity.owner, blockPath: identity.blockPath }
+            : {}),
+          entityType: 'events',
+        });
+        selectedIds = await loadSelected();
+      }
+    }
+    signal?.throwIfAborted();
+    const domainIds = context.domainId
+      ? [context.domainId]
+      : (await this.domainsService.findAll()).map((domain) =>
+          domain._id.toString(),
+        );
+    signal?.throwIfAborted();
+    if (!domainIds.length) {
+      return { selectedIds: [], candidateIds: [] };
+    }
+    const query = this.buildDynamicSummaryQuery(filters, domainIds);
+    this.appendQueryAnd(query, {
+      $or: [
+        {
+          'schedule.mode': { $ne: 'recurring' },
+          endAt: { $gt: context.now.toISOString() },
+        },
+        {
+          'schedule.mode': 'recurring',
+          status: { $in: ACTIVE_EVENT_STATUSES },
+          'schedule.hasActiveOccurrences': true,
+          $or: [
+            { 'schedule.recurrence.endDate': { $exists: false } },
+            { endAt: { $gt: context.now.toISOString() } },
+          ],
+        },
+      ],
+    });
+    const candidates = (await this.eventModel
+      .find(query)
+      .select({ _id: 1, status: 1, schedule: 1, startAt: 1, endAt: 1 })
+      .limit(EVENT_SNAPSHOT_CANDIDATE_LIMIT + 1)
+      .lean()
+      .exec()) as DomainEventDocument[];
+    if (candidates.length > EVENT_SNAPSHOT_CANDIDATE_LIMIT) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'event_snapshot_candidate_overflow',
+          limit: EVENT_SNAPSHOT_CANDIDATE_LIMIT,
+          domainId: context.domainId,
+          temporalMode: filters.temporal?.mode,
+        }),
+      );
+      throw new ServiceUnavailableException(
+        'Event collection snapshot candidate limit exceeded',
+      );
+    }
+    const exact = this.getExactTemporalPredicate(filters);
+    return {
+      selectedIds,
+      candidateIds: [
+        ...new Set([
+          ...selectedIds,
+          ...candidates
+            .filter((event) => !exact || exact(event))
+            .map((event) => event._id.toString()),
+        ]),
+      ],
+    };
   }
 
   private applyTemporalFilter(
@@ -844,7 +1199,8 @@ export class EventsService {
     locationById: Map<string, PublicEventLocation> = new Map(),
     policy: PublicBlockConversionPolicy = { dynamicRandom: 'enabled' },
     signal?: AbortSignal,
-  ): Promise<DomainEventDocument> {
+    snapshotNow = new Date(),
+  ): Promise<PublicEventDto> {
     const eventObj = event as unknown as Record<string, unknown>;
     const blocks = Array.isArray(eventObj.blocks)
       ? (eventObj.blocks as Array<Record<string, unknown>>)
@@ -855,7 +1211,7 @@ export class EventsService {
       {
         owner: { kind: 'event', eventId: String(eventObj._id) },
         domainId: this.toIdString(eventObj.domainId),
-        now: new Date(),
+        now: snapshotNow,
         signal,
       },
       policy,
@@ -876,26 +1232,127 @@ export class EventsService {
     const locationId = this.toIdString(eventObj.locationId);
     const location = locationId ? locationById.get(locationId) : undefined;
 
-    return this.toReadEvent({
-      ...eventObj,
-      ...(media ? { mediaId: media } : {}),
-      ...(location ? { locationId: location } : {}),
-      ...(domainSlug ? { domainSlug } : {}),
-      blocks: publicBlocks,
+    const readEvent = this.toReadEvent(
+      {
+        ...eventObj,
+        ...(media ? { mediaId: media } : {}),
+        ...(location ? { locationId: location } : {}),
+        ...(domainSlug ? { domainSlug } : {}),
+        blocks: publicBlocks,
+      } as unknown as DomainEventDocument,
+      snapshotNow,
+      2,
+      false,
+    );
+    const lifecycle = normalizeEffectiveLifecycle(readEvent.status);
+    const availability = getRegistrationAvailability({
+      event: readEvent,
       registeredCount: count,
-    } as unknown as DomainEventDocument);
+      now: snapshotNow,
+    });
+    const diagnostic = readCapacityDiagnostic(readEvent);
+    const registration = readEvent.registration
+      ? {
+          isOpen: readEvent.registration.isOpen,
+          ...(readEvent.registration.deadline
+            ? { deadline: readEvent.registration.deadline }
+            : {}),
+        }
+      : undefined;
+    const publicEvent = {
+      ...(readEvent as unknown as Record<string, unknown>),
+      status: lifecycle,
+      ...(diagnostic.effectiveCapacity !== undefined
+        ? { capacity: diagnostic.effectiveCapacity }
+        : {}),
+      ...(registration ? { registration } : {}),
+      registrationAvailability: availability,
+      evaluatedAt: snapshotNow.toISOString(),
+      ...(getEventNextTransitionAt(readEvent, snapshotNow)
+        ? { nextTransitionAt: getEventNextTransitionAt(readEvent, snapshotNow) }
+        : {}),
+    } as Record<string, unknown>;
+    delete publicEvent.capacity;
+    if (diagnostic.effectiveCapacity !== undefined) {
+      publicEvent.capacity = diagnostic.effectiveCapacity;
+    }
+    delete publicEvent.registeredCount;
+    delete publicEvent.legacyStatus;
+    delete publicEvent.capacityConflict;
+    delete publicEvent.capacityInvalid;
+    delete publicEvent.__v;
+    return publicEvent as PublicEventDto;
   }
 
-  private toReadEvent(event: DomainEventDocument): DomainEventDocument {
+  private toReadEvent(
+    event: DomainEventDocument,
+    now = new Date(),
+    previewLimit = EVENT_SCHEDULE_ADMIN_PREVIEW_LIMIT,
+    includeCancelled = true,
+  ): DomainEventDocument {
     const value = event as unknown as Record<string, unknown>;
     const schedule = projectEventScheduleForRead(
       value.schedule as DomainEventDocument['schedule'],
       value.status as EventStatus,
+      now,
+      previewLimit,
+      includeCancelled,
     );
     return {
       ...value,
       ...(schedule ? { schedule } : {}),
     } as unknown as DomainEventDocument;
+  }
+
+  private toAdminEvent(
+    event: DomainEventDocument,
+    registeredCount: number,
+    now: Date,
+  ): DomainEventDocument {
+    const value = event as unknown as Record<string, unknown>;
+    const lifecycle = normalizeEffectiveLifecycle(value.status);
+    const capacity = readCapacityDiagnostic(event);
+    return {
+      ...value,
+      status: lifecycle === 'invalid' ? value.status : lifecycle,
+      ...(lifecycle !== value.status ? { legacyStatus: value.status } : {}),
+      ...(capacity.conflict ? { capacityConflict: capacity.conflict } : {}),
+      capacityInvalid: capacity.invalid,
+      registeredCount,
+      schedule: projectEventScheduleForRead(
+        event.schedule,
+        event.status,
+        now,
+        EVENT_SCHEDULE_ADMIN_PREVIEW_LIMIT,
+      ),
+    } as unknown as DomainEventDocument;
+  }
+
+  async reconcileExpiredNonRecurring(
+    now = new Date(),
+    id?: string,
+  ): Promise<void> {
+    const query: FilterQuery<DomainEventDocument> = {
+      status: { $in: ACTIVE_EVENT_STATUSES },
+      'schedule.mode': { $ne: 'recurring' },
+      endAt: { $lte: now.toISOString() },
+    };
+    if (id) {
+      const validId = validateObjectId(id);
+      if (!validId) return;
+      query._id = validId;
+    }
+    await this.eventModel.updateMany(
+      query,
+      {
+        $set: { status: EventStatus.Completed },
+        $inc: { __v: 1 },
+      },
+      // Reconciliation is a lifecycle transition, not an editorial update.
+      // Keep the admin list's updatedAt ordering stable while the revision still
+      // advances so concurrent CAS writers observe the transition.
+      { timestamps: false },
+    );
   }
 
   private toIdString(value: unknown): string {
@@ -1087,12 +1544,16 @@ export class EventsService {
   private prepareCreateTiming(
     createEventDto: CreateEventDto,
   ): CreateEventDto & { startAt: string; endAt: string } {
+    const status = this.canonicalizeWriteStatus(
+      createEventDto.status ?? EventStatus.Draft,
+    );
     if (createEventDto.schedule === undefined) {
       this.assertRegistrationDeadlineBeforeStart(
         createEventDto.registration?.deadline,
         createEventDto.startAt,
       );
-      return createEventDto as CreateEventDto & {
+      this.assertActiveHasFutureTiming(status, createEventDto.endAt, undefined);
+      return { ...createEventDto, status } as CreateEventDto & {
         startAt: string;
         endAt: string;
       };
@@ -1108,11 +1569,8 @@ export class EventsService {
     }
 
     const envelope = this.normalizeScheduleForWrite(createEventDto.schedule);
-    this.assertRecurringMergedInvariants(
-      undefined,
-      createEventDto.status ?? EventStatus.Draft,
-      envelope.schedule,
-    );
+    this.assertRecurringMergedInvariants(undefined, status, envelope.schedule);
+    this.assertActiveHasFutureTiming(status, envelope.endAt, envelope.schedule);
     this.assertRegistrationDeadlineBeforeStart(
       createEventDto.registration?.deadline,
       envelope.startAt,
@@ -1120,6 +1578,7 @@ export class EventsService {
 
     return {
       ...createEventDto,
+      status,
       schedule: envelope.schedule,
       startAt: envelope.startAt,
       endAt: envelope.endAt,
@@ -1131,6 +1590,9 @@ export class EventsService {
     existingEvent: DomainEventDocument,
   ): Record<string, unknown> {
     const updateData: Record<string, unknown> = { ...updateEventDto };
+    if (updateEventDto.status !== undefined) {
+      updateData.status = this.canonicalizeWriteStatus(updateEventDto.status);
+    }
     const hasSchedule = hasOwnProperty(updateEventDto, 'schedule');
     const hasStartAt = hasOwnProperty(updateEventDto, 'startAt');
     const hasEndAt = hasOwnProperty(updateEventDto, 'endAt');
@@ -1169,7 +1631,9 @@ export class EventsService {
       );
     }
 
-    const mergedStatus = updateEventDto.status ?? existingEvent.status;
+    const mergedStatus = this.canonicalizeWriteStatus(
+      (updateData.status as EventStatus | undefined) ?? existingEvent.status,
+    );
     const mergedSchedule = (updateData.schedule ??
       existingEvent.schedule) as DomainEventDocument['schedule'];
     this.assertRecurringMergedInvariants(
@@ -1177,6 +1641,20 @@ export class EventsService {
       mergedStatus,
       mergedSchedule,
     );
+    if (
+      hasOwnProperty(updateEventDto, 'status') ||
+      hasSchedule ||
+      hasStartAt ||
+      hasEndAt
+    ) {
+      this.assertActiveHasFutureTiming(
+        mergedStatus,
+        typeof updateData.endAt === 'string'
+          ? updateData.endAt
+          : existingEvent.endAt,
+        mergedSchedule,
+      );
+    }
 
     if (
       hasSchedule ||
@@ -1196,6 +1674,46 @@ export class EventsService {
     }
 
     return updateData;
+  }
+
+  private canonicalizeWriteStatus(status: EventStatus): EventStatus {
+    const lifecycle = normalizeEffectiveLifecycle(status);
+    if (lifecycle === 'invalid') {
+      throw new BadRequestException('Unsupported event status');
+    }
+    return lifecycle;
+  }
+
+  private assertActiveHasFutureTiming(
+    status: EventStatus,
+    endAt: string | undefined,
+    schedule: DomainEventDocument['schedule'] | undefined,
+  ): void {
+    if (status !== EventStatus.Active) return;
+
+    if (isRecurringSchedule(schedule)) {
+      const projection = projectEventScheduleForRead(
+        schedule,
+        status,
+        new Date(Date.now()),
+        2,
+        false,
+      );
+      if (
+        projection?.mode === 'recurring' &&
+        projection.hasActiveOccurrences &&
+        projection.nextActiveOccurrence
+      ) {
+        return;
+      }
+      throw new BadRequestException(
+        'Active recurring events require a current or future occurrence',
+      );
+    }
+
+    if (!endAt || new Date(endAt).getTime() <= Date.now()) {
+      throw new BadRequestException('Active events require a future final end');
+    }
   }
 
   private assertRecurringMergedInvariants(

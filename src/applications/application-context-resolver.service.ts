@@ -117,7 +117,7 @@ export class ApplicationContextResolver {
         'Referenced event not found',
       );
       const event = await this.resolvePublicTarget(
-        () => this.eventsService.findOne(eventId),
+        () => this.eventsService.assertRegistrationAvailable(eventId),
         'Referenced event not found',
       );
       const domainId = this.requireTargetDomainId(

@@ -209,6 +209,8 @@ eventBlocksPath.discriminator(PageBlockType.Html, htmlBlockSchema);
 domainEventSchema.index({ mediaId: 1 }, { sparse: true });
 domainEventSchema.index({ domainId: 1, slug: 1 }, { unique: true });
 domainEventSchema.index({ domainId: 1, status: 1, startAt: 1 });
+domainEventSchema.index({ domainId: 1, status: 1, endAt: 1 });
+domainEventSchema.index({ status: 1, endAt: 1 });
 domainEventSchema.index(
   { domainId: 1, startAt: 1 },
   { partialFilterExpression: { status: EventStatus.Planned } },

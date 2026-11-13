@@ -160,6 +160,18 @@ export class PagesController {
     );
   }
 
+  @Get('public/:pageId/event-collection-snapshot')
+  @Public()
+  async getPublicEventCollectionSnapshot(
+    @Param('pageId') pageId: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return withRequestCancellation(request, response, (signal) =>
+      this.pagesService.getPublicEventCollectionSnapshot(pageId, signal),
+    );
+  }
+
   @Get('domain/:domainSlug/home')
   @Public()
   async findDomainHomepage(

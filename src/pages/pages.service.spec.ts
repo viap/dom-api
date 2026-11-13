@@ -7,6 +7,7 @@ import {
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import mongoose from 'mongoose';
+import { permuteItems } from '@/common/utils/ranked-query';
 import { EntityCollectionItemOrder } from './enums/entity-collection-item-order.enum';
 import { createRandomOrdering } from './utils/entity-collection-ordering';
 import { EventsService } from '@/events/events.service';
@@ -93,6 +94,10 @@ describe('PagesService', () => {
     existingIds: jest.fn(),
     findDynamicSummaries: jest.fn(),
     findDynamicPreviewItems: jest.fn(),
+    reconcileExpiredNonRecurring: jest.fn(),
+    findDynamicSnapshotCandidateIds: jest.fn(),
+    findManyPublicByIdsAt: jest.fn(),
+    findTransitionBoundariesByIdsAt: jest.fn().mockResolvedValue([]),
   };
   const mockMediaService = {
     exists: jest.fn(),
@@ -185,6 +190,12 @@ describe('PagesService', () => {
     mockPartnersService.findDynamicPreviewItems.mockResolvedValue([]);
     mockEventsService.findDynamicSummaries.mockResolvedValue([]);
     mockEventsService.findDynamicPreviewItems.mockResolvedValue([]);
+    mockEventsService.reconcileExpiredNonRecurring.mockResolvedValue(undefined);
+    mockEventsService.findDynamicSnapshotCandidateIds.mockResolvedValue({
+      selectedIds: [],
+      candidateIds: [],
+    });
+    mockEventsService.findManyPublicByIdsAt.mockResolvedValue([]);
     mockPartnersService.exists.mockResolvedValue(true);
     mockPartnersService.existingIds.mockImplementation(
       async (ids: string[]) => new Set(ids),
@@ -199,6 +210,195 @@ describe('PagesService', () => {
     );
     mockMediaService.existingPublishedIds.mockImplementation(
       async (ids: string[]) => new Set(ids),
+    );
+  });
+
+  it('snapshots manual Event collections by owner and full block path', async () => {
+    const page = {
+      ...mockPage,
+      blocks: [
+        {
+          id: 'group-a',
+          type: PageBlockType.Group,
+          blocks: [
+            {
+              id: 'events',
+              type: PageBlockType.EntityCollection,
+              entityType: EntityCollectionEntityType.Events,
+              source: 'manual',
+              items: ['event-a'],
+            },
+          ],
+        },
+        {
+          id: 'group-b',
+          type: PageBlockType.Group,
+          blocks: [
+            {
+              id: 'events',
+              type: PageBlockType.EntityCollection,
+              entityType: EntityCollectionEntityType.Events,
+              source: 'manual',
+              items: ['event-b'],
+            },
+          ],
+        },
+      ],
+    };
+    mockPageModel.findOne.mockReturnValue({
+      lean: () => ({ exec: async () => page }),
+    });
+    mockEventsService.findManyPublicByIdsAt.mockResolvedValue([
+      { _id: 'event-a' },
+      { _id: 'event-b' },
+    ]);
+
+    const snapshot = await service.getPublicEventCollectionSnapshot(
+      mockPage._id,
+    );
+
+    expect(snapshot.collections).toEqual([
+      {
+        identity: {
+          owner: { kind: 'page', pageId: mockPage._id },
+          blockPath: ['group-a', 'events'],
+        },
+        items: ['event-a'],
+      },
+      {
+        identity: {
+          owner: { kind: 'page', pageId: mockPage._id },
+          blockPath: ['group-b', 'events'],
+        },
+        items: ['event-b'],
+      },
+    ]);
+    const snapshotNow = mockEventsService.findManyPublicByIdsAt.mock
+      .calls[0][1] as Date;
+    expect(mockEventsService.reconcileExpiredNonRecurring).toHaveBeenCalledWith(
+      snapshotNow,
+    );
+    expect(snapshot.evaluatedAt).toBe(snapshotNow.toISOString());
+  });
+
+  it('aggregates transitions from the full dynamic candidate set', async () => {
+    const page = {
+      ...mockPage,
+      blocks: [
+        {
+          id: 'events',
+          type: PageBlockType.EntityCollection,
+          entityType: EntityCollectionEntityType.Events,
+          source: 'dynamic',
+          filters: {},
+          limit: 1,
+          itemOrder: EntityCollectionItemOrder.Default,
+        },
+      ],
+    };
+    mockPageModel.findOne.mockReturnValue({
+      lean: () => ({ exec: async () => page }),
+    });
+    mockEventsService.findDynamicSnapshotCandidateIds.mockResolvedValue({
+      selectedIds: ['event-a'],
+      candidateIds: ['event-a', 'event-b'],
+    });
+    mockEventsService.findManyPublicByIdsAt.mockResolvedValue([
+      { _id: 'event-a', nextTransitionAt: '2026-11-13T10:00:15.000Z' },
+    ]);
+    mockEventsService.findTransitionBoundariesByIdsAt.mockResolvedValue([
+      '2026-11-13T10:00:15.000Z',
+      '2026-11-13T10:00:05.000Z',
+    ]);
+
+    const snapshot = await service.getPublicEventCollectionSnapshot(
+      mockPage._id,
+    );
+
+    expect(snapshot.events).toEqual([
+      { _id: 'event-a', nextTransitionAt: '2026-11-13T10:00:15.000Z' },
+    ]);
+    expect(snapshot.nextTransitionAt).toBe('2026-11-13T10:00:05.000Z');
+  });
+
+  it('fails closed when the Page-level Event candidate union exceeds its bound', async () => {
+    const page = {
+      ...mockPage,
+      blocks: ['first', 'second'].map((id) => ({
+        id,
+        type: PageBlockType.EntityCollection,
+        entityType: EntityCollectionEntityType.Events,
+        source: 'dynamic',
+        filters: {},
+        limit: 1,
+        itemOrder: EntityCollectionItemOrder.Default,
+      })),
+    };
+    mockPageModel.findOne.mockReturnValue({
+      lean: () => ({ exec: async () => page }),
+    });
+    mockEventsService.findDynamicSnapshotCandidateIds
+      .mockResolvedValueOnce({
+        selectedIds: [],
+        candidateIds: Array.from(
+          { length: 600 },
+          (_, index) => `first-${index}`,
+        ),
+      })
+      .mockResolvedValueOnce({
+        selectedIds: [],
+        candidateIds: Array.from(
+          { length: 600 },
+          (_, index) => `second-${index}`,
+        ),
+      });
+
+    await expect(
+      service.getPublicEventCollectionSnapshot(mockPage._id),
+    ).rejects.toThrow('Page Event snapshot candidate limit exceeded');
+    expect(
+      mockEventsService.findTransitionBoundariesByIdsAt,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('preserves canonical Random ordering for manual Event snapshots', async () => {
+    const items = ['event-a', 'event-b', 'event-c', 'event-d'];
+    const page = {
+      ...mockPage,
+      blocks: [
+        {
+          id: 'events',
+          type: PageBlockType.EntityCollection,
+          entityType: EntityCollectionEntityType.Events,
+          source: 'manual',
+          items,
+          itemOrder: EntityCollectionItemOrder.Random,
+        },
+      ],
+    };
+    mockPageModel.findOne.mockReturnValue({
+      lean: () => ({ exec: async () => page }),
+    });
+    mockEventsService.findManyPublicByIdsAt.mockResolvedValue(
+      items.map((_id) => ({ _id })),
+    );
+
+    const snapshot = await service.getPublicEventCollectionSnapshot(
+      mockPage._id,
+    );
+    const snapshotNow = mockEventsService.findManyPublicByIdsAt.mock
+      .calls[0][1] as Date;
+    const ordering = createRandomOrdering(
+      {
+        owner: { kind: 'page', pageId: mockPage._id },
+        blockPath: ['events'],
+        domainId: mockPage.domainId,
+        now: snapshotNow,
+      },
+      EntityCollectionEntityType.Events,
+    );
+    expect(snapshot.collections[0]?.items).toEqual(
+      permuteItems(items, ordering.seed, (id) => id),
     );
   });
 

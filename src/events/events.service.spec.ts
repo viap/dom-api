@@ -16,12 +16,15 @@ import { Application } from '@/applications/schemas/application.schema';
 import { PeopleService } from '@/people/people.service';
 import { DomainEvent } from './schemas/domain-event.schema';
 import { EventsService } from './events.service';
+import { EventStatus } from './enums/event-status.enum';
 import { EventType } from './enums/event-type.enum';
 import { PageBlockType } from '@/pages/enums/page-block-type.enum';
 import { BlockButtonType } from '@/pages/enums/block-button-type.enum';
+import { RandomScanUnavailableException } from '@/common/utils/ranked-query';
 
 describe('EventsService', () => {
   let service: EventsService;
+  let dateNowSpy: jest.SpyInstance<number, []>;
 
   const mockEvent = {
     _id: '507f1f77bcf86cd799439021',
@@ -84,6 +87,7 @@ describe('EventsService', () => {
       ),
       findByIdAndDelete: jest.fn(),
       countDocuments: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     },
   );
 
@@ -201,6 +205,9 @@ describe('EventsService', () => {
 
     service = module.get<EventsService>(EventsService);
     jest.clearAllMocks();
+    dateNowSpy = jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-04-01T00:00:00.000Z').getTime());
     mockDomainsService.getActiveById.mockResolvedValue({
       _id: mockEvent.domainId,
     });
@@ -216,8 +223,42 @@ describe('EventsService', () => {
     mockPartnersService.exists.mockResolvedValue(true);
   });
 
+  afterEach(() => {
+    dateNowSpy.mockRestore();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('reconciles expired non-recurring events with a revision increment', async () => {
+    const now = new Date('2026-04-20T12:00:00.000Z');
+    await service.reconcileExpiredNonRecurring(now, mockEvent._id);
+
+    expect(mockEventModel.updateMany).toHaveBeenCalledWith(
+      {
+        _id: mockEvent._id,
+        status: {
+          $in: ['active', 'planned', 'registration_open', 'ongoing'],
+        },
+        'schedule.mode': { $ne: 'recurring' },
+        endAt: { $lte: now.toISOString() },
+      },
+      {
+        $set: { status: 'completed' },
+        $inc: { __v: 1 },
+      },
+      { timestamps: false },
+    );
+  });
+
+  it('does not return stale public data when reconciliation fails', async () => {
+    mockEventModel.updateMany.mockRejectedValueOnce(
+      new Error('reconciliation failed'),
+    );
+
+    await expect(service.findAll({})).rejects.toThrow('reconciliation failed');
+    expect(mockEventModel.find).not.toHaveBeenCalled();
   });
 
   it('builds public, domain-scoped upcoming dynamic Event queries', async () => {
@@ -254,7 +295,7 @@ describe('EventsService', () => {
 
     expect(mockEventModel.find).toHaveBeenCalledWith({
       domainId: { $in: [mockEvent.domainId] },
-      status: { $in: ['planned', 'registration_open', 'ongoing'] },
+      status: { $in: ['active', 'planned', 'registration_open', 'ongoing'] },
       type: { $in: ['seminar'] },
       locationId: { $in: ['507f1f77bcf86cd799439112'] },
       $or: [
@@ -270,7 +311,9 @@ describe('EventsService', () => {
             },
             {
               'schedule.mode': 'recurring',
-              status: { $in: ['planned', 'registration_open', 'ongoing'] },
+              status: {
+                $in: ['active', 'planned', 'registration_open', 'ongoing'],
+              },
               'schedule.hasActiveOccurrences': true,
               $or: [
                 { 'schedule.recurrence.endDate': { $exists: false } },
@@ -410,6 +453,7 @@ describe('EventsService', () => {
       domainId: { $in: [mockEvent.domainId] },
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -426,7 +470,9 @@ describe('EventsService', () => {
             },
             {
               'schedule.mode': 'recurring',
-              status: { $in: ['planned', 'registration_open', 'ongoing'] },
+              status: {
+                $in: ['active', 'planned', 'registration_open', 'ongoing'],
+              },
               'schedule.hasActiveOccurrences': true,
               $or: [
                 { 'schedule.recurrence.endDate': { $exists: false } },
@@ -444,6 +490,7 @@ describe('EventsService', () => {
       domainId: { $in: [mockEvent.domainId] },
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -489,6 +536,7 @@ describe('EventsService', () => {
     expect(mockEventModel.find).toHaveBeenCalledWith({
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -503,8 +551,14 @@ describe('EventsService', () => {
     expect(mockMediaService.findManyByIds).not.toHaveBeenCalled();
     expect(mockLocationsService.findManyByIds).not.toHaveBeenCalled();
     expect(result).toEqual([
-      { ...mockEvent, domainSlug: 'psych-center', registeredCount: 0 },
+      expect.objectContaining({
+        ...mockEvent,
+        status: 'active',
+        domainSlug: 'psych-center',
+        registrationAvailability: 'closed',
+      }),
     ]);
+    expect(result[0]).not.toHaveProperty('registeredCount');
   });
 
   it('populates public event media when an event has a media id', async () => {
@@ -522,13 +576,15 @@ describe('EventsService', () => {
       mockMedia._id,
     ]);
     expect(result).toEqual([
-      {
+      expect.objectContaining({
         ...eventWithMedia,
+        status: 'active',
         mediaId: mockMedia,
         domainSlug: 'psych-center',
-        registeredCount: 0,
-      },
+        registrationAvailability: 'closed',
+      }),
     ]);
+    expect(result[0]).not.toHaveProperty('registeredCount');
   });
 
   it('populates safe public event location in public lists', async () => {
@@ -605,11 +661,12 @@ describe('EventsService', () => {
       mockEvent.domainId,
     ]);
     expect(result).toEqual([
-      {
+      expect.objectContaining({
         ...eventWithObjectIdDomain,
+        status: 'active',
         domainSlug: 'psych-center',
-        registeredCount: 0,
-      },
+        registrationAvailability: 'closed',
+      }),
     ]);
   });
 
@@ -628,11 +685,12 @@ describe('EventsService', () => {
       mockEvent.domainId,
     ]);
     expect(result).toEqual([
-      {
+      expect.objectContaining({
         ...eventWithPopulatedDomain,
+        status: 'active',
         domainSlug: 'psych-center',
-        registeredCount: 0,
-      },
+        registrationAvailability: 'closed',
+      }),
     ]);
   });
 
@@ -663,6 +721,54 @@ describe('EventsService', () => {
       geo: mockLocation.geo,
     });
     expect(event.locationId).not.toHaveProperty('notes');
+  });
+
+  it('keeps private occupancy and migration diagnostics out of public DTOs', async () => {
+    const transitional = {
+      ...mockEvent,
+      __v: 9,
+      capacity: 10,
+      registration: { isOpen: true, maxParticipants: 20 },
+      legacyStatus: 'planned',
+      capacityConflict: { capacity: 10, maxParticipants: 20 },
+      capacityInvalid: false,
+      registeredCount: 7,
+    };
+    mockEventModel.findOne.mockReturnValue(
+      createFindOneQueryMock(transitional),
+    );
+
+    const result = (await service.findOne(mockEvent._id)) as unknown as Record<
+      string,
+      unknown
+    >;
+
+    expect(result.status).toBe('active');
+    expect(result.capacity).toBe(10);
+    expect(result.registration).toEqual({ isOpen: true });
+    expect(result).not.toHaveProperty('__v');
+    expect(result).not.toHaveProperty('registeredCount');
+    expect(result).not.toHaveProperty('legacyStatus');
+    expect(result).not.toHaveProperty('capacityConflict');
+    expect(result).not.toHaveProperty('capacityInvalid');
+  });
+
+  it('omits unusable raw capacity from public DTOs', async () => {
+    mockEventModel.findOne.mockReturnValue(
+      createFindOneQueryMock({
+        ...mockEvent,
+        capacity: 0,
+        registration: { isOpen: true },
+      }),
+    );
+
+    const result = (await service.findOne(mockEvent._id)) as unknown as Record<
+      string,
+      unknown
+    >;
+
+    expect(result).not.toHaveProperty('capacity');
+    expect(result.registrationAvailability).toBe('closed');
   });
 
   it('populates safe public event location in public bulk responses', async () => {
@@ -706,6 +812,7 @@ describe('EventsService', () => {
       domainId: mockEvent.domainId,
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -742,7 +849,12 @@ describe('EventsService', () => {
       _id: { $in: [firstEvent._id, secondEvent._id] },
     });
     expect(mockMediaService.findManyByIds).not.toHaveBeenCalled();
-    expect(result).toEqual({ items: [firstEvent, secondEvent] });
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining(firstEvent),
+        expect.objectContaining(secondEvent),
+      ],
+    });
   });
 
   it('filters public events by speaker or organizer personId', async () => {
@@ -755,6 +867,7 @@ describe('EventsService', () => {
     expect(mockEventModel.find).toHaveBeenCalledWith({
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -767,6 +880,120 @@ describe('EventsService', () => {
     expect(mockDomainsService.findManyByIds).toHaveBeenCalledWith([
       mockEvent.domainId,
     ]);
+  });
+
+  it('fails closed when an Event snapshot candidate universe exceeds its bound', async () => {
+    jest.spyOn(service, 'findDynamicSummaries').mockResolvedValue([]);
+    mockDomainsService.findAll.mockResolvedValue([{ _id: mockEvent.domainId }]);
+    const candidates = Array.from({ length: 1001 }, (_, index) => ({
+      ...mockEvent,
+      _id: `candidate-${index}`,
+    }));
+    const exec = jest.fn().mockResolvedValue(candidates);
+    const lean = jest.fn().mockReturnValue({ exec });
+    const limit = jest.fn().mockReturnValue({ lean });
+    const select = jest.fn().mockReturnValue({ limit });
+    mockEventModel.find.mockReturnValue({ select });
+
+    await expect(
+      service.findDynamicSnapshotCandidateIds({}, 12, {
+        now: new Date('2026-11-13T00:00:00.000Z'),
+      }),
+    ).rejects.toThrow('Event collection snapshot candidate limit exceeded');
+    expect(limit).toHaveBeenCalledWith(1001);
+  });
+
+  it('limits snapshot transition candidates to events that can still cross a boundary', async () => {
+    jest
+      .spyOn(service, 'findDynamicSummaries')
+      .mockResolvedValue([
+        { id: 'selected-history', label: 'Selected history' },
+      ]);
+    mockDomainsService.findAll.mockResolvedValue([{ _id: mockEvent.domainId }]);
+    const exec = jest.fn().mockResolvedValue([]);
+    const lean = jest.fn().mockReturnValue({ exec });
+    const limit = jest.fn().mockReturnValue({ lean });
+    const select = jest.fn().mockReturnValue({ limit });
+    mockEventModel.find.mockReturnValue({ select });
+    const now = new Date('2026-11-13T00:00:00.000Z');
+
+    const result = await service.findDynamicSnapshotCandidateIds({}, 12, {
+      now,
+    });
+
+    expect(mockEventModel.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $and: [
+          {
+            $or: [
+              {
+                'schedule.mode': { $ne: 'recurring' },
+                endAt: { $gt: now.toISOString() },
+              },
+              expect.objectContaining({
+                'schedule.mode': 'recurring',
+                'schedule.hasActiveOccurrences': true,
+              }),
+            ],
+          },
+        ],
+      }),
+    );
+    expect(result).toEqual({
+      selectedIds: ['selected-history'],
+      candidateIds: ['selected-history'],
+    });
+  });
+
+  it('uses the shared Random cache policy and typed Default fallback for snapshots', async () => {
+    const ordering = createRandomOrdering(
+      {
+        owner: { kind: 'page', pageId: '507f1f77bcf86cd799439099' },
+        blockPath: ['events-random-review'],
+        domainId: mockEvent.domainId,
+        now: new Date('2026-11-13T00:00:00.000Z'),
+      },
+      'events',
+    );
+    const summaries = jest
+      .spyOn(service, 'findDynamicSummaries')
+      .mockRejectedValueOnce(new RandomScanUnavailableException('queue_full'))
+      .mockResolvedValueOnce([{ id: mockEvent._id, label: mockEvent.title }]);
+    mockDomainsService.findAll.mockResolvedValue([{ _id: mockEvent.domainId }]);
+    const exec = jest.fn().mockResolvedValue([]);
+    const lean = jest.fn().mockReturnValue({ exec });
+    const limit = jest.fn().mockReturnValue({ lean });
+    const select = jest.fn().mockReturnValue({ limit });
+    mockEventModel.find.mockReturnValue({ select });
+    const cancellation = new AbortController();
+
+    await expect(
+      service.findDynamicSnapshotCandidateIds(
+        {},
+        12,
+        { now: new Date('2026-11-13T00:00:00.000Z'), ordering },
+        cancellation.signal,
+        {
+          owner: { kind: 'page', pageId: '507f1f77bcf86cd799439099' },
+          blockPath: ['events-random-review'],
+        },
+      ),
+    ).resolves.toMatchObject({ selectedIds: [mockEvent._id] });
+
+    expect(summaries).toHaveBeenNthCalledWith(
+      1,
+      {},
+      12,
+      expect.objectContaining({ ordering }),
+      undefined,
+    );
+    expect(summaries).toHaveBeenNthCalledWith(
+      2,
+      {},
+      12,
+      expect.objectContaining({ ordering: undefined }),
+      cancellation.signal,
+    );
   });
 
   it('passes optional description into the created event document', async () => {
@@ -1245,6 +1472,7 @@ describe('EventsService', () => {
         slug: 'event',
         status: {
           $in: [
+            'active',
             'planned',
             'registration_open',
             'ongoing',
@@ -1687,11 +1915,133 @@ describe('EventsService', () => {
     );
   });
 
+  it('does not resolve a capacity conflict during an unrelated edit', async () => {
+    const existing = {
+      ...mockEvent,
+      __v: 5,
+      capacity: 10,
+      registration: { isOpen: false, maxParticipants: 20 },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findByIdAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, title: 'Only title changed' }),
+    );
+
+    await service.update(mockEvent._id, {
+      title: 'Only title changed',
+      expectedRevision: 5,
+    });
+
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 5 },
+      { $set: { title: 'Only title changed' }, $inc: { __v: 1 } },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('resolves a capacity conflict only in the same exact CAS operation', async () => {
+    const existing = {
+      ...mockEvent,
+      __v: 5,
+      capacity: 10,
+      registration: { isOpen: false, maxParticipants: 20 },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findByIdAndUpdate.mockReturnValue(
+      createFindOneQueryMock({
+        ...existing,
+        __v: 6,
+        capacity: 20,
+        registration: { isOpen: false },
+      }),
+    );
+
+    await service.update(mockEvent._id, {
+      expectedRevision: 5,
+      capacityMutation: {
+        action: 'use_legacy',
+        expectedConflict: { capacity: 10, maxParticipants: 20 },
+      },
+    });
+
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 5 },
+      {
+        $set: { capacity: 20 },
+        $unset: { 'registration.maxParticipants': 1 },
+        $inc: { __v: 1 },
+      },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('requires explicit revision intent for canonical capacity mutations', async () => {
+    const existing = { ...mockEvent, __v: 5, capacity: 10 };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, {
+        capacityMutation: { action: 'set', value: 20 },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('uses an absent-revision predicate for an explicit missing revision', async () => {
+    const existing = { ...mockEvent, capacity: 10 };
+    delete (existing as { __v?: number }).__v;
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findOneAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, capacity: 20, __v: 1 }),
+    );
+
+    await service.update(mockEvent._id, {
+      expectedRevision: null,
+      capacityMutation: { action: 'set', value: 20 },
+    });
+
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: { $exists: false } },
+      {
+        $set: { capacity: 20 },
+        $unset: { 'registration.maxParticipants': 1 },
+        $inc: { __v: 1 },
+      },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('rejects stale capacity snapshots before any partial update', async () => {
+    const existing = {
+      ...mockEvent,
+      __v: 5,
+      capacity: 10,
+      registration: { isOpen: false, maxParticipants: 20 },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, {
+        expectedRevision: 5,
+        capacityMutation: {
+          action: 'clear',
+          expectedConflict: { capacity: 10, maxParticipants: 21 },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it('returns 409 instead of replaying a stale Event update', async () => {
     const existing = { ...mockEvent, __v: 3 };
     mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
     mockEventModel.findOne.mockResolvedValue(null);
-    mockEventModel.findByIdAndUpdate.mockReturnValue(
+    mockEventModel.findOneAndUpdate.mockReturnValue(
       createFindOneQueryMock(null),
     );
 
@@ -1755,6 +2105,123 @@ describe('EventsService', () => {
       }),
       { new: true, runValidators: true },
     );
+  });
+
+  it('keeps an active open-ended recurring series editable after its first occurrence', async () => {
+    const existing = {
+      ...mockEvent,
+      status: 'active',
+      __v: 7,
+      startAt: '2026-03-02T10:00:00.000Z',
+      endAt: '2026-03-02T12:00:00.000Z',
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-03-02',
+          startTime: '14:00',
+          endTime: '16:00',
+        },
+        cancelledDates: [],
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findOneAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, title: 'Updated', __v: 8 }),
+    );
+
+    await expect(
+      service.update(mockEvent._id, { title: 'Updated' }),
+    ).resolves.toBeDefined();
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 7 },
+      expect.objectContaining({
+        $set: expect.objectContaining({ title: 'Updated' }),
+        $inc: { __v: 1 },
+      }),
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('keeps unrelated edits available after a finite recurring series has ended', async () => {
+    const existing = {
+      ...mockEvent,
+      status: 'active',
+      __v: 8,
+      startAt: '2026-03-02T10:00:00.000Z',
+      endAt: '2026-03-30T12:00:00.000Z',
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-03-02',
+          startTime: '14:00',
+          endTime: '16:00',
+          endDate: '2026-03-30',
+        },
+        cancelledDates: [],
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+    mockEventModel.findOneAndUpdate.mockReturnValue(
+      createFindOneQueryMock({ ...existing, title: 'Archived series', __v: 9 }),
+    );
+
+    await expect(
+      service.update(mockEvent._id, { title: 'Archived series' }),
+    ).resolves.toBeDefined();
+    expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: mockEvent._id, __v: 8 },
+      expect.objectContaining({
+        $set: expect.objectContaining({ title: 'Archived series' }),
+        $inc: { __v: 1 },
+      }),
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('still rejects an explicit active write for an ended recurring series', async () => {
+    const existing = {
+      ...mockEvent,
+      status: 'active',
+      __v: 8,
+      startAt: '2026-03-02T10:00:00.000Z',
+      endAt: '2026-03-30T12:00:00.000Z',
+      schedule: {
+        timezone: 'Asia/Tbilisi',
+        mode: 'recurring',
+        recurrence: {
+          unit: 'week',
+          interval: 1,
+          anchorDate: '2026-03-02',
+          startTime: '14:00',
+          endTime: '16:00',
+          endDate: '2026-03-30',
+        },
+        cancelledDates: [],
+        overrides: [],
+        hasActiveOccurrences: true,
+      },
+    };
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(existing));
+    mockEventModel.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.update(mockEvent._id, { status: 'active' as EventStatus }),
+    ).rejects.toThrow(
+      'Active recurring events require a current or future occurrence',
+    );
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('still rejects implicit and zero-active recurring-to-manual conversions', async () => {
@@ -1854,7 +2321,7 @@ describe('EventsService', () => {
     ).resolves.toBeDefined();
     expect(mockEventModel.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: mockEvent._id, __v: 1 },
-      { $set: { status: 'planned' }, $inc: { __v: 1 } },
+      { $set: { status: 'active' }, $inc: { __v: 1 } },
       { new: true, runValidators: true },
     );
   });

@@ -187,6 +187,7 @@ describe('Random Dynamic cursor integration', () => {
       domainId: { $in: ['domain'] },
       status: {
         $in: [
+          'active',
           'planned',
           'registration_open',
           'ongoing',
@@ -215,7 +216,7 @@ describe('Random Dynamic cursor integration', () => {
               {
                 'schedule.mode': 'recurring',
                 status: {
-                  $in: ['planned', 'registration_open', 'ongoing'],
+                  $in: ['active', 'planned', 'registration_open', 'ongoing'],
                 },
                 'schedule.hasActiveOccurrences': true,
                 $or: [
@@ -274,7 +275,9 @@ describe('Random Dynamic cursor integration', () => {
               },
               {
                 'schedule.mode': 'recurring',
-                status: { $in: ['planned', 'registration_open', 'ongoing'] },
+                status: {
+                  $in: ['active', 'planned', 'registration_open', 'ongoing'],
+                },
                 'schedule.hasActiveOccurrences': true,
                 'schedule.recurrence.anchorDate': { $lte: '2026-10-31' },
                 $or: [
@@ -306,7 +309,7 @@ describe('Random Dynamic cursor integration', () => {
       const query = model.find.mock.calls[0][0];
       expect(query).toMatchObject({
         ...expected,
-        status: { $in: ['planned', 'registration_open', 'ongoing'] },
+        status: { $in: ['active', 'planned', 'registration_open', 'ongoing'] },
         locationId: { $in: ['location'] },
         type: { $in: ['seminar'] },
         $or: [

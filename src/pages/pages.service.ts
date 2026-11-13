@@ -2,11 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import type { RandomOrdering } from '@/common/utils/ranked-query';
+import { permuteItems, type RandomOrdering } from '@/common/utils/ranked-query';
 import { EntityCollectionItemOrder } from '@/pages/enums/entity-collection-item-order.enum';
 import { EntityCollectionPreviewOwner } from '@/pages/types/page-block.interface';
 import {
@@ -49,6 +51,10 @@ import {
   toPublicBlocks,
 } from './utils/block-validation';
 import { preserveOmittedHtmlSnippets } from './utils/html-snippet-preservation';
+import { collectStoredEventCollections } from './utils/event-collection-identity';
+import { EventCollectionSnapshot } from './types/event-collection-snapshot.interface';
+
+const EVENT_SNAPSHOT_PAGE_CANDIDATE_LIMIT = 1000;
 
 type PageReference = {
   _id: mongoose.Types.ObjectId | string;
@@ -98,6 +104,8 @@ export type EntityCollectionPreviewInput = (
 
 @Injectable()
 export class PagesService {
+  private readonly logger = new Logger(PagesService.name);
+
   constructor(
     @InjectModel(Page.name) private pageModel: Model<PageDocument>,
     private domainsService: DomainsService,
@@ -758,6 +766,136 @@ export class PagesService {
     }
   }
 
+  async getPublicEventCollectionSnapshot(
+    pageId: string,
+    signal?: AbortSignal,
+  ): Promise<EventCollectionSnapshot> {
+    const validId = validateObjectId(pageId);
+    if (!validId) throw new NotFoundException('Page not found');
+    const snapshotNow = new Date();
+    await this.eventsService.reconcileExpiredNonRecurring(snapshotNow);
+    const page = await this.pageModel
+      .findOne({ _id: validId, status: PageStatus.Published })
+      .lean()
+      .exec();
+    if (!page) throw new NotFoundException('Page not found');
+
+    let storedCollections: ReturnType<typeof collectStoredEventCollections>;
+    try {
+      storedCollections = collectStoredEventCollections(
+        validId,
+        (Array.isArray(page.blocks) ? page.blocks : []) as PageRootBlock[],
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'ambiguous_event_collection_identity',
+            pageId: validId,
+          }),
+        );
+      }
+      throw error;
+    }
+    const selectedIds = new Set<string>();
+    const candidateIds = new Set<string>();
+    const collections: EventCollectionSnapshot['collections'] = [];
+
+    for (const entry of storedCollections) {
+      signal?.throwIfAborted();
+      const block = entry.block;
+      let items: string[];
+      let candidates: string[];
+      if (block.source === 'dynamic') {
+        const ordering =
+          block.itemOrder === EntityCollectionItemOrder.Random
+            ? createRandomOrdering(
+                {
+                  owner: entry.identity.owner,
+                  blockPath: entry.identity.blockPath,
+                  domainId: page.domainId?.toString(),
+                  now: snapshotNow,
+                },
+                EntityCollectionEntityType.Events,
+              )
+            : undefined;
+        const resolved =
+          await this.eventsService.findDynamicSnapshotCandidateIds(
+            block.filters as EventEntityCollectionFilters,
+            block.limit ?? 12,
+            {
+              now: snapshotNow,
+              domainId: page.domainId?.toString(),
+              ordering,
+            },
+            signal,
+            entry.identity,
+          );
+        items = resolved.selectedIds;
+        candidates = resolved.candidateIds;
+      } else {
+        items = Array.isArray(block.items)
+          ? block.items.filter((id): id is string => typeof id === 'string')
+          : [];
+        if (block.itemOrder === EntityCollectionItemOrder.Random) {
+          const ordering = createRandomOrdering(
+            {
+              owner: entry.identity.owner,
+              blockPath: entry.identity.blockPath,
+              domainId: page.domainId?.toString(),
+              now: snapshotNow,
+            },
+            EntityCollectionEntityType.Events,
+          );
+          items = permuteItems(items, ordering.seed, (id) => id);
+        }
+        candidates = items;
+      }
+      items.forEach((id) => selectedIds.add(id));
+      for (const id of candidates) {
+        candidateIds.add(id);
+        if (candidateIds.size > EVENT_SNAPSHOT_PAGE_CANDIDATE_LIMIT) {
+          this.logger.warn(
+            JSON.stringify({
+              event: 'event_snapshot_page_candidate_overflow',
+              pageId: validId,
+              limit: EVENT_SNAPSHOT_PAGE_CANDIDATE_LIMIT,
+              identity: entry.identity,
+            }),
+          );
+          throw new ServiceUnavailableException(
+            'Page Event snapshot candidate limit exceeded',
+          );
+        }
+      }
+      collections.push({ identity: entry.identity, items });
+    }
+
+    const [events, transitionBoundaries] = await Promise.all([
+      this.eventsService.findManyPublicByIdsAt(
+        [...selectedIds],
+        snapshotNow,
+        signal,
+      ),
+      this.eventsService.findTransitionBoundariesByIdsAt(
+        [...candidateIds],
+        snapshotNow,
+      ),
+    ]);
+    const transitions = transitionBoundaries
+      .map((value) => new Date(value).getTime())
+      .filter(Number.isFinite);
+
+    return {
+      evaluatedAt: snapshotNow.toISOString(),
+      ...(transitions.length
+        ? { nextTransitionAt: new Date(Math.min(...transitions)).toISOString() }
+        : {}),
+      collections,
+      events,
+    };
+  }
+
   async findReferenceById(id: string): Promise<PageReference | null> {
     const validId = validateObjectId(id);
     if (!validId) {
@@ -816,6 +954,7 @@ export class PagesService {
         now: new Date(),
         signal,
       },
+      { dynamicRandom: 'enabled', eventCollections: 'descriptor' },
     );
 
     return this.normalizePageTitleVisibility({

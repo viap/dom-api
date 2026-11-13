@@ -67,6 +67,51 @@ describe('recurring event schedule generator', () => {
       read.occurrencePreview.every((item) => item.status === 'cancelled'),
     ).toBe(true);
     expect(read.nextActiveOccurrence?.date).toBe('2026-03-30');
+
+    const publicRead = projectEventScheduleForRead(
+      envelope.schedule,
+      EventStatus.Active,
+      new Date('2026-01-01T00:00:00.000Z'),
+      2,
+      false,
+    );
+    expect(publicRead?.mode).toBe('recurring');
+    if (publicRead?.mode !== 'recurring') return;
+    expect(publicRead.occurrencePreview.map((item) => item.date)).toEqual([
+      '2026-03-30',
+      '2026-04-06',
+    ]);
+    expect(
+      publicRead.occurrencePreview.every((item) => item.status === 'active'),
+    ).toBe(true);
+  });
+
+  it('returns no public recurring rows for a cancelled Event', () => {
+    const schedule = normalizeEventSchedule(recurring()).schedule;
+    const read = projectEventScheduleForRead(
+      schedule,
+      EventStatus.Cancelled,
+      new Date('2026-01-01T00:00:00.000Z'),
+      2,
+      false,
+    );
+    expect(read?.mode).toBe('recurring');
+    if (read?.mode !== 'recurring') return;
+    expect(read.occurrencePreview).toEqual([]);
+    expect(read.days).toEqual([]);
+  });
+
+  it('treats the exact occurrence end as exclusive', () => {
+    const schedule = normalizeEventSchedule(recurring()).schedule;
+    const read = projectEventScheduleForRead(
+      schedule,
+      EventStatus.Active,
+      new Date('2026-01-05T16:00:00.000Z'),
+    );
+    expect(read?.mode).toBe('recurring');
+    if (read?.mode !== 'recurring') return;
+    expect(read.nextActiveOccurrence?.date).toBe('2026-01-12');
+    expect(read.occurrencePreview[0]?.date).toBe('2026-01-12');
   });
 
   it('preserves an override under cancellation and restores it unchanged', () => {
