@@ -266,6 +266,27 @@ describe('createPageSchema', () => {
     expect(invalid.error).toBeDefined();
   });
 
+  it('accepts group as a Dynamic Event collection type filter', () => {
+    const { error, value } = createPageSchema.validate({
+      title: 'Groups',
+      slug: 'groups',
+      blocks: [
+        {
+          id: 'groups',
+          type: 'entityCollection',
+          entityType: 'events',
+          layout: 'grid',
+          source: 'dynamic',
+          items: [],
+          filters: { types: ['group'] },
+        },
+      ],
+    });
+
+    expect(error).toBeUndefined();
+    expect(value.blocks[0].filters.types).toEqual(['group']);
+  });
+
   it('should reject invalid Dynamic entity collection branches and limits', () => {
     for (const block of [
       {
