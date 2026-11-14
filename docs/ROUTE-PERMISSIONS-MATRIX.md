@@ -26,8 +26,10 @@ Related docs:
 - `Auth`: any authenticated user
 - `Admin`
 - `Editor`
+- `Accountant`
 - `Psychologist`
 - `Admin, Editor`: either role is allowed
+- `Admin, Accountant`: either role is allowed
 
 ### Notes
 
@@ -271,13 +273,13 @@ This section is intentionally high-signal rather than exhaustive. It covers the 
 | `POST`   | `/therapy-requests/:therapyRequestId/reject`     | Admin, Editor, Psychologist | Admin / specialist     |
 | `PUT`    | `/therapy-requests/:therapyRequestId`            | Admin, Editor, Psychologist | Admin / specialist     |
 | `DELETE` | `/therapy-requests/:therapyRequestId`            | Admin, Editor, Psychologist | Admin / specialist     |
-| `GET`    | `/therapy-request-analytics/filters`             | Admin, Editor               | Admin/editor analytics |
-| `GET`    | `/therapy-request-analytics/summary`             | Admin, Editor               | Admin/editor analytics |
-| `GET`    | `/therapy-request-analytics/requests`            | Admin, Editor               | Admin/editor analytics |
-| `GET`    | `/therapy-request-analytics/requests/:id`        | Admin, Editor               | Admin/editor analytics review context |
-| `GET`    | `/therapy-request-analytics/lifecycle`           | Admin, Editor               | Admin/editor analytics |
-| `GET`    | `/therapy-request-analytics/export`              | Admin, Editor               | Admin/editor analytics export |
-| `PUT`    | `/therapy-request-analytics/requests/:id`        | Admin, Editor               | Admin/editor analytics review |
+| `GET`    | `/therapy-request-analytics/filters`             | Admin, Accountant           | Admin/accountant analytics |
+| `GET`    | `/therapy-request-analytics/summary`             | Admin, Accountant           | Admin/accountant analytics |
+| `GET`    | `/therapy-request-analytics/requests`            | Admin, Accountant           | Admin/accountant analytics |
+| `GET`    | `/therapy-request-analytics/requests/:id`        | Admin                       | Admin analytics review context |
+| `GET`    | `/therapy-request-analytics/lifecycle`           | Admin, Accountant           | Admin/accountant analytics |
+| `GET`    | `/therapy-request-analytics/export`              | Admin, Accountant           | Admin/accountant analytics export |
+| `PUT`    | `/therapy-request-analytics/requests/:id`        | Admin                       | Admin analytics review |
 
 Note:
 
