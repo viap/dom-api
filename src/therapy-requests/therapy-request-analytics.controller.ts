@@ -20,7 +20,7 @@ import {
 } from './types/therapy-request-analytics.types';
 
 @Controller('therapy-request-analytics')
-@Roles(Role.Admin, Role.Editor)
+@Roles(Role.Admin, Role.Accountant)
 export class TherapyRequestAnalyticsController {
   constructor(
     private analyticsService: TherapyRequestAnalyticsService,
@@ -28,13 +28,13 @@ export class TherapyRequestAnalyticsController {
   ) {}
 
   @Get('filters')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Accountant)
   getFilters(): Promise<TherapyRequestAnalyticsFiltersResponse> {
     return this.analyticsService.getFilters();
   }
 
   @Get('summary')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Accountant)
   getSummary(
     @Query(new JoiValidationPipe(therapyRequestAnalyticsQuerySchema))
     query: TherapyRequestAnalyticsQuery,
@@ -43,7 +43,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('requests')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Accountant)
   getRequests(
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsRequestsResponse> {
@@ -51,7 +51,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('requests/:therapyRequestId')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin)
   getRequestDetails(
     @Param('therapyRequestId') therapyRequestId: string,
   ): Promise<TherapyRequestAnalyticsRequestDetails> {
@@ -59,7 +59,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('lifecycle')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Accountant)
   getLifecycle(
     @Query() query: TherapyRequestAnalyticsQuery,
   ): Promise<TherapyRequestAnalyticsLifecycleResponse> {
@@ -67,7 +67,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Get('export')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin, Role.Accountant)
   async export(
     @Query() query: TherapyRequestAnalyticsQuery,
     @Res() response: Response,
@@ -85,7 +85,7 @@ export class TherapyRequestAnalyticsController {
   }
 
   @Put('requests/:therapyRequestId')
-  @Roles(Role.Admin, Role.Editor)
+  @Roles(Role.Admin)
   updateRequestAnalytics(
     @Param('therapyRequestId') therapyRequestId: string,
     @GetUser() user: UserDocument,

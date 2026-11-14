@@ -2457,7 +2457,7 @@ Response:
 
 ### `GET /therapy-request-analytics/summary`
 
-Admin/editor. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
+Admin/accountant. Query filters may include `month`, `startDate`, `endDate`, `clientGender`, `requestCategory`, `psychologist`, `accepted`, and `analyticsReviewRequired`.
 
 Response:
 
@@ -2517,7 +2517,7 @@ Response:
 
 ### `GET /therapy-request-analytics/requests/:therapyRequestId`
 
-Admin/editor. Returns read-only context for the analytics review modal. Contacts with `hidden: true` are filtered out.
+Admin only. Returns read-only context for the analytics review modal. Contacts with `hidden: true` are filtered out.
 
 Response:
 
@@ -2538,7 +2538,7 @@ Response:
 
 ### `GET /therapy-request-analytics/lifecycle`
 
-Admin/editor. Returns KPI-based psychologist rankings and request-level audit rows. The route name is kept for compatibility.
+Admin/accountant. Returns KPI-based psychologist rankings and request-level audit rows. The route name is kept for compatibility.
 The KPI session aggregation uses MongoDB `$firstN`; production MongoDB must be 5.2+.
 Newer responses include additive `allPsychologists` with every specialist produced by the KPI aggregation, including `insufficient_data` rows. Legacy `topPsychologists`, `bottomPsychologists`, and `insufficientDataPsychologists` remain for independent deployment compatibility; older API responses may omit `allPsychologists`.
 
@@ -2690,7 +2690,7 @@ Response:
 
 ### `PUT /therapy-request-analytics/requests/:therapyRequestId`
 
-Admin/editor manual correction endpoint. Corrected fields are marked as manual in `analyticsInference`.
+Admin-only manual correction endpoint. Corrected fields are marked as manual in `analyticsInference`.
 
 Request:
 
@@ -2704,7 +2704,7 @@ Request:
 
 ### `GET /therapy-request-analytics/export`
 
-Admin/editor. Returns an `.xlsx` file respecting current filters. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
+Admin/accountant. Returns an `.xlsx` file respecting current filters. The export intentionally contains request-level client names, descriptions, and lifecycle data. Sheets: raw requests, monthly summary, category breakdown, psychologist KPI scores, and KPI request audit.
 
 ### `POST /therapy-requests/:therapyRequestId/accept`
 

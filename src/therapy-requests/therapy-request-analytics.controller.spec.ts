@@ -4,53 +4,57 @@ import { Role } from '@/roles/enums/roles.enum';
 import { TherapyRequestAnalyticsController } from './therapy-request-analytics.controller';
 
 describe('TherapyRequestAnalyticsController', () => {
-  const analyticsRoles = [Role.Admin, Role.Editor];
+  const readRoles = [Role.Admin, Role.Accountant];
+  const reviewRoles = [Role.Admin];
 
-  it('allows admin and editor access to analytics routes', () => {
+  it('allows admin and accountant access to analytics read and export routes', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, TherapyRequestAnalyticsController),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.getFilters,
       ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.getSummary,
       ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.getRequests,
       ),
-    ).toEqual(analyticsRoles);
-    expect(
-      Reflect.getMetadata(
-        ROLES_KEY,
-        TherapyRequestAnalyticsController.prototype.getRequestDetails,
-      ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.getLifecycle,
       ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.export,
       ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(readRoles);
+  });
+
+  it('restricts analytics review context and updates to admins', () => {
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        TherapyRequestAnalyticsController.prototype.getRequestDetails,
+      ),
+    ).toEqual(reviewRoles);
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
         TherapyRequestAnalyticsController.prototype.updateRequestAnalytics,
       ),
-    ).toEqual(analyticsRoles);
+    ).toEqual(reviewRoles);
   });
 });

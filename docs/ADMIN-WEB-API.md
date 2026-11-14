@@ -1136,15 +1136,20 @@ This section is intentionally shorter. It is meant as a frontend catalog, not a 
 
 ### Therapy Request Analytics
 
-Admin/editor analytics routes:
+Admin/accountant analytics read and export routes:
 
 - `GET /therapy-request-analytics/filters`
 - `GET /therapy-request-analytics/summary`
 - `GET /therapy-request-analytics/requests`
-- `GET /therapy-request-analytics/requests/:therapyRequestId`
 - `GET /therapy-request-analytics/lifecycle`
 - `GET /therapy-request-analytics/export`
+
+Admin-only analytics review routes:
+
+- `GET /therapy-request-analytics/requests/:therapyRequestId`
 - `PUT /therapy-request-analytics/requests/:therapyRequestId`
+
+The request list, lifecycle data, and XLSX export intentionally include request-level client names, descriptions, and lifecycle data. Only the Admin review route exposes non-hidden contacts, and only Admin may apply manual analytics corrections.
 
 Analytics fields on therapy requests:
 
