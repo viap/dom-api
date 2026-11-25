@@ -168,7 +168,7 @@ All variables are loaded from `config/.env` via `ConfigModule.forRoot({ envFileP
 |---|---|
 | `PORT` | HTTP server port (default: 3003) |
 | `WEBSOCKET_PORT` | Socket.IO port (default: 3004) |
-| `CORS_ORIGINS` | Comma-separated exact frontend origins allowed by CORS |
+| `CORS_ORIGINS` | Comma-separated exact frontend origins. Only `NODE_ENV=dev` enables the optional range `http://localhost:3000-3999`. |
 | `PUBLIC_WEB_URL` | Telegram-compatible site origin used for both links in application notifications |
 | `TELEGRAM_BOT_USERNAME` | Telegram bot username, without `@`, used to build public contact-link deep links |
 | `APPLICATION_MESSAGING_ENABLED` | Enables application-scoped official Telegram queueing, delivery reports, and reply ingestion; defaults off |

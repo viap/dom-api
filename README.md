@@ -73,9 +73,10 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
 
    ```env
    # Application
+   NODE_ENV=dev
    PORT=3000
    WEBSOCKET_PORT=3004
-   CORS_ORIGINS=http://localhost:3006
+   CORS_ORIGINS=http://localhost:3000-3999
    PUBLIC_WEB_URL=https://psydom.org
 
    # Database
@@ -89,7 +90,7 @@ A comprehensive NestJS-based REST API for a therapy/psychology platform that man
    JWT_EXPIRES_IN=1d
    ```
 
-   `CORS_ORIGINS` accepts a comma-separated allowlist. Empty/omitted values default to `http://localhost:3006`.
+   `CORS_ORIGINS` accepts a comma-separated list of exact origins. With `NODE_ENV=dev`, the optional entry `http://localhost:3000-3999` allows HTTP on `localhost` for ports 3000 through 3999 inclusive. Empty/omitted values default to `http://localhost:3006`.
 
    `PUBLIC_WEB_URL` is the required site origin used for both the linked site address and administrator application deep link in notifications. It must be an absolute HTTP(S) origin without credentials, path, query, or fragment and with a Telegram-compatible hostname. Use `https://psydom.org` locally and in production.
 
@@ -239,7 +240,7 @@ The API implements comprehensive protection against NoSQL injection attacks:
 - Deploy uses deterministic server dependency install: `npm ci --omit=dev`.
 - Deploy performs PM2 zero-downtime cutover (`reload` when process exists, `start` otherwise).
 - Health check uses retries (up to 12 attempts with 5-second intervals) against `GET /auth/ping`.
-- Deploy validates `CORS_ORIGINS` format and runs a CORS smoke check for the first configured origin against `OPTIONS` and `POST /auth/login/user`.
+- Deploy validates `CORS_ORIGINS` and checks each configured origin with `OPTIONS` and `POST /auth/login/user`.
 - Deploy runs auth branch smoke checks and verifies structured reasons:
   - valid API client + bad user => `invalid_user_credentials`
   - invalid API client => `invalid_api_client`

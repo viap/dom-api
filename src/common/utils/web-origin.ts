@@ -1,5 +1,24 @@
 import { isIP } from 'node:net';
 
+export function parseCorsOrigins(
+  value: string | undefined,
+  nodeEnv: string | undefined,
+): (string | RegExp)[] {
+  const origins = (value ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (!origins.length) return ['http://localhost:3006'];
+  if (nodeEnv !== 'dev') return origins;
+
+  return origins.map((origin) =>
+    origin === 'http://localhost:3000-3999'
+      ? /^http:\/\/localhost:3[0-9]{3}$/
+      : origin,
+  );
+}
+
 function isTelegramCompatibleHostname(hostname: string): boolean {
   const normalizedHostname = hostname.replace(/^\[|\]$/gu, '');
   return isIP(normalizedHostname) !== 0 || normalizedHostname.includes('.');

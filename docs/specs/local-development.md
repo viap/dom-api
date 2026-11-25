@@ -18,7 +18,7 @@ Baseline local values:
 NODE_ENV=dev
 PORT=3003
 WEBSOCKET_PORT=3004
-CORS_ORIGINS=http://localhost:3006
+CORS_ORIGINS=http://localhost:3000-3999
 PUBLIC_WEB_URL=https://psydom.org
 TELEGRAM_BOT_USERNAME=PsyDom_Tbilisi_Test_bot
 
@@ -36,15 +36,14 @@ MONGO_INITDB_ROOT_PASSWORD=example
 
 Notes:
 
-- `CORS_ORIGINS` supports a comma-separated allowlist.
+- `CORS_ORIGINS` accepts comma-separated exact origins. Only `NODE_ENV=dev` expands `http://localhost:3000-3999` to include HTTP on `localhost` for ports 3000 through 3999 inclusive.
 - `PUBLIC_WEB_URL` is required and must contain only a Telegram-compatible site HTTP(S) origin. It is used for both the linked site address and administrator application deep link; local and production use `https://psydom.org`.
 - `TELEGRAM_BOT_USERNAME` must match the username returned by Telegram for the `TOKEN` configured in `/Users/mr.blood/Projects/DOM/dom-bot/config/.env`, without the leading `@`. The API uses it to build public application-link deep links.
 - `APPLICATION_MESSAGING_ENABLED` defaults to `false`. Set it to `true` only when testing the Stage 5 application-scoped bot queue and exact-reply flow with the matching `dom-bot`; keep it off until real Telegram acceptance is complete.
 - With this standard local value, `Открыть заявку` points to the production admin and cannot resolve a local application ID. This limitation is intentional while one origin supplies both notification links.
 - For a temporary same-machine Telegram Desktop end-to-end check, use `PUBLIC_WEB_URL=http://127.0.0.1:3006` and temporarily add `http://127.0.0.1:3006` to `CORS_ORIGINS`. Both the site link and application link will point to loopback, and the browser may require a separate login from `localhost`.
-- Each allowlist value must be an exact origin in the format `scheme://host:port`.
 - `CORS_ORIGINS` values must not include paths (e.g. `/ru/login`) or trailing slashes. A trailing slash on `PUBLIC_WEB_URL` is accepted and normalized.
-- Multi-origin example: `CORS_ORIGINS=http://localhost:3006,https://dom.example.com`
+- Multi-origin example: `CORS_ORIGINS=http://localhost:3000-3999,https://dom.example.com`
 - Empty/missing `CORS_ORIGINS` falls back to `http://localhost:3006`.
 - Telegram does not render `localhost` as a notification link. Use `https://psydom.org` for the standard local smoke check; use numeric loopback only for the temporary same-machine Telegram Desktop flow above.
 - Keep real production/staging secrets out of local env files.
@@ -90,7 +89,7 @@ test database; the Mongo-backed suite drops that database after the run.
   - verify local Mongo process
   - verify `MONGO_URL`, `MONGO_DBNAME`, and credentials
 - CORS issues from frontend:
-  - confirm `CORS_ORIGINS` includes `http://localhost:3006`
+  - confirm `CORS_ORIGINS` includes the frontend origin or the matching localhost range
   - if deployed frontend uses IP/domain origin, include that exact origin with scheme and port
 - Missing uploaded media in local verification:
   - ensure clients use media endpoints (`/media/:id/content`, `/media/:id/thumbnail`), not raw `/uploads/...` paths
