@@ -114,6 +114,15 @@ function hasOwnProperty(value: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+function normalizeMediaZoom(value: unknown): number {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 1 &&
+    value <= 3
+    ? value
+    : 1;
+}
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -131,7 +140,8 @@ export class EventsService {
   ) {}
 
   async create(createEventDto: CreateEventDto): Promise<DomainEventDocument> {
-    const createData = this.prepareCreateTiming(createEventDto);
+    const { mediaZoom, ...createData } =
+      this.prepareCreateTiming(createEventDto);
 
     await this.validateDomainAndRefs(createData);
     await this.ensureUniqueSlug(createData.domainId, createData.slug);
@@ -146,6 +156,9 @@ export class EventsService {
 
     const event = new this.eventModel({
       ...createData,
+      ...(createData.mediaId && mediaZoom !== undefined
+        ? { mediaZoom: normalizeMediaZoom(mediaZoom) }
+        : {}),
       blocks: normalizedBlocks ?? [],
     });
     const saved = await event.save();
@@ -523,12 +536,14 @@ export class EventsService {
     const domainId =
       updateEventDto.domainId || existingEvent.domainId.toString();
     const slug = updateEventDto.slug || existingEvent.slug;
+    const existingMediaId = this.toIdString(existingEvent.mediaId);
+    const mediaId = updateEventDto.mediaId || existingMediaId;
 
     await this.validateDomainAndRefs({
       domainId,
       locationId:
         updateEventDto.locationId || existingEvent.locationId?.toString(),
-      mediaId: updateEventDto.mediaId || existingEvent.mediaId?.toString(),
+      mediaId: mediaId || undefined,
       speakerIds:
         updateEventDto.speakerIds ||
         existingEvent.speakerIds.map((id) => id.toString()),
@@ -564,6 +579,7 @@ export class EventsService {
     delete timingDto.expectedRevision;
     delete timingDto.capacityMutation;
     delete timingDto.capacity;
+    delete timingDto.mediaZoom;
     if (timingDto.registration !== undefined) {
       const incomingRegistration = { ...timingDto.registration };
       if (hasOwnProperty(incomingRegistration, 'maxParticipants')) {
@@ -594,6 +610,11 @@ export class EventsService {
     }
 
     const unsetData: Record<string, 1> = {};
+    if (mediaId && updateEventDto.mediaZoom !== undefined) {
+      updateData.mediaZoom = normalizeMediaZoom(updateEventDto.mediaZoom);
+    } else if (mediaId.toLowerCase() !== existingMediaId.toLowerCase()) {
+      unsetData.mediaZoom = 1;
+    }
     if (capacityUpdate?.clear) {
       unsetData.capacity = 1;
       if (updateData.registration === undefined) {
@@ -1300,6 +1321,9 @@ export class EventsService {
     );
     return {
       ...value,
+      ...(value.mediaZoom !== undefined
+        ? { mediaZoom: normalizeMediaZoom(value.mediaZoom) }
+        : {}),
       ...(schedule ? { schedule } : {}),
     } as unknown as DomainEventDocument;
   }
@@ -1314,6 +1338,9 @@ export class EventsService {
     const capacity = readCapacityDiagnostic(event);
     return {
       ...value,
+      ...(value.mediaZoom !== undefined
+        ? { mediaZoom: normalizeMediaZoom(value.mediaZoom) }
+        : {}),
       status: lifecycle === 'invalid' ? value.status : lifecycle,
       ...(lifecycle !== value.status ? { legacyStatus: value.status } : {}),
       ...(capacity.conflict ? { capacityConflict: capacity.conflict } : {}),

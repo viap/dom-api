@@ -643,7 +643,7 @@ describe('MediaService', () => {
         __v: 0,
         mediaId: uploadedMediaId,
       },
-      { $unset: { mediaId: '' }, $inc: { __v: 1 } },
+      { $unset: { mediaId: '', mediaZoom: '' }, $inc: { __v: 1 } },
     );
     expect(mockPersonModel.updateMany).toHaveBeenCalledWith(
       { photoId: uploadedMediaId },

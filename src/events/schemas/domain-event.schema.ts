@@ -117,6 +117,9 @@ export class DomainEvent {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media' })
   mediaId?: mongoose.Schema.Types.ObjectId;
 
+  @Prop({ type: Number, min: 1, max: 3 })
+  mediaZoom?: number;
+
   @Prop({
     required: true,
     type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }],

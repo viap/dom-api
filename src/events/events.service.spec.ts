@@ -559,12 +559,14 @@ describe('EventsService', () => {
       }),
     ]);
     expect(result[0]).not.toHaveProperty('registeredCount');
+    expect(result[0]).not.toHaveProperty('mediaZoom');
   });
 
   it('populates public event media when an event has a media id', async () => {
     const eventWithMedia = {
       ...mockEvent,
       mediaId: mockMedia._id,
+      mediaZoom: 1.234,
     };
     const findQuery = createFindQueryMock([eventWithMedia]);
     mockEventModel.find.mockReturnValue(findQuery);
@@ -585,6 +587,19 @@ describe('EventsService', () => {
       }),
     ]);
     expect(result[0]).not.toHaveProperty('registeredCount');
+    expect(result[0].mediaId).not.toHaveProperty('mediaZoom');
+  });
+
+  it('normalizes damaged zoom when reading without modifying the document', async () => {
+    const row = { ...mockEvent, mediaId: mockMedia._id, mediaZoom: '2' };
+    mockEventModel.find.mockReturnValue(createFindQueryMock([row]));
+
+    expect((await service.findAll({}))[0].mediaZoom).toBe(1);
+    expect(
+      (await service.findManyAdminByIds([row._id])).items[0].mediaZoom,
+    ).toBe(1);
+    expect(row.mediaZoom).toBe('2');
+    expect(mockEventModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('populates safe public event location in public lists', async () => {
@@ -1442,6 +1457,74 @@ describe('EventsService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it.each([
+    ['other Event field', { title: 'Updated' }, undefined, undefined],
+    [
+      'same media',
+      { mediaId: mockMedia._id.toUpperCase() },
+      undefined,
+      undefined,
+    ],
+    ['explicit reset', { mediaZoom: 1 }, 1, undefined],
+    [
+      'different media',
+      { mediaId: mockLocation._id },
+      undefined,
+      { mediaZoom: 1 },
+    ],
+    [
+      'different media with zoom',
+      { mediaId: mockLocation._id, mediaZoom: 1.234 },
+      1.234,
+      undefined,
+    ],
+  ] as const)(
+    'preserves Event CAS for zoom updates: %s',
+    async (_name, patch, zoom, unset) => {
+      const stored = {
+        ...mockEvent,
+        mediaId: new Types.ObjectId(mockMedia._id),
+        mediaZoom: 2.5,
+        __v: 4,
+      };
+      mockEventModel.findById.mockReturnValue(createFindOneQueryMock(stored));
+      mockEventUpdate.mockReturnValue(createFindOneQueryMock(stored));
+
+      await service.update(stored._id, { ...patch, expectedRevision: 4 });
+
+      const [filter, update] = mockEventModel.findOneAndUpdate.mock.calls[0];
+      expect(filter).toEqual({ _id: stored._id, __v: 4 });
+      expect(update).toMatchObject({ $inc: { __v: 1 } });
+      if (zoom === undefined) {
+        expect(update.$set).not.toHaveProperty('mediaZoom');
+      } else {
+        expect(update.$set).toHaveProperty('mediaZoom', zoom);
+      }
+      if (unset === undefined) {
+        expect(update).not.toHaveProperty('$unset');
+      } else {
+        expect(update).toHaveProperty('$unset', unset);
+      }
+    },
+  );
+
+  it('uses the ID of a populated cover and ignores a zoom with no cover', async () => {
+    mockEventModel.findById.mockReturnValue(
+      createFindOneQueryMock({ ...mockEvent, mediaId: mockMedia }),
+    );
+    mockEventUpdate.mockReturnValue(createFindOneQueryMock(mockEvent));
+    await service.update(mockEvent._id, { mediaId: mockMedia._id });
+    expect(mockEventModel.findOneAndUpdate.mock.calls[0][1]).not.toHaveProperty(
+      '$unset',
+    );
+
+    mockEventModel.findById.mockReturnValue(createFindOneQueryMock(mockEvent));
+    await service.update(mockEvent._id, { title: 'No cover', mediaZoom: 2 });
+    expect(
+      mockEventModel.findOneAndUpdate.mock.calls[1][1].$set,
+    ).not.toHaveProperty('mediaZoom');
+  });
+
   it('should throw NotFoundException for invalid public item ids', async () => {
     await expect(service.findOne('invalid-id')).rejects.toThrow(
       NotFoundException,
@@ -1535,6 +1618,37 @@ describe('EventsService', () => {
   });
 
   describe('create with blocks and seo', () => {
+    it.each([
+      [undefined, undefined, undefined],
+      [undefined, 2, undefined],
+      [mockMedia._id, undefined, undefined],
+      [mockMedia._id, 1.234, 1.234],
+    ])(
+      'writes cover %p with zoom %p as %p',
+      async (mediaId, mediaZoom, expected) => {
+        mockEventModel.findOne.mockResolvedValue(null);
+        await service.create({
+          domainId: mockEvent.domainId,
+          type: EventType.Seminar,
+          title: 'Event',
+          slug: 'event',
+          startAt: mockEvent.startAt,
+          endAt: mockEvent.endAt,
+          mediaId,
+          mediaZoom,
+        });
+
+        const [doc] = mockEventModel.mock.calls[0] as unknown as [
+          Record<string, unknown>,
+        ];
+        if (expected === undefined) {
+          expect(doc).not.toHaveProperty('mediaZoom');
+        } else {
+          expect(doc.mediaZoom).toBe(expected);
+        }
+      },
+    );
+
     it('accepts seo in create payload', async () => {
       mockEventModel.findOne.mockResolvedValue(null);
 

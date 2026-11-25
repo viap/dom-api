@@ -16,6 +16,7 @@ export interface CreateEventDto {
   schedule?: EventScheduleWrite;
   locationId?: string;
   mediaId?: string;
+  mediaZoom?: number;
   speakerIds?: string[];
   organizerIds?: string[];
   partnerIds?: string[];
