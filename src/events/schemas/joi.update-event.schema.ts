@@ -12,6 +12,7 @@ import {
   normalizeEventSchedule,
 } from '../utils/event-schedule';
 import { joiEventScheduleSchema } from './joi.event-schedule.schema';
+import { joiEventMediaZoom } from './joi.event-media-zoom.schema';
 
 export const updateEventSchema = Joi.object({
   expectedRevision: Joi.number().integer().min(0).allow(null).optional(),
@@ -37,6 +38,7 @@ export const updateEventSchema = Joi.object({
 
   locationId: joiObjectId.optional(),
   mediaId: joiObjectId.optional(),
+  mediaZoom: joiEventMediaZoom,
 
   speakerIds: Joi.array().items(joiObjectId).optional(),
   organizerIds: Joi.array().items(joiObjectId).optional(),

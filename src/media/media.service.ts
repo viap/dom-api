@@ -927,7 +927,7 @@ export class MediaService {
         const result = await this.domainEventModel
           .updateOne(
             { _id: event._id, __v: event.__v ?? 0, mediaId },
-            { $unset: { mediaId: '' }, $inc: { __v: 1 } },
+            { $unset: { mediaId: '', mediaZoom: '' }, $inc: { __v: 1 } },
           )
           .exec();
         if (result.modifiedCount !== 1) {

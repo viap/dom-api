@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { join } from 'path';
 import { static as serveStatic } from 'express';
+import { parseCorsOrigins } from '@/common/utils/web-origin';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -8,14 +9,10 @@ async function bootstrap() {
   app.enableShutdownHooks();
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   const uploadsRoot = join(process.cwd(), 'uploads');
-  const corsOrigins = (process.env.CORS_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
 
   // Enable CORS for configured origins.
   app.enableCors({
-    origin: corsOrigins.length ? corsOrigins : ['http://localhost:3006'],
+    origin: parseCorsOrigins(process.env.CORS_ORIGINS, process.env.NODE_ENV),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
