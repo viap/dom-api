@@ -9,12 +9,14 @@ import { ApplicationsService } from './applications.service';
 
 describe('ApplicationsController', () => {
   let controller: ApplicationsController;
+  const countInbox = jest.fn();
 
   beforeEach(() => {
     controller = new ApplicationsController({
       create: jest.fn(),
       createFromPublicWeb: jest.fn(),
       findAll: jest.fn(),
+      countInbox,
       findOne: jest.fn(),
       update: jest.fn(),
     } as unknown as ApplicationsService);
@@ -22,6 +24,11 @@ describe('ApplicationsController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it.each([0, 126])('returns the inbox count %i', async (count) => {
+    countInbox.mockResolvedValueOnce(count);
+    await expect(controller.getInboxCount()).resolves.toEqual({ count });
   });
 
   it('should mark create as public and throttled', () => {
