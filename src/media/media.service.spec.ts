@@ -2,7 +2,10 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { imageSize } from 'image-size';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { copyFile, mkdir, unlink, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import sharp from 'sharp';
 import { DomainEvent } from '@/events/schemas/domain-event.schema';
 import { PageBlockType } from '@/pages/enums/page-block-type.enum';
@@ -435,6 +438,75 @@ describe('MediaService', () => {
     await expect(service.getThumbnail(externalMedia._id)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('should read missing files from MEDIA_READ_FALLBACK_DIR only in dev and delete only local files', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'media-fallback-'));
+    const fallback = join(tmp, 'main-uploads');
+    const put = (file: string) => {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, 'x');
+    };
+    put(join(tmp, 'uploads', 'thumbnails', uploadedMedia.storageKey));
+    put(join(fallback, 'media', uploadedMedia.storageKey));
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue(tmp);
+    const prevEnv = {
+      NODE_ENV: process.env.NODE_ENV,
+      MEDIA_READ_FALLBACK_DIR: process.env.MEDIA_READ_FALLBACK_DIR,
+    };
+    process.env.MEDIA_READ_FALLBACK_DIR = fallback;
+    const createService = (nodeEnv: string) => {
+      process.env.NODE_ENV = nodeEnv;
+      return new MediaService(
+        mockMediaModel as never,
+        mockPageModel as never,
+        mockDomainEventModel as never,
+        mockPersonModel as never,
+        mockPartnerModel as never,
+      );
+    };
+    try {
+      const previewService = createService('dev');
+      mockMediaModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(uploadedMedia),
+        }),
+      });
+
+      await expect(
+        previewService.getContent(uploadedMediaId),
+      ).resolves.toMatchObject({
+        path: join(fallback, 'media', uploadedMedia.storageKey),
+      });
+      await expect(
+        previewService.getThumbnail(uploadedMediaId),
+      ).resolves.toMatchObject({
+        path: join(tmp, 'uploads', 'thumbnails', uploadedMedia.storageKey),
+      });
+      await expect(
+        createService('prod').getContent(uploadedMediaId),
+      ).resolves.toMatchObject({
+        path: join(tmp, 'uploads', 'media', uploadedMedia.storageKey),
+      });
+
+      mockMediaModel.findById.mockReturnValue(createLeanChain(uploadedMedia));
+      mockMediaModel.findByIdAndDelete.mockReturnValue(
+        createLeanChain(uploadedMedia),
+      );
+      await previewService.remove(uploadedMediaId);
+
+      expect((unlink as jest.Mock).mock.calls.flat()).toEqual([
+        join(tmp, 'uploads', 'media', uploadedMedia.storageKey),
+        join(tmp, 'uploads', 'thumbnails', uploadedMedia.storageKey),
+      ]);
+    } finally {
+      for (const [key, value] of Object.entries(prevEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      cwdSpy.mockRestore();
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it('should update editable metadata only', async () => {

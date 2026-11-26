@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { imageSize } from 'image-size';
+import { existsSync } from 'fs';
 import { copyFile, mkdir, unlink, writeFile } from 'fs/promises';
 import { Model } from 'mongoose';
 import { randomUUID } from 'crypto';
@@ -95,6 +96,13 @@ export class MediaService {
     'uploads',
     'thumbnails',
   );
+  // Dev-only read-only uploads root consulted when a file is missing locally
+  // (worktree previews reuse the main checkout's media). Writes and deletes
+  // never use it.
+  private readonly readFallbackRoot =
+    (process.env.NODE_ENV === 'dev' &&
+      process.env.MEDIA_READ_FALLBACK_DIR?.trim()) ||
+    null;
   private readonly allowedMimeTypes = new Set(
     Object.values(IMAGE_FORMAT_TO_MIME),
   );
@@ -258,7 +266,11 @@ export class MediaService {
       'Media content not found',
     );
 
-    const path = this.resolveUploadedFilePath(media.storageKey);
+    const path = this.withReadFallback(
+      this.resolveUploadedFilePath(media.storageKey),
+      'media',
+      media.storageKey,
+    );
 
     return {
       path,
@@ -272,7 +284,11 @@ export class MediaService {
       'Media thumbnail not found',
     );
 
-    const path = this.resolveThumbnailFilePath(media.storageKey);
+    const path = this.withReadFallback(
+      this.resolveThumbnailFilePath(media.storageKey),
+      'thumbnails',
+      media.storageKey,
+    );
 
     return {
       path,
@@ -1159,7 +1175,15 @@ export class MediaService {
   }
 
   private resolveUploadedFilePath(storageKey: string): string {
-    const root = resolve(this.uploadsRoot);
+    return this.resolvePathUnder(this.uploadsRoot, storageKey);
+  }
+
+  private resolveThumbnailFilePath(storageKey: string): string {
+    return this.resolvePathUnder(this.uploadsThumbnailsRoot, storageKey);
+  }
+
+  private resolvePathUnder(rootDir: string, storageKey: string): string {
+    const root = resolve(rootDir);
     const path = resolve(root, storageKey);
     if (path !== root && !path.startsWith(`${root}${sep}`)) {
       throw new BadRequestException('Invalid media storage key');
@@ -1168,14 +1192,19 @@ export class MediaService {
     return path;
   }
 
-  private resolveThumbnailFilePath(storageKey: string): string {
-    const root = resolve(this.uploadsThumbnailsRoot);
-    const path = resolve(root, storageKey);
-    if (path !== root && !path.startsWith(`${root}${sep}`)) {
-      throw new BadRequestException('Invalid media storage key');
+  private withReadFallback(
+    path: string,
+    folder: 'media' | 'thumbnails',
+    storageKey: string,
+  ): string {
+    if (!this.readFallbackRoot || existsSync(path)) {
+      return path;
     }
 
-    return path;
+    return this.resolvePathUnder(
+      join(this.readFallbackRoot, folder),
+      storageKey,
+    );
   }
 
   private parseIsoDate(value: string, field: string): Date {

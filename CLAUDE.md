@@ -173,6 +173,7 @@ All variables are loaded from `config/.env` via `ConfigModule.forRoot({ envFileP
 | `TELEGRAM_BOT_USERNAME` | Telegram bot username, without `@`, used to build public contact-link deep links |
 | `APPLICATION_MESSAGING_ENABLED` | Enables application-scoped official Telegram queueing, delivery reports, and reply ingestion; defaults off |
 | `MONGO_URL` | MongoDB connection string |
+| `MEDIA_READ_FALLBACK_DIR` | Optional, ignored unless `NODE_ENV=dev`: absolute `uploads` dir read when a media file/thumbnail is missing under `./uploads` (worktree previews reuse the main checkout's media). Never written or deleted. Previews share the main database: media uploaded in a preview has its file only in that worktree, and deleting media in a preview removes the record for the main API too |
 | `MONGO_DBNAME` | Database name |
 | `MONGO_INITDB_ROOT_USERNAME` | MongoDB auth username |
 | `MONGO_INITDB_ROOT_PASSWORD` | MongoDB auth password |
