@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { ApplicationsController } from '@/applications/applications.controller';
+import { ApplicationsService } from '@/applications/applications.service';
 import { Booking } from '../src/booking-system/bookings/schemas/booking.schema';
 import { Company } from '../src/booking-system/companies/schemas/company.schema';
 import { Room } from '../src/booking-system/rooms/schemas/room.schema';
@@ -25,6 +27,7 @@ const P1_USER = id(4);
 const P2_USER = id(5);
 const DELETED = id(6);
 const ACCOUNTANT = id(7);
+const EDITOR_ACCOUNTANT = id(8);
 const P1 = id(11);
 const P2 = id(12);
 const REQUEST_OF_P2 = id(21);
@@ -36,6 +39,10 @@ const users: Record<string, { _id: string; roles: string[] }> = {
   [P1_USER]: { _id: P1_USER, roles: ['user', 'psychologist'] },
   [P2_USER]: { _id: P2_USER, roles: ['user', 'psychologist'] },
   [ACCOUNTANT]: { _id: ACCOUNTANT, roles: ['user', 'accountant'] },
+  [EDITOR_ACCOUNTANT]: {
+    _id: EDITOR_ACCOUNTANT,
+    roles: ['user', 'editor', 'accountant'],
+  },
 };
 const psychologistsByUser: Record<string, { _id: string }> = {
   [P1_USER]: { _id: P1 },
@@ -79,7 +86,16 @@ describe('Access rules (e2e)', () => {
   let tokenFor: (userId: string) => string;
 
   beforeAll(async () => {
-    const builder = Test.createTestingModule({ imports: [TestAppModule] });
+    const builder = Test.createTestingModule({
+      imports: [TestAppModule],
+      controllers: [ApplicationsController],
+      providers: [
+        {
+          provide: ApplicationsService,
+          useValue: { countInbox: () => Promise.resolve(126) },
+        },
+      ],
+    });
     const overrides: Array<[string, unknown]> = [
       [
         User.name,
@@ -122,6 +138,32 @@ describe('Access rules (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it.each([ADMIN, EDITOR, EDITOR_ACCOUNTANT])(
+    'routes inbox-count to the static handler for %s',
+    async (userId) => {
+      await request(app.getHttpServer())
+        .get('/applications/inbox-count?limit=1&offset=100&status=archived')
+        .set('Authorization', `Bearer ${tokenFor(userId)}`)
+        .expect(200, { count: 126 });
+    },
+  );
+
+  it.each([ACCOUNTANT, PLAIN, P1_USER])(
+    'denies inbox-count for %s without an inbox role',
+    async (userId) => {
+      await request(app.getHttpServer())
+        .get('/applications/inbox-count')
+        .set('Authorization', `Bearer ${tokenFor(userId)}`)
+        .expect(403);
+    },
+  );
+
+  it('requires authentication for the inbox count', async () => {
+    await request(app.getHttpServer())
+      .get('/applications/inbox-count')
+      .expect(401);
   });
 
   const contactsUpdate = {

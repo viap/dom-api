@@ -25,6 +25,7 @@ import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreatePublicApplicationDto } from './dto/create-public-application.dto';
 import { UpdateApplicationDto } from './dto/update-application.dto';
 import { ApplicationFormType } from './enums/application-form-type.enum';
+import { ApplicationStatus } from './enums/application-status.enum';
 import { ApplicationQueryParams } from './types/query-params.interface';
 import { Application, ApplicationDocument } from './schemas/application.schema';
 import {
@@ -358,6 +359,12 @@ export class ApplicationsService {
       .skip(offset)
       .limit(limit)
       .lean()
+      .exec();
+  }
+
+  countInbox(): Promise<number> {
+    return this.applicationModel
+      .countDocuments({ status: ApplicationStatus.New })
       .exec();
   }
 

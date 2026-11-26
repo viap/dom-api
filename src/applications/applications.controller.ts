@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -59,6 +60,13 @@ export class ApplicationsController {
     query: ApplicationQueryParams,
   ) {
     return this.applicationsService.findAll(query);
+  }
+
+  @Get('inbox-count')
+  @Roles(Role.Admin, Role.Editor)
+  @Header('Cache-Control', 'private, no-store')
+  async getInboxCount(): Promise<{ count: number }> {
+    return { count: await this.applicationsService.countInbox() };
   }
 
   @Get(':id')
