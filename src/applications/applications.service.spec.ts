@@ -22,6 +22,7 @@ import { CreateApplicationDto } from './dto/create-application.dto';
 import * as ApplicationNotification from './application-notification';
 import { Application } from './schemas/application.schema';
 import { ApplicationsService } from './applications.service';
+import { ApplicationStatus } from './enums/application-status.enum';
 import { ApplicationMessagingPolicyService } from '@/common/application-messaging/application-messaging-policy.service';
 import { ApplicationContextResolver } from './application-context-resolver.service';
 import { Types } from 'mongoose';
@@ -52,6 +53,7 @@ describe('ApplicationsService', () => {
     jest.fn().mockImplementation(() => mockInstance),
     {
       find: jest.fn(),
+      countDocuments: jest.fn(),
       findById: jest.fn(),
       findByIdAndUpdate: jest.fn(),
     },
@@ -199,6 +201,7 @@ describe('ApplicationsService', () => {
     jest.restoreAllMocks();
     mockApplicationModel.mockReset().mockImplementation(() => mockInstance);
     mockApplicationModel.find.mockReset();
+    mockApplicationModel.countDocuments.mockReset();
     mockApplicationModel.findById.mockReset();
     mockApplicationModel.findByIdAndUpdate.mockReset();
     mockDomainsService.getActiveById.mockReset();
@@ -300,6 +303,17 @@ describe('ApplicationsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('counts all new applications with a single unpaginated status query', async () => {
+    const exec = jest.fn().mockResolvedValue(126);
+    mockApplicationModel.countDocuments.mockReturnValue({ exec });
+
+    await expect(service.countInbox()).resolves.toBe(126);
+    expect(mockApplicationModel.countDocuments.mock.calls).toEqual([
+      [{ status: ApplicationStatus.New }],
+    ]);
+    expect(mockApplicationModel.find).not.toHaveBeenCalled();
   });
 
   it('fails service construction when PUBLIC_WEB_URL is invalid', () => {
